@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Employee System - MySQL Powered</title>
+
+    <!-- External Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+    <!-- External Stylesheet -->
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'style.css' %}">
+</head>
+
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="screen active">
+        <div class="login-container">
+            <div class="login-card">
+                <div class="login-title">Employee Attendance System</div>
+                <div class="login-subtitle">Sign in to mark your attendance</div>
+
+                <form onsubmit="handleLogin(event)">
+                    <div class="form-group">
+                        <label class="form-label">Username</label>
+                        <input type="text" id="loginUsername" class="form-control" placeholder="Enter your username"
+                            required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="loginPassword" class="form-control"
+                                placeholder="Enter your password" required>
+                            <button type="button" class="toggle-password-btn" data-target="loginPassword">👁</button>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-full-width" id="loginBtn">
+                        <span id="loginBtnText">Sign In</span>
+                        <span id="loginSpinner" class="loading-spinner hidden"></span>
+                    </button>
+                </form>
+
+                <div class="signup-link">
+                    <p>New employee? <a href="#" onclick="showScreen('signupScreen')">Sign up here</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Signup Screen -->
+    <div id="signupScreen" class="screen">
+        <div class="login-container">
+            <div class="login-card" style="max-width: 600px;">
+                <div class="login-title">Create Your Account</div>
+                <div class="login-subtitle">Join our attendance system</div>
+
+                <form onsubmit="handleSignup(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Full Name</label>
+                            <input type="text" id="signupName" class="form-control" placeholder="Enter full name"
+                                required pattern="[A-Za-z ]+" title="Only alphabets and spaces allowed">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Phone</label>
+                            <input type="tel" id="signupPhone" class="form-control" placeholder="10-digit number"
+                                required pattern="[0-9]{10}">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Email</label>
+                        <input type="email" id="signupEmail" class="form-control" placeholder="Enter email" required>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Department</label>
+                            <select id="signupDepartment" class="form-control" required>
+                                <option value="">Select Department</option>
+                                <option value="IT">IT</option>
+                                <option value="HR">HR</option>
+                                <option value="Surveyors">Surveyors</option>
+                                <option value="Accounts">Accounts</option>
+                                <option value="Growth">Growth</option>
+                                <option value="Others">Others</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Primary Office</label>
+                            <select id="signupOffice" class="form-control" required>
+                                <option value="">Select Office</option>
+                                <option value="79">79 Office</option>
+                                <option value="105">105 Office</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Username</label>
+                            <input type="text" id="signupUsername" class="form-control" placeholder="Choose username"
+                                required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Password</label>
+                            <div class="password-wrapper">
+                                <input type="password" id="signupPassword" class="form-control"
+                                    placeholder="Create password" required minlength="6">
+                                <button type="button" class="toggle-password-btn"
+                                    data-target="signupPassword">👁</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- NEW: Confirm Password field -->
+                    <div class="form-group">
+                        <label class="form-label">Confirm Password</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="signupConfirmPassword" class="form-control"
+                                placeholder="Re-enter password" required minlength="6">
+                            <button type="button" class="toggle-password-btn"
+                                data-target="signupConfirmPassword">👁</button>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-full-width" id="signupBtn">
+                        <span id="signupBtnText">Create Account</span>
+                        <span id="signupSpinner" class="loading-spinner hidden"></span>
+                    </button>
+                </form>
+
+                <div class="login-link">
+                    <p>Already have an account? <a href="#" onclick="showScreen('loginScreen')">Sign in here</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Screen -->
+    <div id="dashboardScreen" class="screen">
+        <div class="container">
+            <div class="header">
+                <div class="header-title">Attendance Dashboard</div>
+                <div class="header-user">
+                    <span class="user-welcome">Welcome, <span id="userName">User</span></span>
+                    <button onclick="logout()" class="btn btn-secondary">Logout</button>
+                </div>
+            </div>
+
+            <!-- Employee Stats Grid (shown for non-admin users) -->
+            <div class="stats-grid" id="employeeStatsGrid">
+                <div class="stat-card">
+                    <div class="stat-card-title">Today's Status</div>
+                    <div class="stat-card-value" id="todayStatus">Not Marked</div>
+                    <div class="stat-card-timing" id="todayTiming"></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-title" style="display:flex;justify-content:space-between;align-items:center;">
+                        <span>This Month</span>
+                        <button onclick="openAttendanceCalendar()"
+                            style="font-size:12px;padding:4px 8px;border-radius:999px;border:none;cursor:pointer;">
+                            📅 Calendar
+                        </button>
+                    </div>
+                    <div class="stat-card-value" id="monthlyDays">0</div>
+                    <div class="stat-card-timing">Working Days</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-card-title">WFH Used</div>
+                    <div class="stat-card-value" id="wfhCount">0/1</div>
+                    <div class="stat-card-timing">This Month</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-title">Location Status</div>
+                    <div class="stat-card-value" id="locationStatus">Checking...</div>
+                    <div class="stat-card-timing" id="locationDistance"></div>
+                </div>
+            </div>
+
+            <!-- Admin Stats Grid (shown only for admin users) -->
+            <div class="stats-grid hidden" id="adminStatsGrid">
+                <div class="stat-card" onclick="showEmployeeSummary()">
+                    <div class="stat-card-title">📊 Employee Summary</div>
+                    <div class="stat-card-value" id="totalEmployees">0</div>
+                    <div class="stat-card-timing" id="presentToday">0 present today</div>
+                    <div class="stat-card-subtext" id="surveyorsPresent">0 surveyors present</div>
+                </div>
+
+                <div class="stat-card" onclick="openBirthdayCalendar()">
+                    <div class="stat-card-title">🎂 Birthday Calendar</div>
+                    <div class="stat-card-value" id="upcomingBirthdays">0</div>
+                    <div class="stat-card-timing">Upcoming this month</div>
+                    <div class="stat-card-subtext">Click to view calendar</div>
+                </div>
+                <div class="stat-card" onclick="openRequestsModal()">
+                    <div class="stat-card-title">📋 Requests</div>
+                    <div class="stat-card-value" id="pendingRequests">0</div>
+                    <div class="stat-card-timing">Pending approvals</div>
+                    <div class="stat-card-subtext">WFH & Leave requests</div>
+                </div>
+                <div class="stat-card" onclick="openTaskManager()" id="taskManagerCard">
+                    <div class="stat-card-title">📝 Task Manager</div>
+                    <div class="stat-card-value" id="activeTasks">0</div>
+                    <div class="stat-card-timing">Active tasks</div>
+                    <div class="stat-card-subtext">Trello-style board</div>
+                </div>
+            </div>
+
+            <div class="actions-grid">
+                <div class="action-card" onclick="startAttendanceFlow()" id="checkInCard">
+                    <span class="action-card-icon">📍</span>
+                    <div class="action-card-title">Check In</div>
+                    <div class="action-card-description">Mark your attendance with location and photo</div>
+                </div>
+                <div class="action-card hidden" onclick="showCheckOut()" id="checkOutCard">
+                    <span class="action-card-icon">🏃</span>
+                    <div class="action-card-title">Check Out</div>
+                    <div class="action-card-description">Complete your work day</div>
+                </div>
+                <div id="calendarModal" class="modal">
+                    <div class="modal-content calendar-modal-content">
+                        <h3>Attendance Calendar – <span id="calendarMonthLabel"></span></h3>
+
+                        <div style="font-size:12px;margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;">
+                            <span><span class="calendar-dot cal-present"></span> Office (Full)</span>
+                            <span><span class="calendar-dot cal-client"></span> Client</span>
+                            <span><span class="calendar-dot cal-absent"></span> Absent</span>
+                            <span><span class="calendar-dot cal-wfh"></span> WFH</span>
+                            <span><span class="calendar-dot cal-half"></span> Half Day</span>
+                        </div>
+
+                        <div id="calendarGrid" class="calendar-grid" style="margin-top:12px;"></div>
+
+                        <div style="text-align:right;margin-top:16px;">
+                            <button class="btn btn-secondary" onclick="closeModal('calendarModal')">Close</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="action-card" onclick="openMyTasks()" id="myTasksCard">
+                    <span class="action-card-icon">📝</span>
+                    <div class="action-card-title">My Tasks</div>
+                    <div class="action-card-description">View and manage your assigned tasks</div>
+                </div>
+                <div class="action-card" onclick="showScreen('recordsScreen')">
+                    <span class="action-card-icon">📋</span>
+                    <div class="action-card-title">Records</div>
+                    <div class="action-card-description">View your attendance history</div>
+                </div>
+                <div class="action-card hidden" onclick="openAdminPanel()" id="adminCard">
+                    <span class="action-card-icon">✍️</span>
+                    <div class="action-card-title">Admin Panel</div>
+                    <div class="action-card-description">Add/Edit Users/Offices (Admin only)</div>
+                </div>
+                <div class="action-card hidden" onclick="openProfile()" id="profileCard">
+                    <span class="action-card-icon">🧑‍💻</span>
+                    <div class="action-card-title">Edit Your Details</div>
+                    <div class="action-card-description">Update your name, email, phone, password</div>
+                </div>
+                <div class="action-card" onclick="openExportModal()" id="exportCard">
+                    <span class="action-card-icon">📊</span>
+                    <div class="action-card-title">Export Attendance</div>
+                    <div class="action-card-description">Select date range to export attendance records (Admin only)
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Edit Attendance Modal -->
+    <div id="editAttendanceModal" class="modal">
+        <div class="modal-content">
+            <h3 style="margin-bottom: 12px;">Edit Attendance Status</h3>
+            <p id="editAttInfo" style="margin-bottom: 16px; font-size: 14px; color: var(--gray-600);">
+                <!-- Filled by JS with employee + date -->
+            </p>
+
+            <div class="form-group">
+                <label class="form-label">Status</label>
+                <select id="editAttStatus" class="form-control">
+                    <option value="present">Present</option>
+                    <option value="half_day">Half Day</option>
+                    <option value="wfh">Work From Home</option>
+                    <option value="client">Client</option>
+                    <option value="absent">Absent</option>
+                </select>
+            </div>
+
+            <div id="editAttMsg" style="margin-top: 8px; font-size: 13px; color: var(--gray-600);">
+            </div>
+
+            <div style="display:flex; gap:12px; justify-content:flex-end; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closeModal('editAttendanceModal')">
+                    Cancel
+                </button>
+                <button class="btn btn-primary" id="editAttSaveBtn" onclick="submitEditAttendance()">
+                    <span id="editAttSaveText">Save</span>
+                    <span id="editAttSpinner" class="loading-spinner hidden"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Screen (Edit Your Details) -->
+    <div id="profileScreen" class="screen">
+        <div class="container">
+            <div class="header">
+                <div class="header-title">Edit Your Details</div>
+                <button onclick="showScreen('dashboardScreen')" class="btn btn-secondary">← Back</button>
+            </div>
+
+            <div class="card" style="max-width:100%;margin:0 auto;">
+
+                <!-- 1. ACCOUNT / OFFICIAL DETAILS -->
+                <h3>Account Details</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Full Name</label>
+                        <input id="profileName" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Official Email</label>
+                        <input id="profileEmail" class="form-control">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Mobile</label>
+                        <input id="profilePhone" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Department</label>
+                        <input id="profileDepartment" class="form-control" disabled>
+                    </div>
+                </div>
+
+                <!-- ADDED: Primary Office Field -->
+                <div class="form-group">
+                    <label class="form-label">Primary Office</label>
+                    <select id="profilePrimaryOffice" class="form-control">
+                        <option value="">Select Office</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Change Password (optional)</label>
+                    <input id="profilePassword" type="password" class="form-control"
+                        placeholder="Leave blank to keep current">
+                </div>
+
+                <hr>
+
+                <!-- 2. PERSONAL INFORMATION -->
+                <h3>Personal Information</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Personal Email</label>
+                        <input id="profilePersonalEmail" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Date of Birth</label>
+                        <input id="profileDob" type="date" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Gender</label>
+                        <select id="profileGender" class="form-control">
+                            <option value="">Select</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                            <option value="other">Other</option>
+                            <option value="prefer_not_to_say">Prefer not to say</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Marital Status</label>
+                        <select id="profileMaritalStatus" class="form-control">
+                            <option value="">Select</option>
+                            <option value="single">Single</option>
+                            <option value="married">Married</option>
+                            <option value="divorced">Divorced</option>
+                            <option value="widowed">Widowed</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- 3. CONTACT & ADDRESS -->
+                <h3>Contact & Address</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Alternate Number</label>
+                        <input id="profileAlternateNumber" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Emergency Contact Name</label>
+                        <input id="profileEmergencyName" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Emergency Contact Phone</label>
+                        <input id="profileEmergencyPhone" class="form-control">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Home Address</label>
+                    <textarea id="profileHomeAddress" class="form-control" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Current Address</label>
+                    <textarea id="profileCurrentAddress" class="form-control" rows="2"></textarea>
+                </div>
+
+                <hr>
+
+                <!-- 4. EMPLOYMENT & ROLE -->
+                <h3>Employment & Role</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Date of Joining</label>
+                        <input id="profileDoj" type="date" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Reporting Manager / Lead</label>
+                        <input id="profileReportingMgr" class="form-control">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Skill Set</label>
+                    <textarea id="profileSkillSet" class="form-control" rows="2"
+                        placeholder="e.g. Java, React, SQL, Communication"></textarea>
+                </div>
+
+
+                <hr>
+
+                <!-- 5. BANK & PAYROLL -->
+                <h3>Bank & Payroll Details</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Bank Account Number</label>
+                        <input id="profileBankAccount" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Bank Name</label>
+                        <input id="profileBankName" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">IFSC Code</label>
+                        <input id="profileBankIfsc" class="form-control">
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- 6. EDUCATION & QUALIFICATIONS -->
+                <h3>Education & Qualifications</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Highest Qualification</label>
+                        <input id="profileHighestQualification" class="form-control">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Qualification Notes (optional)</label>
+                    <textarea id="profileQualificationNotes" class="form-control" rows="2"></textarea>
+                </div>
+
+                <hr>
+
+                <!-- 7. FAMILY & DEPENDENTS -->
+                <h3>Family & Dependents</h3>
+                <div class="form-group">
+                    <label class="form-label">Family Members Details</label>
+                    <textarea id="profileFamilyDetails" class="form-control" rows="3"
+                        placeholder="Name - Relation - Phone, one per line"></textarea>
+                </div>
+
+                <hr>
+                <!-- 7.1. USER IDENTITY -->
+                <h3>User Identity</h3>
+                <label class="form-label">
+                    <input type="checkbox" id="chkDocIdentity" onchange="toggleDocRow('Identity')">
+                    Photo & Signature Upload
+                </label>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">User Photo</label>
+                        <input type="file" id="userPhotoFile" accept="image/*" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Signature</label>
+                        <input type="file" id="userSignatureFile" accept="image/*" class="form-control">
+                    </div>
+                </div>
+                <hr>
+
+                <!-- 8. DOCUMENTS & CERTIFICATES -->
+                <h3>Documents & Certificates</h3>
+
+                <!-- Identity Documents -->
+                <h4 style="margin-top:8px;">Identity Documents</h4>
+
+                <div class="doc-row">
+                    <label class="form-label">
+                        <input type="checkbox" id="chkDocAadhar" onchange="toggleDocRow('Aadhar')">
+                        Aadhaar Card
+                    </label>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Aadhaar Number</label>
+                            <input id="docAadharNumber" class="form-control" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Aadhaar PDF</label>
+                            <input type="file" id="docAadharFile" class="form-control" accept="application/pdf"
+                                disabled>
+                            <small class="text-muted">
+                                Please upload PDF as <code>&lt;username&gt;_aadhar.pdf</code> (e.g.
+                                <code>rohit_aadhar.pdf</code>)
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="doc-row">
+                    <label class="form-label">
+                        <input type="checkbox" id="chkDocPan" onchange="toggleDocRow('Pan')">
+                        PAN Card
+                    </label>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">PAN Number</label>
+                            <input id="docPanNumber" class="form-control" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">PAN PDF</label>
+                            <input type="file" id="docPanFile" class="form-control" accept="application/pdf" disabled>
+                            <small class="text-muted">
+                                Please upload PDF as <code>&lt;username&gt;_pan.pdf</code> (e.g.
+                                <code>rohit_pan.pdf</code>)
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="doc-row">
+                    <label class="form-label">
+                        <input type="checkbox" id="chkDocOtherId" onchange="toggleDocRow('OtherId')">
+                        Other ID Document
+                    </label>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Document Name</label>
+                            <input id="docOtherIdName" class="form-control" placeholder="e.g. Driving License" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Document Number</label>
+                            <input id="docOtherIdNumber" class="form-control" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Document PDF</label>
+                            <input type="file" id="docOtherIdFile" class="form-control" accept="application/pdf"
+                                disabled>
+                            <small class="text-muted">
+                                Please upload PDF as <code>&lt;username&gt;_&lt;docname&gt;.pdf</code>
+                                (e.g. <code>rohit_drivinglicense.pdf</code>)
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- Qualification Documents -->
+                <h4 style="margin-top:8px;">Qualification Documents</h4>
+
+                <div class="doc-row">
+                    <label class="form-label">
+                        <input type="checkbox" id="chkQualHighest" onchange="toggleDocRow('QualHighest')">
+                        Highest Qualification Certificate
+                    </label>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Qualification Name</label>
+                            <input id="qualHighestName" class="form-control" placeholder="e.g. B.Tech, MBA" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Certificate / Reg No. (optional)</label>
+                            <input id="qualHighestNumber" class="form-control" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Certificate PDF</label>
+                            <input type="file" id="qualHighestFile" class="form-control" accept="application/pdf"
+                                disabled>
+                            <small class="text-muted">
+                                Suggested file name: <code>&lt;username&gt;_highestqualification.pdf</code>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="doc-row">
+                    <label class="form-label">
+                        <input type="checkbox" id="chkQualProfessional" onchange="toggleDocRow('QualProfessional')">
+                        Professional Certificate
+                    </label>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Certificate Name</label>
+                            <input id="qualProfessionalName" class="form-control" placeholder="e.g. AWS, Azure"
+                                disabled>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Certificate ID / Reg No. (optional)</label>
+                            <input id="qualProfessionalNumber" class="form-control" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Certificate PDF</label>
+                            <input type="file" id="qualProfessionalFile" class="form-control" accept="application/pdf"
+                                disabled>
+                            <small class="text-muted">
+                                Suggested file name: <code>&lt;username&gt;_professionalcert.pdf</code>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="doc-row">
+                    <label class="form-label">
+                        <input type="checkbox" id="chkQualOther" onchange="toggleDocRow('QualOther')">
+                        Other Qualification Document
+                    </label>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Document Name</label>
+                            <input id="qualOtherName" class="form-control" placeholder="e.g. Diploma, Workshop"
+                                disabled>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Details / Number (optional)</label>
+                            <input id="qualOtherNumber" class="form-control" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Document PDF</label>
+                            <input type="file" id="qualOtherFile" class="form-control" accept="application/pdf"
+                                disabled>
+                            <small class="text-muted">
+                                Please upload PDF as <code>&lt;username&gt;_&lt;docname&gt;.pdf</code>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-secondary" style="margin-top:8px;" onclick="uploadProfileDocuments()">
+                    Upload Selected Documents
+                </button>
+                <div id="myDocumentsList" class="card" style="margin-top:20px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <h3>My Uploaded Documents</h3>
+                        <button class="btn btn-danger btn-sm" onclick="deleteSelectedDocuments()">
+                            🗑 Delete Selected
+                        </button>
+                    </div>
+
+                    <div id="myDocsEmpty" class="text-muted">No documents uploaded.</div>
+                    <div id="myDocsGrid" class="my-docs-grid hidden"></div>
+                </div>
+
+
+                <div id="profileDocsMsg" style="font-size:12px;margin-top:4px;color:var(--gray-600);"></div>
+
+                <div class="text-center" style="margin-top:16px;">
+                    <button class="btn btn-primary" onclick="saveProfile()">
+                        <span id="profileSaveText">Save All Details</span>
+                        <span id="profileSaveSpinner" class="loading-spinner hidden"></span>
+                    </button>
+                </div>
+                <div id="profileMsg" style="margin-top:8px;color:var(--gray-700);font-size:13px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Attendance Screen -->
+    <div id="attendanceScreen" class="screen">
+        <div class="container">
+            <div class="header">
+                <div class="header-title">Mark Attendance</div>
+                <button onclick="showScreen('dashboardScreen')" class="btn btn-secondary">← Back</button>
+            </div>
+
+            <div class="card">
+                <!-- Choice row: WFH / Office / Client -->
+                <div id="typeSelectionSection" style="margin-top: 8px;">
+                    <h3>Select Attendance Type:</h3>
+                    <div class="office-selection" id="typeSelection">
+                        <!-- inside the WFH card -->
+                        <div class="office-card" onclick="onWFHCardClick(event)" id="wfhOption">
+
+                            <span class="action-card-icon">🏠</span>
+                            <h3>Work From Home</h3>
+                            <p id="wfhStatus">Checking availability...</p>
+
+                            <!-- add this line -->
+                            <button id="wfhRequestBtn" class="btn btn-secondary"
+                                style="display:none; margin-top:8px; background-color: #1d4ed8;"
+                                onclick="requestWFHExtension(event)">Request WFH</button>
+                        </div>
+
+
+                        <div class="office-card" onclick="selectType('office', event)">
+                            <span class="action-card-icon">🏢</span>
+                            <h3>Office Work</h3>
+                            <p>Shows offices after you tap</p>
+                        </div>
+
+                        <div class="office-card" onclick="selectType('client', event)">
+                            <span class="action-card-icon">📍</span>
+                            <h3>Client Location</h3>
+                            <p>No geofence required</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Offices (hidden until user picks "Office Work") -->
+                <div id="officeBlock" style="display:none; margin-top: 24px;">
+                    <h3>Select Office:</h3>
+                    <p style="color: var(--gray-500); margin-bottom: 12px;">
+                        Only offices within range will be enabled
+                    </p>
+                    <div class="office-selection" id="officeSelection">
+                        <!-- populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Camera -->
+                <div id="cameraSection" class="hidden" style="margin-top: 24px;">
+                    <h3>Take Your Photo:</h3>
+                    <p style="color: var(--gray-500); margin-bottom: 12px;">Photo is required for verification</p>
+
+                    <div class="camera-container">
+                        <video id="video" autoplay muted playsinline style="display:none;"></video>
+                        <img id="capturedPhoto" style="display:none;">
+                        <canvas id="photoCanvas" style="display:none;"></canvas>
+                        <div id="cameraPlaceholder"
+                            style="display:flex;align-items:center;justify-content:center;height:100%;background:#f3f4f6;color:#6b7280;">
+                            Click "Start Camera" to begin
+                        </div>
+                    </div>
+
+                    <div class="camera-controls">
+                        <button onclick="startCamera()" class="btn btn-primary" id="startCameraBtn">📷 Start
+                            Camera</button>
+                        <button onclick="capturePhoto()" class="btn btn-success" id="captureBtn"
+                            style="display:none;">📸 Capture</button>
+                        <button onclick="retakePhoto()" class="btn btn-secondary" id="retakeBtn"
+                            style="display:none;">🔄 Retake</button>
+                    </div>
+
+                    <div class="text-center" style="margin-top: 16px;">
+                        <button onclick="markAttendance()" class="btn btn-success" id="markBtn" style="display:none;">
+                            <span id="markBtnText">✅ Mark Attendance</span>
+                            <span id="markSpinner" class="loading-spinner hidden"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Records Screen -->
+    <div id="recordsScreen" class="screen">
+        <div class="container">
+            <div class="header">
+                <div class="header-title">Attendance Records</div>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <span id="adminExportNote" class="hidden" style="color: var(--gray-500); font-size: 14px;">(Admin:
+                        Export available)</span>
+                    <button onclick="showScreen('dashboardScreen')" class="btn btn-secondary">← Back</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div id="recordsContent">
+                    <div class="text-center" style="padding: 40px;">
+                        <div class="loading-spinner" style="margin: 0 auto 16px; width: 24px; height: 24px;"></div>
+                        <p>Loading attendance records...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Admin Panel -->
+    <div id="adminScreen" class="screen">
+        <div class="container">
+            <div class="header">
+                <div class="header-title">Admin Panel</div>
+                <div style="display:flex; gap:12px; align-items:center;">
+                    <button onclick="showScreen('dashboardScreen')" class="btn btn-secondary">← Back</button>
+                </div>
+            </div>
+
+            <div class="admin-grid">
+                <!-- Add Office -->
+                <div class="card">
+                    <h3 style="margin-bottom:12px;">Add New Office</h3>
+                    <div class="form-group">
+                        <label class="form-label">Office ID</label>
+                        <input id="newOfficeId" class="form-control" placeholder="e.g., 106 or HQ (must be unique)">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Office Name</label>
+                        <input id="newOfficeName" class="form-control" placeholder="e.g., Head Office">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Address</label>
+                        <input id="newOfficeAddress" class="form-control" placeholder="Office address">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Latitude</label>
+                            <input id="newOfficeLat" class="form-control" placeholder="e.g., 28.6139">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Longitude</label>
+                            <input id="newOfficeLng" class="form-control" placeholder="e.g., 77.2090">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Radius (meters)</label>
+                        <input id="newOfficeRadius" class="form-control" placeholder="e.g., 100">
+                    </div>
+                    <div style="display:flex; gap:8px; margin-top:8px;">
+                        <button class="btn btn-primary" onclick="submitNewOffice()">➕ Add Office</button>
+                        <button class="btn" onclick="clearOfficeForm()">Reset</button>
+                    </div>
+                    <div id="addOfficeMsg" style="margin-top:8px;color:var(--gray-700);font-size:13px;"></div>
+                </div>
+
+                <!-- Add User -->
+                <div class="card">
+                    <h3 style="margin-bottom:12px;">Add New User</h3>
+                    <div class="form-group">
+                        <label class="form-label">Full Name</label>
+                        <input id="newUserName" class="form-control" placeholder="e.g., John Doe">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Username</label>
+                            <input id="newUserUsername" class="form-control" placeholder="username">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Mobile Number</label>
+                            <input id="newUserPhone" class="form-control" placeholder="10-digit number">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Email</label>
+                        <input id="newUserEmail" class="form-control" placeholder="email@example.com">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Department</label>
+                            <select id="newUserDepartment" class="form-control">
+                                <option value="">Select Department</option>
+                                <option>IT</option>
+                                <option>HR</option>
+                                <option>Surveyors</option>
+                                <option>Accounts</option>
+                                <option>Growth</option>
+                                <option>Others</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Primary Office</label>
+                            <select id="newUserPrimaryOffice" class="form-control">
+                                <option value="">Loading offices…</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Role</label>
+                            <select id="newUserRole" class="form-control">
+                                <option value="employee">Employee</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Password</label>
+                            <input id="newUserPassword" type="password" class="form-control" placeholder="min 6 chars">
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn btn-success" onclick="submitNewUser()">➕ Add User</button>
+                        <button class="btn" onclick="clearUserForm()">Reset</button>
+                    </div>
+                    <div id="addUserMsg" style="margin-top:8px;color:var(--gray-700);font-size:13px;"></div>
+                </div>
+            </div>
+
+
+            <!-- Lists -->
+            <div style="display:grid; grid-template-columns:1fr; gap:20px; width: auto">
+                <div class="card">
+                    <h3>Offices <small id="officeCount" style="color:var(--gray-500); font-size:10px;"></small></h3>
+                    <div id="adminOfficesList" style="margin-top:12px;"></div>
+                </div>
+
+                <div class="card">
+                    <h3>Users Management <small id="userCount" style="color:var(--gray-500); font-size:10px;"></small>
+                    </h3>
+                    <div class="table-wrap" id="adminUsersListWrapper"
+                        style="margin-top:12px;max-height:420px;overflow:auto;">
+                        <table id="adminUsersTable" class="records-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:60px">ID</th>
+                                    <th>Name</th>
+                                    <th>Username</th>
+                                    <th>Mobile</th>
+                                    <th>Department</th>
+                                    <th>Role</th>
+                                    <th style="width:160px">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminUsersList"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="header-title">User Details / Profiles</div>
+                        <button class="btn btn-secondary" onclick="refreshAdminProfiles()">Refresh</button>
+                        <button class="btn btn-primary" onclick="exportAllProfilesExcel()">Export All (Excel)</button>
+                    </div>
+                    <div id="adminProfilesList"></div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Success Modal -->
+    <div id="successModal" class="modal">
+        <div class="modal-content">
+            <div class="text-center">
+                <div style="font-size: 64px; margin-bottom: 16px;">✅</div>
+                <h3 style="margin-bottom: 16px;">Success!</h3>
+                <p id="successMessage" style="margin-bottom: 24px;">Operation completed successfully.</p>
+                <button onclick="closeModal('successModal')" class="btn btn-primary">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Check Out Confirmation Modal -->
+    <div id="checkOutModal" class="modal">
+        <div class="modal-content">
+            <div class="text-center">
+                <div style="font-size: 48px; margin-bottom: 16px;">🏃</div>
+                <h3 style="margin-bottom: 16px;">Check Out Confirmation</h3>
+                <div id="checkOutDetails" style="margin-bottom: 24px; text-align: left;"></div>
+                <div id="halfDayWarning" class="hidden"
+                    style="background: #fef3c7; padding: 16px; border-radius: 8px; margin-bottom: 20px; color: #92400e;">
+                    <h4>⚠️ Half Day Warning</h4>
+                    <p>You have worked less than 8 hours. This will be marked as a half day.</p>
+                </div>
+                <div style="display: flex; gap: 12px; justify-content: center;">
+                    <button onclick="closeModal('checkOutModal')" class="btn btn-secondary">Cancel</button>
+                    <button onclick="confirmCheckOut()" class="btn btn-primary" id="confirmCheckOutBtn">
+                        <span id="checkOutBtnText">Confirm Check Out</span>
+                        <span id="checkOutSpinner" class="loading-spinner hidden"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Documents Modal -->
+    <div id="docsModal" class="docs-modal">
+        <div class="docs-modal-content">
+
+            <div id="docsModalTitle" class="docs-modal-header">
+                Documents
+            </div>
+
+            <div id="docsList" class="docs-list"></div>
+
+            <div class="docs-actions">
+                <button class="btn btn-secondary" onclick="closeDocsModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="downloadSelectedDocs()">Download</button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Export Attendance Modal -->
+    <div id="exportModal" class="modal">
+        <div class="modal-content">
+            <div class="text-center">
+                <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
+                <h3 style="margin-bottom: 16px;">Export Attendance</h3>
+                <p style="margin-bottom: 24px; color: var(--gray-600);">
+                    Select date range to export attendance records
+                </p>
+
+                <div class="form-group">
+                    <label class="form-label">From Date</label>
+                    <input type="date" id="exportFromDate" class="form-control">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">To Date</label>
+                    <input type="date" id="exportToDate" class="form-control">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Include</label>
+                    <div style="display: flex; gap: 20px; margin-top: 8px;">
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="exportIncludePhotos" checked>
+                            Photos
+                        </label>
+                        <div class="form-group">
+                            <label class="form-label">Employee</label>
+                            <select id="exportUserSelect" class="form-control">
+                                <option value="all">All Employees</option>
+                                <!-- populated dynamically -->
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Attendance Type</label>
+                            <select id="exportTypeSelect" class="form-control">
+                                <option value="all">All</option>
+                                <option value="office">Office</option>
+                                <option value="wfh">WFH</option>
+                                <option value="client">Client</option>
+                            </select>
+                        </div>
+
+                    </div>
+                </div>
+
+                <div id="exportError" style="color: var(--error-color); margin: 16px 0; display: none;"></div>
+
+                <div style="display: flex; gap: 12px; justify-content: center; margin-top: 20px;">
+                    <button onclick="closeModal('exportModal')" class="btn btn-secondary">Cancel</button>
+                    <button onclick="confirmExport()" class="btn btn-primary" id="confirmExportBtn">
+                        <span id="exportBtnText">Export to Excel</span>
+                        <span id="exportSpinner" class="loading-spinner hidden"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Birthday Calendar Modal -->
+    <div id="birthdayCalendarModal" class="modal">
+        <div class="modal-content calendar-modal-content">
+            <div id="birthdayCalendarContent">
+                <div class="text-center" style="padding: 40px;">
+                    <div class="loading-spinner" style="margin: 0 auto 16px;"></div>
+                    <p>Loading birthday calendar...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Requests Modal -->
+    <div id="requestsModal" class="modal">
+        <div class="modal-content" style="max-width: 900px; max-height: 80vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3>📋 Pending Requests</h3>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" onclick="refreshRequests()">🔄 Refresh</button>
+                    <button class="btn btn-secondary" onclick="closeModal('requestsModal')">✕ Close</button>
+                </div>
+            </div>
+
+            <div id="requestsContent">
+                <div class="text-center" style="padding: 40px;">
+                    <div class="loading-spinner" style="margin: 0 auto 16px;"></div>
+                    <p>Loading requests...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Task Manager Modal -->
+    <div id="taskManagerModal" class="modal">
+        <div class="modal-content" style="max-width: 1200px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3> Task Manager</h3>
+                <div class="modal-actions">
+                    <button class="btn btn-primary" onclick="addNewTask()">➕ Add Task</button>
+                    <button class="btn btn-secondary" onclick="refreshTasks()">🔄 Refresh</button>
+                    <button class="btn btn-secondary" onclick="closeModal('taskManagerModal')">✕ Close</button>
+                </div>
+            </div>
+
+            <div class="premium-task-board">
+                <div class="premium-column" id="todoColumn">
+                    <div class="premium-column-header">
+                        <h4> To Do</h4>
+                        <span class="premium-task-count" id="todoCount">0</span>
+                    </div>
+                    <div class="premium-task-list" id="todoList">
+                        <div class="text-muted text-center p-3">No tasks</div>
+                    </div>
+                </div>
+
+                <div class="premium-column" id="inProgressColumn">
+                    <div class="premium-column-header">
+                        <h4> In Progress</h4>
+                        <span class="premium-task-count" id="inProgressCount">0</span>
+                    </div>
+                    <div class="premium-task-list" id="inProgressList">
+                        <div class="text-muted text-center p-3">No tasks</div>
+                    </div>
+                </div>
+
+                <div class="premium-column" id="completedColumn">
+                    <div class="premium-column-header">
+                        <h4> Completed</h4>
+                        <span class="premium-task-count" id="completedCount">0</span>
+                    </div>
+                    <div class="premium-task-list" id="completedList">
+                        <div class="text-muted text-center p-3">No tasks</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- My Tasks Modal (Employee Only) -->
+    <div id="myTasksModal" class="modal">
+        <div class="modal-content" style="max-width: 1200px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3> My Tasks</h3>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" onclick="refreshMyTasks()">🔄 Refresh</button>
+                    <button class="btn btn-secondary" onclick="closeModal('myTasksModal')">✕ Close</button>
+                </div>
+            </div>
+
+            <div class="premium-task-board">
+                <div class="premium-column" id="myTodoColumn">
+                    <div class="premium-column-header">
+                        <h4> To Do</h4>
+                        <span class="premium-task-count" id="myTodoCount">0</span>
+                    </div>
+                    <div class="premium-task-list" id="myTodoList">
+                        <div class="text-muted text-center p-3">No tasks</div>
+                    </div>
+                </div>
+
+                <div class="premium-column" id="myInProgressColumn">
+                    <div class="premium-column-header">
+                        <h4> In Progress</h4>
+                        <span class="premium-task-count" id="myInProgressCount">0</span>
+                    </div>
+                    <div class="premium-task-list" id="myInProgressList">
+                        <div class="text-muted text-center p-3">No tasks</div>
+                    </div>
+                </div>
+
+                <div class="premium-column" id="myCompletedColumn">
+                    <div class="premium-column-header">
+                        <h4> Completed</h4>
+                        <span class="premium-task-count" id="myCompletedCount">0</span>
+                    </div>
+                    <div class="premium-task-list" id="myCompletedList">
+                        <div class="text-muted text-center p-3">No tasks</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Task Modal -->
+    <div id="addTaskModal" class="modal">
+        <div class="modal-content">
+            <h3>Add New Task</h3>
+
+            <div class="form-group">
+                <label class="form-label">Task Title</label>
+                <input type="text" id="taskTitle" class="form-control" placeholder="Enter task title">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Assign To</label>
+                <select id="taskAssignee" class="form-control">
+                    <option value="">Select Employee...</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea id="taskDescription" class="form-control" rows="3" placeholder="Task description"></textarea>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Priority</label>
+                    <select id="taskPriority" class="form-control">
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="urgent">Urgent</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Due Date</label>
+                    <input type="date" id="taskDueDate" class="form-control">
+                </div>
+            </div>
+
+
+            <div style="display:flex; gap:12px; justify-content:flex-end; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closeModal('addTaskModal')">Cancel</button>
+                <button class="btn btn-primary" id="saveTaskBtn" onclick="saveNewTask()">
+                    <span id="saveTaskText">Save Task</span>
+                    <span id="saveTaskSpinner" class="loading-spinner hidden"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Notification -->
+    <div id="notification" class="notification"></div>
+
+    <!-- External JavaScript -->
+    {% load static %}
+    <script src="{% static 'script.js' %}"></script>
+</body>
+
+</html>
