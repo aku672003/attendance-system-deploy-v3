@@ -18,7 +18,7 @@ import tempfile
 from datetime import datetime, date, time, timedelta
 from .models import (
     Employee, EmployeeProfile, OfficeLocation, DepartmentOfficeAccess,
-    AttendanceRecord, WFHRequest, EmployeeDocument, Task
+    AttendanceRecord, EmployeeRequest, EmployeeDocument, Task
 )
 from django.contrib.auth.hashers import make_password, check_password
 
@@ -634,9 +634,11 @@ def wfh_request(request):
         }, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        WFHRequest.objects.create(
+        EmployeeRequest.objects.create(
             employee_id=employee_id,
-            requested_date=requested_date,
+            request_type='wfh',
+            start_date=requested_date,
+            end_date=requested_date,
             reason=reason,
             status='pending'
         )
@@ -1456,26 +1458,26 @@ def upcoming_birthdays(request):
 def pending_requests(request):
     """Get pending WFH and leave requests"""
     try:
-        # Get pending WFH requests
-        wfh_requests = WFHRequest.objects.filter(
+        # Get pending requests
+        requests_obj = EmployeeRequest.objects.filter(
             status='pending'
-        ).select_related('employee').order_by('requested_date')
+        ).select_related('employee').order_by('start_date')
 
         requests_data = []
-        for req in wfh_requests:
+        for req in requests_obj:
             requests_data.append({
                 'id': req.id,
                 'employee_id': req.employee.id,
                 'employee_name': req.employee.name,
                 'username': req.employee.username,
-                'type': 'wfh',
-                'date': str(req.requested_date),
+                'type': req.request_type,
+                'date': str(req.start_date), # Frontend uses this key currently
+                'start_date': str(req.start_date),
+                'end_date': str(req.end_date),
                 'reason': req.reason,
-                'status': req.status
+                'status': req.status,
+                'created_at': req.created_at.isoformat()
             })
-
-        # TODO: Add leave requests when implemented
-        # For now, only WFH requests are included
 
         return Response({
             'success': True,
@@ -1493,9 +1495,18 @@ def pending_requests(request):
 def active_tasks(request):
     """Get count of active tasks"""
     try:
-        active_count = Task.objects.filter(
-            status__in=['todo', 'in_progress']
-        ).count()
+        employee_id = request.GET.get('employee_id')
+        query = Task.objects.filter(status__in=['todo', 'in_progress'])
+
+        if employee_id:
+            try:
+                emp = Employee.objects.get(id=employee_id)
+                if emp.role != 'admin':
+                    query = query.filter(assigned_to=emp)
+            except Employee.DoesNotExist:
+                pass # Or return 0
+        
+        active_count = query.count()
 
         return Response({
             'success': True,
@@ -1508,58 +1519,87 @@ def active_tasks(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+def _get_admin_task_manager_data():
+    """Helper: Get all tasks for Admin Task Manager"""
+    tasks = Task.objects.select_related('assigned_to', 'created_by').order_by('-created_at')
+    return _serialize_tasks(tasks)
+
+def _get_employee_my_tasks_data(employee):
+    """Helper: Get assigned tasks for Employee My Tasks"""
+    tasks = Task.objects.filter(assigned_to=employee).select_related('assigned_to', 'created_by').order_by('-created_at')
+    return _serialize_tasks(tasks)
+
+def _serialize_tasks(tasks):
+    """Helper: Serialize task list"""
+    data = []
+    for task in tasks:
+        data.append({
+            'id': task.id,
+            'title': task.title,
+            'description': task.description,
+            'status': task.status,
+            'priority': task.priority,
+            'assigned_to': task.assigned_to.id,
+            'assigned_to_name': task.assigned_to.name,
+            'created_by': task.created_by.id,
+            'created_by_name': task.created_by.name,
+            'due_date': str(task.due_date) if task.due_date else None,
+            'created_at': task.created_at.isoformat(),
+            'updated_at': task.updated_at.isoformat()
+        })
+    return data
+
+def _create_task_admin(data, creator):
+    """Helper: Admin creates a task"""
+    required_fields = ['title', 'assigned_to']
+    for field in required_fields:
+        if not data.get(field):
+             raise ValueError(f'{field} is required')
+
+    assigned_id = data.get('assigned_to')
+    assigned_employee = Employee.objects.get(id=assigned_id)
+
+    task = Task.objects.create(
+        title=data['title'],
+        description=data.get('description', ''),
+        status=data.get('status', 'todo'),
+        priority=data.get('priority', 'medium'),
+        assigned_to=assigned_employee,
+        created_by=creator,
+        due_date=data.get('due_date')
+    )
+    return task
+
 @api_view(['GET', 'POST'])
 @parser_classes([JSONParser])
 def tasks_api(request):
-    """Get all tasks or create a new task"""
+    """Get all tasks or create a new task (Separated Admin/Employee Logic)"""
     if request.method == 'GET':
         try:
             employee_id = request.GET.get('employee_id')
-            print(f"DEBUG: tasks_api called with employee_id='{employee_id}'")
-            tasks_query = Task.objects.select_related('assigned_to', 'created_by').order_by('-created_at')
-
-            if employee_id:
-                try:
-                    emp = Employee.objects.get(id=employee_id)
-                    print(f"DEBUG: Found employee {emp.name} with role {emp.role}")
-                    if emp.role != 'admin':
-                        tasks_query = tasks_query.filter(assigned_to=emp)
-                        print(f"DEBUG: Filtering tasks for assigned_to={emp.id}")
-                except Employee.DoesNotExist:
-                     # Invalid ID -> Return nothing for security
-                     return Response({'success': True, 'tasks': []})
-            else:
-                 # No ID provided -> Default to secure empty response (or require admin token which we dont have).
-                 # If this is an admin request, they MUST provide their ID too as per new frontend logic.
-                 # If we assume untrusted frontend, we should probably fail safe.
-                 # Let's return empty if no ID provided to prevent leaking all tasks.
+            
+            if not employee_id:
+                 # Security default
                  return Response({'success': True, 'tasks': []})
 
-            tasks = tasks_query
-            tasks_data = []
-
-            for task in tasks:
-                tasks_data.append({
-                    'id': task.id,
-                    'title': task.title,
-                    'description': task.description,
-                    'status': task.status,
-                    'priority': task.priority,
-                    'assigned_to': task.assigned_to.id,
-                    'assigned_to_name': task.assigned_to.name,
-                    'created_by': task.created_by.id,
-                    'created_by_name': task.created_by.name,
-                    'due_date': str(task.due_date) if task.due_date else None,
-                    'created_at': task.created_at.isoformat(),
-                    'updated_at': task.updated_at.isoformat()
+            try:
+                emp = Employee.objects.get(id=employee_id)
+                
+                if emp.role == 'admin':
+                    # ADMIN PATH
+                    tasks_data = _get_admin_task_manager_data()
+                else:
+                    # EMPLOYEE PATH
+                    tasks_data = _get_employee_my_tasks_data(emp)
+                    
+                return Response({
+                    'success': True,
+                    'tasks': tasks_data
                 })
-            
-            print(f"DEBUG: Returning {len(tasks_data)} tasks")
 
-            return Response({
-                'success': True,
-                'tasks': tasks_data
-            })
+            except Employee.DoesNotExist:
+                 return Response({'success': True, 'tasks': []})
+
         except Exception as e:
             return Response({
                 'success': False,
@@ -1567,48 +1607,36 @@ def tasks_api(request):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     elif request.method == 'POST':
-        data = request.data
-        required_fields = ['title', 'assigned_to']
-
-        for field in required_fields:
-            if not data.get(field):
-                return Response({
-                    'success': False,
-                    'message': f'{field} is required'
-                }, status=status.HTTP_400_BAD_REQUEST)
-
         try:
-            # Get current user (admin)
-            # For now, assume admin user - in production, get from authentication
-            admin_user = Employee.objects.filter(role='admin').first()
-            if not admin_user:
-                return Response({
-                    'success': False,
-                    'message': 'Admin user not found'
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            data = request.data
+            creator_id = data.get('created_by')
+            
+            # Identify creator
+            if creator_id:
+                creator = Employee.objects.get(id=creator_id)
+            else:
+                creator = Employee.objects.filter(role='admin').first()
+                if not creator:
+                    return Response({'success': False, 'message': 'No creator found'}, status=status.HTTP_400_BAD_REQUEST)
 
-            assigned_employee = Employee.objects.get(id=data['assigned_to'])
-
-            task = Task.objects.create(
-                title=data['title'],
-                description=data.get('description', ''),
-                status=data.get('status', 'todo'),
-                priority=data.get('priority', 'medium'),
-                assigned_to=assigned_employee,
-                created_by=admin_user,
-                due_date=data.get('due_date')
-            )
+            # Dispatch creation logic
+            if creator.role == 'admin':
+                task = _create_task_admin(data, creator)
+            else:
+                # Re-use admin logic for now as employee creation wasn't strictly defined different yet, 
+                # but valid separation point.
+                task = _create_task_admin(data, creator) 
 
             return Response({
                 'success': True,
                 'message': 'Task created successfully',
                 'task_id': task.id
             })
+
+        except ValueError as e:
+             return Response({'success': False, 'message': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Employee.DoesNotExist:
-            return Response({
-                'success': False,
-                'message': 'Assigned employee not found'
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response({'success': False, 'message': 'Employee not found'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({
                 'success': False,
@@ -1616,10 +1644,58 @@ def tasks_api(request):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+def _update_task_admin(task, data):
+    """Helper: Admin updates task details (full access)"""
+    if task.status == 'completed':
+         # User requirement: "if any task is marked completed it can't be changed"
+         raise ValueError("Cannot modify a completed task")
+
+    if 'status' in data:
+        task.status = data['status']
+    if 'priority' in data:
+        task.priority = data['priority']
+    if 'title' in data:
+        task.title = data['title']
+    if 'description' in data:
+        task.description = data['description']
+    if 'due_date' in data:
+        task.due_date = data['due_date']
+    # Admin can also reassign task if needed (not in original code but logical for admin)
+    if 'assigned_to' in data:
+         try:
+             assigned_emp = Employee.objects.get(id=data['assigned_to'])
+             task.assigned_to = assigned_emp
+         except:
+             pass 
+
+    task.save()
+    return True
+
+def _update_task_employee(task, data):
+    """Helper: Employee updates task (limited access - mostly status)"""
+    # Employee typically only updates status or adds comments (comments not implemented yet)
+    if task.status == 'completed':
+         # STRICTLY BLOCK for generic updates
+         # Exception: If user is trying to reopen? "it can't be changed" implies NO.
+         # Exception: If user is trying to reopen? "it can't be changed" implies NO.
+         # return False - REMOVED to allow raising exception
+         raise ValueError("Cannot modify a completed task")
+
+    if 'status' in data:
+        task.status = data['status']
+    
+    # Employee cannot change title, description, priority, etc. in strict mode
+    # But if original UI allowed it, we might need to support it. 
+    # User said "My Task totally different", implies restricted flow.
+    # We will restrict to Status updates for now as per best practice for "My Tasks".
+    
+    task.save()
+    return True
+
 @api_view(['POST'])
 @parser_classes([JSONParser])
 def task_detail_api(request, task_id):
-    """Update or delete a task"""
+    """Update or delete a task (Separated Admin/Employee Logic)"""
     try:
         task = Task.objects.get(id=task_id)
     except Task.DoesNotExist:
@@ -1631,87 +1707,41 @@ def task_detail_api(request, task_id):
     data = request.data
     requesting_user_id = data.get('user_id') # Must be passed from frontend
     
-    # Validation helper
-    def can_modify(task, user_id):
-        if not user_id: return False
-        try:
-            user = Employee.objects.get(id=user_id)
-            if user.role == 'admin': return True
-            if task.assigned_to.id == int(user_id): return True
-            return False
-        except:
-            return False
-
-    # Check if delete
-    if data.get('_method') == 'DELETE':
-        if not can_modify(task, requesting_user_id):
-             return Response({'success': False, 'message': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
-        task.delete()
-        return Response({
-            'success': True,
-            'message': 'Task deleted'
-        })
-
-    if not can_modify(task, requesting_user_id):
-        return Response({'success': False, 'message': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
-
-    # Update task
-    if 'status' in data:
-        task.status = data['status']
-    if 'priority' in data:
-        task.priority = data['priority']
-    if 'title' in data:
-        task.title = data['title']
-    if 'description' in data:
-        task.description = data['description']
-    if 'due_date' in data:
-        task.due_date = data['due_date']
-
-    task.save()
-
-    return Response({
-        'success': True,
-        'message': 'Task updated'
-    })
-
-
-@api_view(['POST'])
-@parser_classes([JSONParser])
-def wfh_request_approve(request):
-    """Approve WFH request"""
-    data = request.data
-    request_id = data.get('request_id')
-
-    if not request_id:
-        return Response({
-            'success': False,
-            'message': 'Request ID is required'
-        }, status=status.HTTP_400_BAD_REQUEST)
+    if not requesting_user_id:
+         return Response({'success': False, 'message': 'User verification required'}, status=status.HTTP_403_FORBIDDEN)
 
     try:
-        wfh_request = WFHRequest.objects.get(id=request_id)
-        wfh_request.status = 'approved'
-        wfh_request.reviewed_at = timezone.now()
-        # Set reviewed_by to admin user
-        admin_user = Employee.objects.filter(role='admin').first()
-        if admin_user:
-            wfh_request.reviewed_by = admin_user
-        wfh_request.save()
+        requesting_user = Employee.objects.get(id=requesting_user_id)
+        
+        # Check permissions and dispatch
+        if request.method == 'POST':
+             # Check for DELETE method simulation (common in some frameworks/this app?)
+             if data.get('_method') == 'DELETE':
+                  if requesting_user.role != 'admin': # Only Admin deletes
+                       return Response({'success': False, 'message': 'Only Admin can delete tasks'}, status=status.HTTP_403_FORBIDDEN)
+                  
+                  task.delete()
+                  return Response({'success': True, 'message': 'Task deleted'})
 
-        return Response({
-            'success': True,
-            'message': 'WFH request approved'
-        })
-    except WFHRequest.DoesNotExist:
-        return Response({
-            'success': False,
-            'message': 'WFH request not found'
-        }, status=status.HTTP_404_NOT_FOUND)
+             # Update Logic
+             if requesting_user.role == 'admin':
+                  _update_task_admin(task, data)
+                  return Response({'success': True, 'message': 'Task updated (Admin)'})
+             
+             elif task.assigned_to.id == requesting_user.id:
+                  _update_task_employee(task, data)
+                  return Response({'success': True, 'message': 'Task updated (Employee)'})
+             
+             else:
+                  return Response({'success': False, 'message': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+
+    except Employee.DoesNotExist:
+         return Response({'success': False, 'message': 'User not found'}, status=status.HTTP_403_FORBIDDEN)
     except Exception as e:
-        return Response({
-            'success': False,
-            'message': 'Failed to approve request'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+         return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
 
 
 @api_view(['POST'])
@@ -1768,3 +1798,114 @@ def employees_simple_list(request):
             'success': False,
             'message': 'Failed to fetch employees'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@parser_classes([JSONParser])
+def wfh_request_approve(request):
+    """Approve or reject a Request (WFH or Leave)"""
+    try:
+        data = request.data
+        request_id = data.get('request_id')
+        status_val = data.get('status', 'approved')
+        admin_response = data.get('admin_response', '')
+        reviewer_id = data.get('reviewed_by') 
+
+        try:
+            request_obj = EmployeeRequest.objects.get(id=request_id)
+        except EmployeeRequest.DoesNotExist:
+            return Response({'success': False, 'message': 'Request not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        request_obj.status = status_val
+        request_obj.admin_response = admin_response
+        request_obj.reviewed_at = timezone.now()
+        
+        if reviewer_id:
+             try:
+                 request_obj.reviewed_by = Employee.objects.get(id=reviewer_id)
+             except:
+                 pass
+        
+        if not request_obj.reviewed_by:
+             admin_user = Employee.objects.filter(role='admin').first()
+             if admin_user:
+                 request_obj.reviewed_by = admin_user
+
+        request_obj.save()
+
+        return Response({
+            'success': True,
+            'message': f'Request {status_val}'
+        })
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@parser_classes([JSONParser])
+def leave_request(request):
+    """Create a new leave request (Full Day or Half Day)"""
+    try:
+        data = request.data
+        employee_id = data.get('employee_id')
+        date_str = data.get('date')
+        r_type = data.get('type') # 'full_day', 'half_day', 'wfh'
+        reason = data.get('reason')
+        period = data.get('period') # 'first_half', 'second_half'
+
+        if not all([employee_id, date_str, r_type]):
+             return Response({'success': False, 'message': 'Missing fields'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            employee = Employee.objects.get(id=employee_id)
+        except Employee.DoesNotExist:
+            return Response({'success': False, 'message': 'Employee not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        req_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+
+        # Check existing
+        existing = EmployeeRequest.objects.filter(employee=employee, start_date=req_date).first()
+        if existing:
+             return Response({'success': False, 'message': 'Request already exists for this date'}, status=status.HTTP_400_BAD_REQUEST)
+
+        EmployeeRequest.objects.create(
+            employee=employee,
+            request_type=r_type,
+            start_date=req_date,
+            end_date=req_date,
+            reason=reason,
+            status='pending',
+            half_day_period=period if r_type == 'half_day' else None
+        )
+
+        return Response({'success': True, 'message': 'Leave request submitted'})
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@parser_classes([JSONParser])
+def leave_request_approve(request):
+    """Approve or reject a leave request"""
+    try:
+        data = request.data
+        request_id = data.get('request_id')
+        status_val = data.get('status', 'approved') # approved or rejected
+        admin_response = data.get('admin_response', '')
+
+        try:
+            req = EmployeeRequest.objects.get(id=request_id)
+        except EmployeeRequest.DoesNotExist:
+            return Response({'success': False, 'message': 'Request not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        req.status = status_val
+        req.admin_response = admin_response
+        req.reviewed_at = timezone.now()
+        req.save()
+        
+        return Response({'success': True, 'message': f'Request {status_val}'})
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

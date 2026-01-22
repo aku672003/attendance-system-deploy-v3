@@ -195,34 +195,45 @@ class AttendanceRecord(models.Model):
         return f"{self.employee.username} - {self.date}"
 
 
-class WFHRequest(models.Model):
+class EmployeeRequest(models.Model):
+    REQUEST_TYPE_CHOICES = [
+        ('wfh', 'Work From Home'),
+        ('full_day', 'Full Day Leave'),
+        ('half_day', 'Half Day Leave'),
+    ]
+
     STATUS_CHOICES = [
         ('pending', 'Pending'),
         ('approved', 'Approved'),
         ('rejected', 'Rejected'),
     ]
 
-    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='wfh_requests')
-    requested_date = models.DateField()
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='requests')
+    request_type = models.CharField(max_length=20, choices=REQUEST_TYPE_CHOICES)
+    start_date = models.DateField()
+    end_date = models.DateField()
     reason = models.TextField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    reviewed_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_wfh_requests')
+    half_day_period = models.CharField(max_length=20, choices=[('first_half', 'First Half'), ('second_half', 'Second Half')], null=True, blank=True)
+    
     admin_response = models.TextField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_requests')
     reviewed_at = models.DateTimeField(null=True, blank=True)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'wfh_requests'
-        unique_together = [['employee', 'requested_date']]
+        db_table = 'employee_requests'
         indexes = [
             models.Index(fields=['employee']),
             models.Index(fields=['status']),
-            models.Index(fields=['requested_date']),
+            models.Index(fields=['start_date']),
+            models.Index(fields=['request_type']),
         ]
 
     def __str__(self):
-        return f"{self.employee.username} - {self.requested_date}"
+        return f"{self.employee.username} - {self.request_type} - {self.start_date}"
 
 
 class EmployeeDocument(models.Model):

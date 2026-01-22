@@ -403,9 +403,14 @@ async function apiCall(path, method = 'GET', data = null) {
         opts.body = JSON.stringify(data);
     }
 
-    const res = await fetch(url, opts);
-    const text = await res.text();
-    try { return JSON.parse(text); } catch { return { success: false, raw: text, status: res.status }; }
+    try {
+        const res = await fetch(url, opts);
+        const text = await res.text();
+        try { return JSON.parse(text); } catch { return { success: false, raw: text, status: res.status }; }
+    } catch (error) {
+        console.error("API Call failed:", error);
+        return { success: false, message: "Network error or server unreachable" };
+    }
 }
 
 
@@ -442,13 +447,22 @@ async function handleLogin(event) {
 
             showNotification('Login successful!');
             showScreen('dashboardScreen');
-            await loadDashboardData();
-            await loadDashboardData();
-            await populateOfficeDropdowns();
+
+            try {
+                await loadDashboardData();
+                await populateOfficeDropdowns(); // Ensure this exists or catch if it doesn't
+            } catch (err) {
+                console.error("Critical error loading dashboard data:", err);
+                showNotification("Dashboard loaded with some errors", "warning");
+            }
+
             updateDashboardVisibility();
         } else {
             showNotification(result.message || 'Login failed', 'error');
         }
+    } catch (error) {
+        console.error("Login process error:", error);
+        showNotification("An unexpected error occurred during login", "error");
     } finally {
         // Reset button state
         loginBtn.disabled = false;
@@ -552,15 +566,18 @@ async function loadDashboardData() {
         document.getElementById('adminExportNote')?.classList.add('hidden');
 
         // 1. Run location check first and get its status
-        const locationStatus = await updateLocationStatus();
-        const isUserInRange = locationStatus ? locationStatus.inRange : false;
+        let isUserInRange = false;
+        try {
+            const locationStatus = await updateLocationStatus();
+            isUserInRange = locationStatus ? locationStatus.inRange : false;
+        } catch (e) {
+            console.error("Error updating location status:", e);
+        }
 
         // 2. Now run other checks, passing the location status
-        await Promise.all([
-            loadTodayAttendance(isUserInRange),
-            loadMonthlyStats(),
-            loadWFHEligibility()
-        ]);
+        try { await loadTodayAttendance(isUserInRange); } catch (e) { console.error(e); }
+        try { await loadMonthlyStats(); } catch (e) { console.error(e); }
+        try { await loadWFHEligibility(); } catch (e) { console.error(e); }
     }
 }
 
@@ -1185,8 +1202,8 @@ async function openRequestsModal() {
             window.currentRequests = requests; // Store for filtering
 
             const total = requests.length;
-            const wfhCount = requests.filter(r => r.type === 'Work from Home').length;
-            const leaveCount = requests.filter(r => r.type === 'Leave').length;
+            const wfhCount = requests.filter(r => r.type === 'wfh').length;
+            const leaveCount = requests.filter(r => r.type === 'full_day' || r.type === 'half_day').length;
 
             let html = `
                 <div class="requests-modal-container">
@@ -1228,10 +1245,11 @@ async function openRequestsModal() {
                                 <span class="tech-search-icon">🔍</span>
                                 <input type="text" placeholder="Search employee..." onkeyup="filterRequests(this.value)">
                             </div>
-                            <div class="filter-tabs">
-                                <div class="filter-tab active" onclick="filterRequestsByType('all', this)">All</div>
-                                <div class="filter-tab" onclick="filterRequestsByType('Work from Home', this)">WFH</div>
-                                <div class="filter-tab" onclick="filterRequestsByType('Leave', this)">Leave</div>
+                            
+                            <div class="requests-filters">
+                                <button class="filter-tab active" onclick="filterRequestsByType('all', this)">All</button>
+                                <button class="filter-tab" onclick="filterRequestsByType('wfh', this)">WFH</button>
+                                <button class="filter-tab" onclick="filterRequestsByType('leave', this)">Leave</button>
                             </div>
                         </div>
                     </div>
@@ -1266,15 +1284,20 @@ function renderRequestCards(requests) {
     }
 
     return requests.map((req, index) => {
-        const typeClass = req.type === 'Work from Home' ? 'tech-wfh' : 'tech-leave';
-        const badgeClass = req.type === 'Work from Home' ? 'badge-tech-wfh' : 'badge-tech-leave';
+        let typeLabel = req.type;
+        if (req.type === 'wfh') typeLabel = 'Work from Home';
+        else if (req.type === 'full_day') typeLabel = 'Full Day Leave';
+        else if (req.type === 'half_day') typeLabel = 'Half Day Leave';
+
+        const typeClass = req.type === 'wfh' ? 'tech-wfh' : 'tech-leave';
+        const badgeClass = req.type === 'wfh' ? 'badge-tech-wfh' : 'badge-tech-leave';
         const initials = req.employee_name ? req.employee_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : '??';
 
         // Staggered animation
         const delay = index * 50;
 
         return `
-            <div class="req-card-tech ${typeClass}" style="animation: slideInUp 0.3s forwards; animation-delay: ${delay}ms; opacity: 0;">
+            <div class="req-card-tech ${typeClass}" style="animation: slideInUp 0.3s forwards; animation-delay: ${delay}ms;">
                 <div class="req-avatar-tech">${initials}</div>
                 <div class="req-content-tech">
                     <div class="req-header-tech">
@@ -1285,7 +1308,7 @@ function renderRequestCards(requests) {
                         </div>
                     </div>
                     <div class="req-badges-tech">
-                        <span class="req-badge ${badgeClass}">${req.type}</span>
+                        <span class="req-badge ${badgeClass}">${typeLabel}</span>
                         <span style="font-size:0.8rem; color:var(--gray-500); font-weight:600;">📅 ${req.date}</span>
                     </div>
                     ${req.reason ? `<p style="margin:4px 0 0; color:var(--gray-600); font-size:0.9rem;">"${req.reason}"</p>` : ''}
@@ -1318,8 +1341,16 @@ function applyRequestFilters() {
     const type = window.requestFilterType || 'all';
 
     const filtered = window.currentRequests.filter(req => {
-        const matchesSearch = req.employee_name.toLowerCase().includes(query) || req.username.toLowerCase().includes(query);
-        const matchesType = type === 'all' || req.type === type;
+        const matchesSearch = (req.employee_name || '').toLowerCase().includes(query) || (req.username || '').toLowerCase().includes(query);
+
+        // Fix filtering logic
+        let matchesType = true;
+        if (type === 'wfh') {
+            matchesType = req.type === 'wfh';
+        } else if (type === 'leave') {
+            matchesType = req.type === 'full_day' || req.type === 'half_day';
+        }
+
         return matchesSearch && matchesType;
     });
 
@@ -1332,7 +1363,7 @@ async function openTaskManager() {
     // Hide Add Task button for non-admins
     const addTaskBtn = document.querySelector('#taskManagerModal .modal-actions .btn-primary');
     if (addTaskBtn) {
-        if (window.currentUser && window.currentUser.role !== 'admin') {
+        if (typeof currentUser !== 'undefined' && currentUser && currentUser.role !== 'admin') {
             addTaskBtn.style.display = 'none';
         } else {
             addTaskBtn.style.display = 'inline-block';
@@ -1347,8 +1378,10 @@ let tasks = [];
 
 async function refreshTasks() {
     try {
-        const empId = window.currentUser ? window.currentUser.id : '';
-        const res = await apiCall(`tasks?employee_id=${empId}`, 'GET');
+        // Always pass employee_id so backend can verify role (Admin vs Employee)
+        const empId = typeof currentUser !== 'undefined' && currentUser ? currentUser.id : '';
+        const queryParams = `?employee_id=${empId}`;
+        const res = await apiCall(`tasks${queryParams}`, 'GET');
         if (res && res.success && Array.isArray(res.tasks)) {
             tasks = res.tasks;
             renderTaskBoard();
@@ -1391,7 +1424,7 @@ function renderTaskBoard() {
                     <div class="premium-card-header">
                         <span class="premium-priority-badge ${priorityClass}">${task.priority || 'Medium'}</span>
                         <div style="display:flex; gap:4px;">
-                            ${window.currentUser && window.currentUser.role === 'admin' ? `
+                            ${typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin' ? `
                             <button class="btn-icon-sm" onclick="editTask(${task.id})" style="background:none; border:none; color:#94a3b8; cursor:pointer;" title="Edit">✎</button>
                             <button class="btn-icon-sm" onclick="deleteTask(${task.id})" style="background:none; border:none; color:#ef4444; cursor:pointer;" title="Delete">🗑</button>
                             ` : ''}
@@ -1428,7 +1461,7 @@ async function openMyTasks() {
 
 async function refreshMyTasks() {
     try {
-        const empId = window.currentUser ? window.currentUser.id : '';
+        const empId = typeof currentUser !== 'undefined' && currentUser ? currentUser.id : '';
         console.log('DEBUG: refreshing my tasks for empId:', empId, 'currentUser:', window.currentUser);
         const res = await apiCall(`tasks?employee_id=${empId}`, 'GET');
         console.log('DEBUG: my tasks response:', res);
@@ -1575,7 +1608,8 @@ async function saveNewTask() {
             description,
             priority,
             due_date: dueDate || null,
-            assigned_to: assigneeId || null
+            assigned_to: assigneeId || null,
+            created_by: typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null
         });
 
         if (res && res.success) {
@@ -1600,7 +1634,7 @@ async function moveTask(taskId, newStatus, isMyTask = false) {
     try {
         const payload = {
             status: newStatus,
-            user_id: window.currentUser ? window.currentUser.id : null
+            user_id: typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null
         };
         const res = await apiCall(`tasks/${taskId}`, 'POST', payload);
         if (res && res.success) {
@@ -1625,9 +1659,9 @@ async function deleteTask(taskId) {
     try {
         const payload = {
             _method: 'DELETE',
-            user_id: window.currentUser ? window.currentUser.id : null
+            user_id: typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null
         };
-        const res = await apiCall(`tasks / ${taskId} `, 'POST', payload);
+        const res = await apiCall(`tasks/${taskId}`, 'POST', payload);
         if (res && res.success) {
             showNotification('Task deleted');
             await refreshTasks();
@@ -1664,10 +1698,12 @@ async function rejectRequest(requestId, type) {
     if (reason === null) return; // User cancelled
 
     try {
-        const endpoint = type === 'wfh' ? 'wfh-request-reject' : 'leave-request-reject';
+        const endpoint = type === 'wfh' ? 'wfh-request-approve' : 'leave-request-approve';
+        // For rejection, we use the approve endpoint but with status='rejected'
         const res = await apiCall(endpoint, 'POST', {
             request_id: requestId,
-            reason: reason
+            status: 'rejected',
+            admin_response: reason
         });
 
         if (res && res.success) {
@@ -1743,9 +1779,13 @@ async function buildAttendanceCalendar(year, month) {
     }
 
     // Actual days
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+
     for (let day = 1; day <= daysInMonth; day++) {
         const cell = document.createElement('div');
         const status = byDay[day];
+        const currentDate = new Date(year, month, day);
 
         let cls = 'calendar-day';
         if (status === 'present') cls += ' cal-present';
@@ -1753,6 +1793,13 @@ async function buildAttendanceCalendar(year, month) {
         else if (status === 'absent') cls += ' cal-absent';
         else if (status === 'wfh') cls += ' cal-wfh';
         else if (status === 'half_day') cls += ' cal-half';
+
+        // Interactive check for future dates
+        if (currentDate > todayDate) { // Only future dates usually, or >= if same day requests allowed
+            cell.onclick = () => openRequestModal(`${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
+            cell.style.cursor = 'pointer';
+            cell.title = "Click to Request Leave/WFH";
+        }
 
         cell.className = cls;
         cell.textContent = day;
@@ -4804,3 +4851,99 @@ async function exportAllProfilesExcel() {
         showNotification('Error exporting all profiles', 'error');
     }
 }
+
+// --- Interactive Calendar Requests ---
+
+function toggleRequestPeriod() {
+    const type = document.getElementById('requestType').value;
+    const group = document.getElementById('requestPeriodGroup');
+    if (group) {
+        if (type === 'half_day') {
+            group.classList.remove('hidden');
+        } else {
+            group.classList.add('hidden');
+        }
+    }
+}
+
+function openRequestModal(dateStr) {
+    const input = document.getElementById('requestActionDate');
+    const display = document.getElementById('requestActionDateDisplay');
+
+    if (input) input.value = dateStr;
+
+    if (display) {
+        const dateObj = new Date(dateStr);
+        display.textContent = dateObj.toLocaleDateString('default', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        });
+    }
+
+    // Reset form
+    const typeSelect = document.getElementById('requestType');
+    if (typeSelect) {
+        typeSelect.value = 'wfh';
+    }
+    toggleRequestPeriod(); // Ensure correct state
+
+    const reasonInput = document.getElementById('requestReason');
+    if (reasonInput) {
+        reasonInput.value = '';
+    }
+
+    openModal('requestActionModal');
+}
+
+async function submitRequest() {
+    const dateStr = document.getElementById('requestActionDate').value;
+    const type = document.getElementById('requestType').value;
+    const period = document.getElementById('requestPeriod') ? document.getElementById('requestPeriod').value : null;
+    const reason = document.getElementById('requestReason').value;
+    const btn = document.querySelector('#requestActionModal .btn-primary');
+
+    if (!reason || reason.trim() === '') {
+        showNotification('Please provide a reason', 'error');
+        return;
+    }
+
+    try {
+        if (btn) {
+            btn.disabled = true;
+            const originalText = btn.textContent;
+            btn.textContent = 'Submitting...';
+        }
+
+        // Consolidated endpoint for all calendar requests
+        let endpoint = 'leave-request';
+        let body = {
+            employee_id: currentUser ? currentUser.id : null,
+            date: dateStr,
+            type: type,
+            reason: reason,
+            period: (type === 'half_day') ? period : null
+        };
+
+        const res = await apiCall(endpoint, 'POST', body);
+
+        if (res && res.success) {
+            showNotification('Request submitted successfully');
+            closeModal('requestActionModal');
+            // Refresh calendar if open
+            openAttendanceCalendar(); // Reloads calendar data
+        } else {
+            showNotification(res.message || 'Failed to submit request', 'error');
+        }
+
+    } catch (e) {
+        console.error('submitRequest error', e);
+        showNotification('Error submitting request', 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Submit Request';
+        }
+    }
+}
+
+
+

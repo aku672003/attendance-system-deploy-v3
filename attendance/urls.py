@@ -21,6 +21,9 @@ urlpatterns = [
     path('monthly-stats', views.monthly_stats, name='monthly_stats'),
     path('wfh-eligibility', views.wfh_eligibility, name='wfh_eligibility'),
     path('wfh-request', views.wfh_request, name='wfh_request'),
+    path('leave-request', views.leave_request, name='leave_request'),
+    path('leave-request-approve', views.leave_request_approve, name='leave_request_approve'),
+    path('wfh-request-approve', views.wfh_request_approve, name='wfh_request_approve'),
     
     # Profile
     path('employee-profile', views.employee_profile, name='employee_profile'),  # GET and POST
@@ -52,6 +55,5 @@ urlpatterns = [
     path('tasks/<int:task_id>', views.task_detail_api, name='task_detail_api'),
 
     # Request Management
-    path('wfh-request-approve', views.wfh_request_approve, name='wfh_request_approve'),
     path('wfh-request-reject', views.wfh_request_reject, name='wfh_request_reject'),
 ]
