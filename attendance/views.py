@@ -484,6 +484,8 @@ def attendance_records(request):
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
     att_type = request.GET.get('type')
+    days_limit = request.GET.get('days_limit')
+    days_offset = int(request.GET.get('days_offset', 0))
     
     # Auto-mark absentees for today after 12:00pm
     now = timezone.now()
@@ -492,21 +494,33 @@ def attendance_records(request):
         mark_absentees_for_date(today)
     
     try:
-        records = AttendanceRecord.objects.select_related('employee', 'office').all()
+        records_qs = AttendanceRecord.objects.select_related('employee', 'office').all()
         
         if employee_id:
-            records = records.filter(employee_id=employee_id)
+            records_qs = records_qs.filter(employee_id=employee_id)
         if start_date:
-            records = records.filter(date__gte=start_date)
+            records_qs = records_qs.filter(date__gte=start_date)
         if end_date:
-            records = records.filter(date__lte=end_date)
+            records_qs = records_qs.filter(date__lte=end_date)
         if att_type:
-            records = records.filter(type=att_type)
+            records_qs = records_qs.filter(type=att_type)
         
-        records = records.order_by('-date', '-created_at')
+        has_more = False
+        if days_limit:
+            days_limit = int(days_limit)
+            # Get unique dates in DESC order
+            unique_dates = records_qs.values_list('date', flat=True).distinct().order_by('-date')
+            total_days = unique_dates.count()
+            
+            target_dates = unique_dates[days_offset : days_offset + days_limit]
+            has_more = total_days > (days_offset + days_limit)
+            
+            records_qs = records_qs.filter(date__in=target_dates)
+
+        records_qs = records_qs.order_by('-date', '-created_at')
         
         records_data = []
-        for record in records:
+        for record in records_qs:
             records_data.append({
                 'id': record.id,
                 'employee_id': record.employee_id,
@@ -531,7 +545,8 @@ def attendance_records(request):
         
         return Response({
             'success': True,
-            'records': records_data
+            'records': records_data,
+            'has_more': has_more
         })
     except Exception as e:
         return Response({
@@ -1701,8 +1716,8 @@ def active_tasks(request):
         if employee_id:
             try:
                 emp = Employee.objects.get(id=employee_id)
-                if emp.role != 'admin':
-                    query = query.filter(assigned_to=emp)
+                if emp.role.lower() != 'admin':
+                    query = query.filter(Q(assigned_to=emp) | Q(manager=emp)).distinct()
             except Employee.DoesNotExist:
                 pass # Or return 0
         
@@ -1721,12 +1736,14 @@ def active_tasks(request):
 
 def _get_admin_task_manager_data():
     """Helper: Get all tasks for Admin Task Manager"""
-    tasks = Task.objects.select_related('assigned_to', 'created_by').order_by('-created_at')
+    tasks = Task.objects.select_related('assigned_to', 'created_by', 'manager').order_by('-created_at')
     return _serialize_tasks(tasks)
 
 def _get_employee_my_tasks_data(employee):
-    """Helper: Get assigned tasks for Employee My Tasks"""
-    tasks = Task.objects.filter(assigned_to=employee).select_related('assigned_to', 'created_by').order_by('-created_at')
+    """Helper: Get assigned tasks + overseen tasks for Employee My Tasks"""
+    tasks = Task.objects.filter(
+        Q(assigned_to=employee) | Q(manager=employee)
+    ).distinct().select_related('assigned_to', 'created_by', 'manager').order_by('-created_at')
     return _serialize_tasks(tasks)
 
 def _get_manager_employees_tasks_data(manager):
@@ -1868,19 +1885,26 @@ def tasks_api(request):
         except ValueError as e:
              return Response({'success': False, 'message': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Employee.DoesNotExist:
-            return Response({'success': False, 'message': 'Employee not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'success': False, 'message': 'Assigned employee or manager not found'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
+            # More helpful error for debugging
             return Response({
                 'success': False,
-                'message': 'Failed to create task'
+                'message': f'Failed to create task: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-def _update_task_admin(task, data):
-    """Helper: Admin updates task details (full access)"""
-    if task.status == 'completed':
+def _update_task_admin(task, data, user=None):
+    """Helper: Admin/Overseer/Reporting Manager updates task details"""
+    user_role = str(user.role).lower() if user else 'none'
+    is_admin = user_role == 'admin'
+    is_overseer = task.manager and user and task.manager.id == user.id
+    is_reporting_manager = task.assigned_to.manager and user and task.assigned_to.manager.id == user.id
+    
+    if task.status == 'completed' and not (is_admin or is_overseer or is_reporting_manager):
          # User requirement: "if any task is marked completed it can't be changed"
-         raise ValueError("Cannot modify a completed task")
+         # We allow Admins and the Overseer to bypass this for correction/reopening
+         raise ValueError(f"Cannot modify a completed task. Only Admins or Managers can reopen or change finished tasks. (Role: {user_role}, ID: {user.id if user else '?'})")
 
     if 'status' in data:
         task.status = data['status']
@@ -1900,18 +1924,28 @@ def _update_task_admin(task, data):
          except:
              pass 
 
+    if 'manager_id' in data:
+        if data['manager_id'] == 'none':
+            task.manager = None
+        else:
+            try:
+                manager_emp = Employee.objects.get(id=data['manager_id'])
+                task.manager = manager_emp
+            except:
+                pass
     task.save()
     return True
 
-def _update_task_employee(task, data):
+def _update_task_employee(task, data, user=None):
     """Helper: Employee updates task (limited access - mostly status)"""
+    user_role = str(user.role).lower() if user else 'none'
     # Employee typically only updates status or adds comments (comments not implemented yet)
-    if task.status == 'completed':
+    if task.status == 'completed' and user_role != 'admin':
          # STRICTLY BLOCK for generic updates
          # Exception: If user is trying to reopen? "it can't be changed" implies NO.
          # Exception: If user is trying to reopen? "it can't be changed" implies NO.
          # return False - REMOVED to allow raising exception
-         raise ValueError("Cannot modify a completed task")
+         raise ValueError(f"Cannot modify a completed task (ReqID: {user.id if user else '?'})")
 
     if 'status' in data:
         task.status = data['status']
@@ -1929,7 +1963,7 @@ def _update_task_employee(task, data):
 def task_detail_api(request, task_id):
     """Update or delete a task (Separated Admin/Employee Logic)"""
     try:
-        task = Task.objects.get(id=task_id)
+        task = Task.objects.select_related('assigned_to', 'manager', 'assigned_to__manager').get(id=task_id)
     except Task.DoesNotExist:
         return Response({
             'success': False,
@@ -1956,12 +1990,24 @@ def task_detail_api(request, task_id):
                   return Response({'success': True, 'message': 'Task deleted'})
 
              # Update Logic
-             if requesting_user.role == 'admin':
-                  _update_task_admin(task, data)
+             role = str(requesting_user.role).lower()
+             
+             if role == 'admin':
+                  _update_task_admin(task, data, requesting_user)
                   return Response({'success': True, 'message': 'Task updated (Admin)'})
              
+             elif task.manager and task.manager.id == requesting_user.id:
+                  # Task Overseer can also perform full updates
+                  _update_task_admin(task, data, requesting_user)
+                  return Response({'success': True, 'message': 'Task updated (Overseer)'})
+             
+             elif task.assigned_to.manager and task.assigned_to.manager.id == requesting_user.id:
+                  # Assignee's Reporting Manager can also perform full updates
+                  _update_task_admin(task, data, requesting_user)
+                  return Response({'success': True, 'message': 'Task updated (Manager)'})
+             
              elif task.assigned_to.id == requesting_user.id:
-                  _update_task_employee(task, data)
+                  _update_task_employee(task, data, requesting_user)
                   return Response({'success': True, 'message': 'Task updated (Employee)'})
              
              else:
@@ -1989,12 +2035,15 @@ def task_comment_api(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        task = Task.objects.get(id=task_id)
+        task = Task.objects.select_related('assigned_to', 'manager', 'assigned_to__manager').get(id=task_id)
         author = Employee.objects.get(id=author_id)
         
-        # Permission check: Admin, Manager of the assigned employee, or the assigned employee themselves
+        # Permission check: Admin, Overseer, Manager of the assigned employee, or the assigned employee themselves
         can_comment = False
-        if author.role == 'admin':
+        role = str(author.role).lower()
+        if role == 'admin':
+            can_comment = True
+        elif task.manager and task.manager.id == author.id:
             can_comment = True
         elif task.assigned_to.id == author.id:
             can_comment = True

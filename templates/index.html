@@ -10,6 +10,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 
     <!-- External Stylesheet -->
     {% load static %}
@@ -859,8 +860,9 @@
                     <h3>Take Your Photo:</h3>
                     <p style="color: var(--gray-500); margin-bottom: 12px;">Photo is required for verification</p>
 
-                    <div class="camera-container">
+                    <div class="camera-container mirrored">
                         <video id="video" autoplay muted playsinline style="display:none;"></video>
+                        <canvas id="overlayCanvas" style="position:absolute; top:0; left:0; display:none;"></canvas>
                         <img id="capturedPhoto" style="display:none;">
                         <canvas id="photoCanvas" style="display:none;"></canvas>
                         <div id="cameraPlaceholder"
@@ -1305,6 +1307,7 @@
                         manage your assignments</p>
                 </div>
                 <div class="modal-actions">
+                    <button class="btn btn-primary" onclick="addNewTask()">➕ Add Task</button>
                     <button class="btn btn-secondary" onclick="refreshMyTasks()">🔄 Refresh</button>
                     <button class="btn btn-secondary" onclick="closeModal('myTasksModal')">✕ Close</button>
                 </div>
@@ -1401,9 +1404,11 @@
             </div>
 
             <div class="form-group">
-                <label class="form-label">Task Manager (Overseer)</label>
+                <label class="form-label">Task Manager (Overseer) <small class="text-muted"
+                        style="font-weight:normal; margin-left:8px;">(Any employee can oversee this
+                        task)</small></label>
                 <select id="taskManager" class="form-control">
-                    <option value="none">Optional: Select Manager...</option>
+                    <option value="none">Optional: No Overseer</option>
                 </select>
             </div>
 
@@ -1661,6 +1666,21 @@
                     style="flex: 1; padding: 12px; font-weight: 600;">Cancel</button>
                 <button id="confirmOkBtn" class="btn btn-primary"
                     style="flex: 1; padding: 12px; font-weight: 600; background: #ef4444; border-color: #ef4444;">Proceed</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Rejection Modal (Dark Theme) -->
+    <div id="rejectionModal" class="modal">
+        <div class="modal-content rejection-modal-content">
+            <h3 class="rejection-title">127.0.0.1:8000 says</h3>
+            <div class="form-group" style="margin-bottom: 24px;">
+                <label class="rejection-label">Reason for rejection (optional):</label>
+                <input type="text" id="rejectionReasonInput" class="rejection-input" autofocus>
+            </div>
+            <div class="rejection-actions">
+                <button id="rejectionCancelBtn" class="btn rejection-btn-cancel">Cancel</button>
+                <button id="rejectionOkBtn" class="btn rejection-btn-ok">OK</button>
             </div>
         </div>
     </div>
