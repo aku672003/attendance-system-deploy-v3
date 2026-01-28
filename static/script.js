@@ -12,6 +12,11 @@ let notificationTimeout = null;
 let currentEditAttendanceId = null;
 let allAttendanceRecords = [];
 let selectedOfficeInRange = false;
+let attendanceDaysOffset = 0;
+let attendanceHasMore = false;
+let faceapiLoaded = false;
+let trackingInterval = null;
+const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
 // API Configuration
 const apiBaseUrl = "/api";
 
@@ -31,6 +36,9 @@ document.addEventListener('DOMContentLoaded', function () {
             localStorage.removeItem('attendanceUser');
         }
     }
+
+    // Load face detection models
+    loadFaceDetectionModels();
 });
 // Toggle password visibility for any button with .toggle-password-btn
 document.addEventListener('click', function (e) {
@@ -54,6 +62,21 @@ document.addEventListener('click', e => {
 
     openTaskDetail(card.dataset.taskId);
 });
+
+async function loadFaceDetectionModels() {
+    console.log('Loading face detection models...');
+    try {
+        await Promise.all([
+            faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+            faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL)
+        ]);
+        faceapiLoaded = true;
+        console.log('Face detection models loaded successfully.');
+    } catch (e) {
+        console.error('Error loading face detection models:', e);
+        showNotification('Face detection won\'t be available (model load failed).', 'warning');
+    }
+}
 document.addEventListener("dblclick", e => {
     const card = e.target.closest(".task-card");
     if (!card || !isAdmin()) return;
@@ -219,6 +242,8 @@ function resetAttendanceFlow() {
     if (typeSection) typeSection.classList.remove('hidden');
     if (officeBlock) officeBlock.style.display = 'none';
     if (cameraSection) cameraSection.classList.add('hidden');
+
+    stopFaceTracking();
 }
 
 function showScreen(screenId) {
@@ -672,9 +697,22 @@ async function handleNotificationClick(type, id) {
     } else if (type === 'birthday') {
         openBirthdayCalendar();
     } else if (type === 'task') {
-        openTaskManagement();
+        if (currentUser.role === 'admin') {
+            openTaskManager();
+        } else {
+            openMyTasks();
+        }
     } else if (type === 'request') {
-        openPendingRequests();
+        openRequestsModal();
+    }
+
+    // Auto-close notification dropdown
+    const list = document.getElementById('notificationList');
+    if (list) {
+        list.style.display = 'none';
+        list.classList.add('hidden');
+        const icon = document.getElementById('toggleIcon');
+        if (icon) icon.textContent = '▼';
     }
 }
 
@@ -1709,7 +1747,7 @@ function renderRequestCards(requests) {
         const delay = index * 50;
 
         return `
-            <div class="req-card-tech ${typeClass}" onclick="selectRequest(${req.id})" style="animation: slideInUp 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; animation-delay: ${delay}ms; cursor: pointer;">
+            <div id="req-card-${req.id}" class="req-card-tech ${typeClass}" onclick="selectRequest(${req.id})" style="animation: slideInUp 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; animation-delay: ${delay}ms; cursor: pointer;">
                 <div class="req-avatar-tech" style="background: linear-gradient(135deg, #f8fafc, #f1f5f9); color: #475569; width: 60px; height: 60px; border-radius: 18px; border: 1px solid #f1f5f9;">${initials}</div>
                 <div class="req-content-tech">
                     <div class="req-header-tech">
@@ -1859,6 +1897,11 @@ function renderTaskBoard() {
                             <span class="premium-user-avatar" style="width:28px; height:28px; font-size:11px; background: linear-gradient(135deg, #f8fafc, #f1f5f9); border: 1px solid #e2e8f0; color: #475569;">${avatar}</span>
                             <span style="font-size:0.85rem; color:#475569; font-weight: 500;">${task.assigned_to_name || 'Unassigned'}</span>
                         </div>
+                        ${task.manager_name ? `
+                        <div style="display:flex; align-items:center; gap:6px; margin-top: 4px;">
+                            <span style="font-size:0.75rem; color:#64748b; font-weight: 600; background:#f1f5f9; padding:2px 8px; border-radius:4px;">👁 Overseer: ${task.manager_name}</span>
+                        </div>
+                        ` : ''}
                         <div style="display:flex; flex-direction:column; align-items:flex-end;">
                             <span style="font-size:0.8rem; color:#94a3b8; font-weight: 600; display: flex; align-items: center; gap: 4px;">
                                 <span style="font-size: 1rem;">📅</span> ${task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No date'}
@@ -2055,9 +2098,20 @@ async function populateTaskAssigneeDropdown() {
         const res = await apiCall('employees-simple', 'GET');
         if (res && res.success && Array.isArray(res.employees)) {
             window.allEmployeesSimple = res.employees; // Store for lookup
-            const options = '<option value="">Select Employee...</option>' +
-                res.employees.map(emp => `<option value="${emp.id}">${emp.name} (${emp.role})</option>`).join('');
-            select.innerHTML = options;
+
+            let options = '';
+            if (currentUser.role === 'employee') {
+                // For employees, only allow assigning to self
+                options = `<option value="${currentUser.id}" selected>${currentUser.name} (My Self)</option>`;
+                select.innerHTML = options;
+                select.disabled = true; // Lock the selection
+            } else {
+                // Admin/Manager: Show everyone
+                select.disabled = false;
+                options = '<option value="">Select Employee...</option>' +
+                    res.employees.map(emp => `<option value="${emp.id}">${emp.name} (${emp.role})</option>`).join('');
+                select.innerHTML = options;
+            }
 
             const managerSelect = document.getElementById('taskManager');
             if (managerSelect) {
@@ -2129,6 +2183,7 @@ async function saveNewTask() {
             closeModal('addTaskModal');
             window.currentEditingTaskId = null;
             await refreshTasks();
+            if (typeof refreshMyTasks === 'function') await refreshMyTasks();
             await loadActiveTasks(); // Update dashboard count
         } else {
             showNotification(res?.message || (window.currentEditingTaskId ? 'Failed to update task' : 'Failed to create task'), 'error');
@@ -2155,6 +2210,7 @@ function openTaskDetail(taskId) {
 
     document.getElementById('detailTaskMeta').innerHTML = `
         <span>👤 ${task.assigned_to_name}</span>
+        ${task.manager_name ? `<span>👁 Overseer: ${task.manager_name}</span>` : ''}
         <span>🚩 ${task.priority}</span>
         <span>📅 ${task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No date'}</span>
     `;
@@ -2282,7 +2338,7 @@ async function approveRequest(requestId, type) {
 }
 
 async function rejectRequest(requestId, type) {
-    const reason = prompt('Reason for rejection (optional):');
+    const reason = await openRejectionModal(requestId);
     if (reason === null) return; // User cancelled
 
     try {
@@ -2507,6 +2563,32 @@ async function loadMyRequests() {
 }
 
 
+
+// Custom Calendar Tooltip Helper Functions
+function showCalendarTooltip(e, text) {
+    let tooltip = document.getElementById('customCalendarTooltip');
+    if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.id = 'customCalendarTooltip';
+        tooltip.className = 'calendar-tooltip';
+        document.body.appendChild(tooltip);
+    }
+
+    tooltip.textContent = text;
+    tooltip.classList.add('visible');
+
+    // Position
+    tooltip.style.left = `${e.clientX + 10}px`; // Follow mouse slightly
+    tooltip.style.top = `${e.clientY + 10}px`;
+}
+
+function hideCalendarTooltip() {
+    const tooltip = document.getElementById('customCalendarTooltip');
+    if (tooltip) {
+        tooltip.classList.remove('visible');
+    }
+}
+
 async function openAttendanceCalendar() {
     if (!currentUser) {
         showNotification('Please login first', 'error');
@@ -2552,7 +2634,7 @@ async function buildAttendanceCalendar(year, month) {
         if (!r.date) return;
         const d = new Date(r.date);
         if (d.getFullYear() === year && d.getMonth() === month) {
-            byDay[d.getDate()] = r.status || null;
+            byDay[d.getDate()] = r;
         }
     });
 
@@ -2572,7 +2654,8 @@ async function buildAttendanceCalendar(year, month) {
 
     for (let day = 1; day <= daysInMonth; day++) {
         const cell = document.createElement('div');
-        const status = byDay[day];
+        const record = byDay[day];
+        const status = record ? record.status : null;
         const currentDate = new Date(year, month, day);
 
         let cls = 'calendar-day';
@@ -2582,11 +2665,36 @@ async function buildAttendanceCalendar(year, month) {
         else if (status === 'wfh') cls += ' cal-wfh';
         else if (status === 'half_day') cls += ' cal-half';
 
+        // Add tooltip details for past dates/records
+
+
+        // Add tooltip details for past dates/records
+        if (record) {
+            let tooltipLines = [];
+            if (record.check_in_time) tooltipLines.push(`In: ${record.check_in_time}`);
+            if (record.check_out_time) tooltipLines.push(`Out: ${record.check_out_time}`);
+
+            if (record.total_hours) {
+                const h = Number(record.total_hours);
+                if (!isNaN(h) && h > 0) {
+                    tooltipLines.push(`Hrs: ${Math.floor(h)}h ${Math.round((h % 1) * 60)}m`);
+                }
+            }
+            if (tooltipLines.length > 0) {
+                // Remove native title
+                cell.removeAttribute('title');
+                const tooltipText = tooltipLines.join('\n');
+                cell.onmouseenter = (e) => showCalendarTooltip(e, tooltipText);
+                cell.onmousemove = (e) => showCalendarTooltip(e, tooltipText); // Follow mouse
+                cell.onmouseleave = () => hideCalendarTooltip();
+            }
+        }
+
         // Interactive check for future dates
         if (currentDate > todayDate) { // Only future dates usually, or >= if same day requests allowed
             cell.onclick = () => openRequestModal(`${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
             cell.style.cursor = 'pointer';
-            cell.title = "Click to Request Leave/WFH";
+            cell.title = "Click to Request Leave/WFH"; // Override if future
         }
 
         cell.className = cls;
@@ -3390,6 +3498,9 @@ async function startCamera() {
         captureBtn.style.display = 'inline-block';
         retakeBtn.style.display = 'none';
 
+        // Start real-time tracking
+        startFaceTracking();
+
     } catch (e) {
         console.error('startCamera error', e);
 
@@ -3406,7 +3517,7 @@ async function startCamera() {
     }
 }
 
-function capturePhoto() {
+async function capturePhoto() {
     const video = document.getElementById('video');
     const canvas = document.getElementById('photoCanvas');
     const img = document.getElementById('capturedPhoto');
@@ -3428,9 +3539,13 @@ function capturePhoto() {
     canvas.width = width;
     canvas.height = height;
 
-    // Draw the frame from video onto canvas
+    // Draw the frame from video onto canvas (mirrored)
     const ctx = canvas.getContext('2d');
+    ctx.save();
+    ctx.translate(width, 0);
+    ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0, width, height);
+    ctx.restore();
 
     // Save the captured image for attendance API
     capturedPhotoData = canvas.toDataURL('image/jpeg');
@@ -3445,10 +3560,43 @@ function capturePhoto() {
     if (captureBtn) captureBtn.style.display = 'none';
     if (retakeBtn) retakeBtn.style.display = 'inline-block';
 
-    if (markBtn) {
-        markBtn.style.display = 'inline-block';
-    } else {
-        console.warn('markBtn not found — check id="markBtn" in your HTML');
+    // Stop tracking
+    stopFaceTracking();
+
+    // Face Detection Logic
+    if (markBtn) markBtn.style.display = 'none'; // Hide by default until face detected
+
+    if (!faceapiLoaded) {
+        showNotification('Face detection is still loading or failed. Please try again in a moment.', 'warning');
+        return;
+    }
+
+    showNotification('Detecting face...', 'info');
+
+    try {
+        const detections = await faceapi.detectAllFaces(canvas, new faceapi.TinyFaceDetectorOptions());
+
+        if (detections.length === 0) {
+            showNotification('No face detected. Please position yourself clearly and try again.', 'error');
+            // Draw a red "X" or just leave it
+        } else if (detections.length > 1) {
+            showNotification('Multiple faces detected. Please ensure only you are in the frame.', 'error');
+        } else {
+            showNotification('Face detected successfully!', 'success');
+            if (markBtn) markBtn.style.display = 'inline-block';
+
+            // Draw box on canvas for feedback (without score)
+            detections.forEach(detection => {
+                new faceapi.draw.DrawBox(detection.box, { label: "" }).draw(canvas);
+            });
+            // Update the preview image with the version containing the box
+            img.src = canvas.toDataURL('image/jpeg');
+            // Also update the global data used for API
+            capturedPhotoData = img.src;
+        }
+    } catch (e) {
+        console.error('Face detection error:', e);
+        showNotification('Error during face detection.', 'error');
     }
 }
 
@@ -3494,6 +3642,58 @@ function retakePhoto() {
     if (captureBtn) captureBtn.style.display = 'none';
     if (retakeBtn) retakeBtn.style.display = 'none';
     if (markBtn) markBtn.style.display = 'none';
+
+    // Stop tracking
+    stopFaceTracking();
+}
+
+function startFaceTracking() {
+    if (!faceapiLoaded) return;
+
+    const video = document.getElementById('video');
+    const overlay = document.getElementById('overlayCanvas');
+    if (!video || !overlay) return;
+
+    overlay.style.display = 'block';
+
+    // Match overlay canvas size to video display size
+    const updateSize = () => {
+        overlay.width = video.offsetWidth;
+        overlay.height = video.offsetHeight;
+    };
+    updateSize();
+
+    if (trackingInterval) clearInterval(trackingInterval);
+
+    trackingInterval = setInterval(async () => {
+        if (!stream || video.paused || video.ended) return;
+
+        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+        const displaySize = { width: video.offsetWidth, height: video.offsetHeight };
+
+        // Resize detections to match display size
+        const resizedDetections = faceapi.resizeResults(detections, displaySize);
+
+        // Clear canvas and draw detections (without score)
+        const ctx = overlay.getContext('2d');
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+        resizedDetections.forEach(detection => {
+            new faceapi.draw.DrawBox(detection.box, { label: "" }).draw(overlay);
+        });
+    }, 200);
+}
+
+function stopFaceTracking() {
+    if (trackingInterval) {
+        clearInterval(trackingInterval);
+        trackingInterval = null;
+    }
+    const overlay = document.getElementById('overlayCanvas');
+    if (overlay) {
+        overlay.style.display = 'none';
+        const ctx = overlay.getContext('2d');
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+    }
 }
 
 
@@ -3502,6 +3702,7 @@ function stopCamera() {
         stream.getTracks().forEach(t => t.stop());
     }
     stream = null;
+    stopFaceTracking();
 
     const video = document.getElementById('video');
     const img = document.getElementById('capturedPhoto');
@@ -3788,51 +3989,80 @@ async function confirmCheckOut() {
 
 
 
-async function loadAttendanceRecords() {
+async function loadAttendanceRecords(isMore = false) {
     try {
         const recordsContent = document.getElementById('recordsContent');
 
-        recordsContent.innerHTML = `
-            <div class="text-center" style="padding: 40px;">
-                <div class="loading-spinner" style="margin: 0 auto 16px; width: 24px; height: 24px;"></div>
-                <p>Loading attendance records.</p>
-            </div>
-        `;
+        if (!isMore) {
+            attendanceDaysOffset = 0;
+            allAttendanceRecords = [];
+            recordsContent.innerHTML = `
+                <div class="text-center" style="padding: 40px;">
+                    <div class="loading-spinner" style="margin: 0 auto 16px; width: 24px; height: 24px;"></div>
+                    <p>Loading attendance records.</p>
+                </div>
+            `;
+        } else {
+            const btn = document.getElementById('loadMoreAttendanceBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<div class="loading-spinner" style="width:16px; height:16px; margin:0 auto;"></div>';
+            }
+        }
 
-        const params = {};
+        const params = {
+            days_limit: 1,
+            days_offset: attendanceDaysOffset
+        };
 
         // For non-admin users (employees), fetch last 6 months of data
         if (currentUser.role !== 'admin') {
             params.employee_id = currentUser.id;
-
+            // No strict 6-month limit here if we want true pagination, but we can keep it as a safety
             const today = new Date();
             const sixMonthsAgo = new Date();
             sixMonthsAgo.setMonth(today.getMonth() - 6);
-
             params.start_date = formatDate(sixMonthsAgo);
             params.end_date = formatDate(today);
         }
 
-        // Admin → all records
         const result = await apiCall('attendance-records', 'GET', params);
 
-        const rows = (result && result.success && Array.isArray(result.records)) ? result.records : [];
-        allAttendanceRecords = rows;
-
-        renderAttendanceTable(rows);
+        if (result && result.success && Array.isArray(result.records)) {
+            allAttendanceRecords = [...allAttendanceRecords, ...result.records];
+            attendanceHasMore = result.has_more;
+            renderAttendanceTable(allAttendanceRecords);
+            applyAttendanceSearch();
+        } else {
+            if (!isMore) {
+                recordsContent.innerHTML = '<div class="text-center" style="padding: 40px;"><p>No records found.</p></div>';
+            } else {
+                showNotification('No more records to load', 'info');
+                const btn = document.getElementById('loadMoreAttendanceBtn');
+                if (btn) btn.remove();
+            }
+        }
     } catch (error) {
         console.error('Error loading records:', error);
-        document.getElementById('recordsContent').innerHTML = `
-            <div class="text-center" style="padding: 40px;">
-                <p style="color: var(--error-color);">Error loading records. Please try again.</p>
-            </div>
-        `;
+        if (!isMore) {
+            document.getElementById('recordsContent').innerHTML = `
+                <div class="text-center" style="padding: 40px;">
+                    <p style="color: var(--error-color);">Error loading records. Please try again.</p>
+                </div>
+            `;
+        }
     }
+}
+
+async function loadMoreAttendanceRecords() {
+    attendanceDaysOffset++;
+    await loadAttendanceRecords(true);
 }
 
 // 2) Render table with search toolbar
 function renderAttendanceTable(records) {
     const recordsContent = document.getElementById('recordsContent');
+    const oldSearchVal = document.getElementById('attendanceSearchInput')?.value || '';
 
     if (!records || records.length === 0) {
         recordsContent.innerHTML = `
@@ -3849,11 +4079,19 @@ function renderAttendanceTable(records) {
             <input id="attendanceSearchInput"
                     class="form-control records-search-input"
                     placeholder="Search by name / username / date"
+                    value="${oldSearchVal}"
                     onkeyup="if (event.key === 'Enter') applyAttendanceSearch();">
             <button class="btn btn-secondary" onclick="applyAttendanceSearch()">Search</button>
             <button class="btn" onclick="clearAttendanceSearch()">Clear</button>
         </div>
         <div id="attendanceListContainer"></div>
+        ${attendanceHasMore ? `
+            <div class="text-center" style="margin-top: 24px; margin-bottom: 40px;">
+                <button id="loadMoreAttendanceBtn" class="btn btn-primary" onclick="loadMoreAttendanceRecords()" style="padding: 12px 32px; font-weight: 600; border-radius: 12px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);">
+                    Load Previous Day
+                </button>
+            </div>
+        ` : ''}
     `;
 
     const listContainer = document.getElementById('attendanceListContainer');
@@ -4045,17 +4283,7 @@ function applyAttendanceSearch() {
 }
 
 function clearAttendanceSearch() {
-    const input = document.getElementById('attendanceSearchInput');
-    if (input) input.value = '';
-
-    const listContainer = document.getElementById('attendanceListContainer');
-    if (!listContainer || !allAttendanceRecords.length) return;
-
-    if (currentUser.role === 'admin') {
-        renderAdminDayWiseView(allAttendanceRecords, listContainer);
-    } else {
-        renderUserMonthWiseView(allAttendanceRecords, listContainer);
-    }
+    loadAttendanceRecords();
 }
 
 
@@ -6003,6 +6231,11 @@ function selectRequest(requestId) {
 
     const initials = req.employee_name ? req.employee_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : '??';
 
+    // Highlight Active Card
+    document.querySelectorAll('.req-card-tech').forEach(c => c.classList.remove('active'));
+    const activeCard = document.getElementById(`req-card-${requestId}`);
+    if (activeCard) activeCard.classList.add('active');
+
     detailContainer.innerHTML = `
         <div style="animation: slideInRight 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 24px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); height: 100%; display: flex; flex-direction: column;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 24px;">
@@ -6013,7 +6246,7 @@ function selectRequest(requestId) {
                         <span style="font-size:0.8rem; color:#64748b;">@${req.username || 'user'}</span>
                     </div>
                 </div>
-                <button onclick="document.getElementById('requestDetailContainer').innerHTML = '<div style=\'height: 100%; border: 2px dashed #e2e8f0; border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; color: #94a3b8;\'><span style=\'font-size: 3rem; margin-bottom: 16px;\'>🔍</span><p style=\'font-weight: 600; margin: 0; color: #64748b;\'>Select a request</p><p style=\'font-size: 0.85rem; margin-top: 4px;\'>Click any card to review details</p></div>'" style="background:transparent; border:none; color:#94a3b8; cursor:pointer; font-size:1.2rem;">✕</button>
+                <button onclick="closeRequestDetail()" style="background:transparent; border:none; color:#94a3b8; cursor:pointer; font-size:1.2rem; transition: color 0.2s;">✕</button>
             </div>
             
             <div style="display:flex; flex-direction:column; gap:16px; flex: 1;">
@@ -6049,3 +6282,59 @@ function selectRequest(requestId) {
     `;
 }
 
+
+// Custom Rejection Modal Logic
+function openRejectionModal(requestId) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('rejectionModal');
+        const input = document.getElementById('rejectionReasonInput');
+        const cancelBtn = document.getElementById('rejectionCancelBtn');
+        const okBtn = document.getElementById('rejectionOkBtn');
+
+        if (!modal || !input) {
+            console.error('Rejection modal elements missing');
+            resolve(null);
+            return;
+        }
+
+        // Reset
+        input.value = '';
+        modal.classList.add('active');
+        input.focus();
+
+        const close = (val) => {
+            modal.classList.remove('active');
+            // Remove listeners to prevent memory leaks or duplicate triggers
+            cancelBtn.removeEventListener('click', onCancel);
+            okBtn.removeEventListener('click', onOk);
+            input.removeEventListener('keydown', onKey);
+            resolve(val);
+        };
+
+        const onCancel = () => close(null);
+        const onOk = () => close(input.value.trim());
+        const onKey = (e) => {
+            if (e.key === 'Enter') onOk();
+            if (e.key === 'Escape') onCancel();
+        };
+
+        cancelBtn.addEventListener('click', onCancel);
+        okBtn.addEventListener('click', onOk);
+        input.addEventListener('keydown', onKey);
+    });
+}
+
+function closeRequestDetail() {
+    const detailContainer = document.getElementById('requestDetailContainer');
+    if (detailContainer) {
+        detailContainer.innerHTML = `
+            <div style="height: 100%; border: 2px dashed #e2e8f0; border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; color: #94a3b8;">
+                <span style="font-size: 3rem; margin-bottom: 16px;">🔍</span>
+                <p style="font-weight: 600; margin: 0; color: #64748b;">Select a request</p>
+                <p style="font-size: 0.85rem; margin-top: 4px;">Click any card to review details</p>
+            </div>
+        `;
+    }
+    // Remove active state
+    document.querySelectorAll('.req-card-tech').forEach(c => c.classList.remove('active'));
+}
