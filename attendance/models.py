@@ -30,6 +30,7 @@ class Employee(models.Model):
     
     ROLE_CHOICES = [
         ('employee', 'Employee'),
+        ('manager', 'Manager'),
         ('admin', 'Admin'),
     ]
 
@@ -41,6 +42,7 @@ class Employee(models.Model):
     department = models.CharField(max_length=20, choices=DEPARTMENT_CHOICES)
     primary_office = models.CharField(max_length=10)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='employee')
+    manager = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='subordinates')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -285,6 +287,7 @@ class Task(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='todo')
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='medium')
     assigned_to = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='assigned_tasks')
+    manager = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='supervised_tasks')
     created_by = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='created_tasks')
     due_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -301,3 +304,36 @@ class Task(models.Model):
 
     def __str__(self):
         return f"{self.title} - {self.assigned_to.name}"
+
+
+class TaskComment(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='comments')
+    author = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='task_comments')
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'task_comments'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"Comment by {self.author.name} on {self.task.title}"
+
+
+class BirthdayWish(models.Model):
+    sender = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='sent_wishes')
+    receiver = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='received_wishes')
+    message = models.TextField()
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'birthday_wishes'
+        indexes = [
+            models.Index(fields=['receiver']),
+            models.Index(fields=['is_read']),
+            models.Index(fields=['created_at']),
+        ]
+
+    def __str__(self):
+        return f"Wish from {self.sender.name} to {self.receiver.name}"

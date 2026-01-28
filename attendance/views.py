@@ -18,7 +18,7 @@ import tempfile
 from datetime import datetime, date, time, timedelta
 from .models import (
     Employee, EmployeeProfile, OfficeLocation, DepartmentOfficeAccess,
-    AttendanceRecord, EmployeeRequest, EmployeeDocument, Task
+    AttendanceRecord, EmployeeRequest, EmployeeDocument, Task, BirthdayWish, TaskComment
 )
 from django.contrib.auth.hashers import make_password, check_password
 
@@ -126,6 +126,7 @@ def register(request):
             department=data['department'],
             primary_office=data['primary_office'],
             role=data.get('role', 'employee'),
+            manager_id=data.get('manager_id') if data.get('manager_id') != 'none' else None,
             is_active=True
         )
         return Response({
@@ -849,6 +850,7 @@ def admin_users(request):
             'phone': u.phone,
             'department': u.department,
             'role': u.role,
+            'manager_name': u.manager.name if u.manager else None,
             'is_active': u.is_active,
         } for u in users]
         
@@ -886,6 +888,8 @@ def admin_user_detail(request, user_id):
                 'phone': employee.phone,
                 'department': employee.department,
                 'role': employee.role,
+                'manager_id': employee.manager.id if employee.manager else None,
+                'manager_name': employee.manager.name if employee.manager else None,
                 'is_active': employee.is_active,
             }
         })
@@ -912,6 +916,18 @@ def admin_user_detail(request, user_id):
             employee.department = data['department']
         if data.get('role'):
             employee.role = data['role']
+        if data.get('manager_id'):
+            if data['manager_id'] == 'none':
+                employee.manager = None
+            else:
+                try:
+                    manager_emp = Employee.objects.get(id=data['manager_id'])
+                    employee.manager = manager_emp
+                except Employee.DoesNotExist:
+                    pass
+        elif 'manager_id' in data and not data.get('manager_id'):
+            employee.manager = None
+            
         if 'is_active' in data:
             employee.is_active = bool(data['is_active'])
         if data.get('primary_office'):
@@ -1455,6 +1471,148 @@ def upcoming_birthdays(request):
 
 
 @api_view(['GET'])
+@parser_classes([JSONParser])
+def get_notifications(request):
+    """Get notifications for the current user"""
+    user_id = request.GET.get('user_id')
+    if not user_id:
+         return Response({'success': False, 'message': 'User ID required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = Employee.objects.get(id=user_id)
+    except Employee.DoesNotExist:
+        return Response({'success': False, 'message': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    notifications = []
+    
+    # 0. Received Birthday Wishes
+    received_wishes = BirthdayWish.objects.filter(
+        receiver_id=user_id,
+        is_read=False
+    ).select_related('sender').order_by('-created_at')
+
+    for wish in received_wishes:
+        notifications.append({
+            'type': 'wish',
+            'icon': '🎈',
+            'message': f"{wish.sender.name}: {wish.message}",
+            'time': wish.created_at.strftime('%I:%M %p'),
+            'id': f'wish_{wish.id}'
+        })
+
+    # 1. Birthday notifications (today's birthdays)
+    today = timezone.now().date()
+    birthdays_today = EmployeeProfile.objects.filter(
+        date_of_birth__month=today.month,
+        date_of_birth__day=today.day,
+        employee__is_active=True
+    ).select_related('employee').exclude(employee_id=user_id)
+    
+    for profile in birthdays_today:
+        notifications.append({
+            'type': 'birthday',
+            'icon': '🎂',
+            'message': f"Today is {profile.employee.name}'s birthday!",
+            'time': 'Today',
+            'id': f'birthday_{profile.employee.id}'
+        })
+    
+    # 2. Task assignments
+    pending_tasks = Task.objects.filter(
+        assigned_to_id=user_id,
+        status='todo'
+    ).order_by('-created_at')[:5]
+    
+    for task in pending_tasks:
+        notifications.append({
+            'type': 'task',
+            'icon': '📝',
+            'message': f'New task assigned: {task.title}',
+            'time': task.created_at.strftime('%I:%M %p') if task.created_at else 'Unknown',
+            'id': f'task_{task.id}'
+        })
+    
+    # 3. Pending requests (for admins)
+    if user.role == 'admin':
+        pending_requests_count = EmployeeRequest.objects.filter(
+            status='pending'
+        ).count()
+        
+        if pending_requests_count > 0:
+            notifications.append({
+                'type': 'request',
+                'icon': '📋',
+                'message': f'{pending_requests_count} pending approval(s)',
+                'time': 'Now',
+                'id': 'pending_requests'
+            })
+    
+    return Response({
+        'success': True,
+        'notifications': notifications,
+        'unread_count': len(notifications)
+    })
+
+@api_view(['POST'])
+@parser_classes([JSONParser])
+def mark_notifications_read(request):
+    """Mark all notifications or a specific one as read"""
+    user_id = request.data.get('user_id')
+    notification_id = request.data.get('notification_id') # Optional: if we want to mark specific
+
+    if not user_id:
+        return Response({'success': False, 'message': 'User ID required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Currently we only have BirthdayWishes that need persistence
+    wishes = BirthdayWish.objects.filter(receiver_id=user_id, is_read=False)
+    if notification_id and notification_id.startswith('wish_'):
+        wish_id = notification_id.replace('wish_', '')
+        wishes = wishes.filter(id=wish_id)
+    
+    wishes.update(is_read=True)
+    
+    return Response({'success': True, 'message': 'Notifications marked as read'})
+
+
+@api_view(['POST'])
+@parser_classes([JSONParser])
+def send_birthday_wish(request):
+    """Send a birthday wish to an employee"""
+    sender_id = request.data.get('sender_id')
+    receiver_id = request.data.get('receiver_id')
+    message = request.data.get('message', 'Wishing you a very Happy Birthday! 🎂')
+
+    if not all([sender_id, receiver_id]):
+         return Response({'success': False, 'message': 'Sender and Receiver IDs required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        sender = Employee.objects.get(id=sender_id)
+        receiver = Employee.objects.get(id=receiver_id)
+        
+        # Prevent duplicate wishes for same day
+        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        existing_wish = BirthdayWish.objects.filter(
+            sender=sender,
+            receiver=receiver,
+            created_at__gte=today_start
+        ).exists()
+        
+        if existing_wish:
+            return Response({'success': False, 'message': 'You have already sent a wish today!'})
+
+        wish = BirthdayWish.objects.create(
+            sender=sender,
+            receiver=receiver,
+            message=message
+        )
+        return Response({'success': True, 'message': 'Birthday wish sent successfully!'})
+
+    except Employee.DoesNotExist:
+        return Response({'success': False, 'message': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+
+@api_view(['GET'])
 def pending_requests(request):
     """Get pending WFH and leave requests"""
     try:
@@ -1488,6 +1646,48 @@ def pending_requests(request):
         return Response({
             'success': False,
             'message': 'Failed to fetch pending requests'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+@api_view(['GET'])
+def my_requests(request):
+    """Get request history for an employee"""
+    try:
+        employee_id = request.GET.get('employee_id')
+        if not employee_id:
+            return Response({
+                'success': False,
+                'message': 'Employee ID is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get all requests for employee
+        requests_obj = EmployeeRequest.objects.filter(
+            employee_id=employee_id
+        ).order_by('-created_at')
+
+        requests_data = []
+        for req in requests_obj:
+            requests_data.append({
+                'id': req.id,
+                'type': req.request_type,
+                'start_date': str(req.start_date),
+                'end_date': str(req.end_date),
+                'reason': req.reason,
+                'status': req.status,
+                'admin_response': req.admin_response,
+                'created_at': req.created_at.isoformat()
+            })
+
+        return Response({
+            'success': True,
+            'count': len(requests_data),
+            'requests': requests_data
+        })
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': 'Failed to fetch request history'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -1529,10 +1729,27 @@ def _get_employee_my_tasks_data(employee):
     tasks = Task.objects.filter(assigned_to=employee).select_related('assigned_to', 'created_by').order_by('-created_at')
     return _serialize_tasks(tasks)
 
+def _get_manager_employees_tasks_data(manager):
+    """Helper: Get tasks for employees reporting to this manager + tasks explicitly managed by them"""
+    tasks = Task.objects.filter(
+        Q(assigned_to__manager=manager) | Q(manager=manager)
+    ).distinct().select_related('assigned_to', 'created_by', 'manager').order_by('-created_at')
+    return _serialize_tasks(tasks)
+
 def _serialize_tasks(tasks):
-    """Helper: Serialize task list"""
+    """Helper: Serialize task list with comments"""
     data = []
     for task in tasks:
+        # Get comments for each task
+        comments = []
+        for comment in task.comments.all().select_related('author'):
+            comments.append({
+                'id': comment.id,
+                'author_name': comment.author.name,
+                'content': comment.content,
+                'created_at': comment.created_at.isoformat()
+            })
+            
         data.append({
             'id': task.id,
             'title': task.title,
@@ -1541,11 +1758,14 @@ def _serialize_tasks(tasks):
             'priority': task.priority,
             'assigned_to': task.assigned_to.id,
             'assigned_to_name': task.assigned_to.name,
+            'manager_id': task.manager.id if task.manager else None,
+            'manager_name': task.manager.name if task.manager else None,
             'created_by': task.created_by.id,
             'created_by_name': task.created_by.name,
             'due_date': str(task.due_date) if task.due_date else None,
             'created_at': task.created_at.isoformat(),
-            'updated_at': task.updated_at.isoformat()
+            'updated_at': task.updated_at.isoformat(),
+            'comments': comments
         })
     return data
 
@@ -1558,6 +1778,11 @@ def _create_task_admin(data, creator):
 
     assigned_id = data.get('assigned_to')
     assigned_employee = Employee.objects.get(id=assigned_id)
+    
+    manager_id = data.get('manager_id')
+    manager_employee = None
+    if manager_id and manager_id != 'none':
+        manager_employee = Employee.objects.get(id=manager_id)
 
     task = Task.objects.create(
         title=data['title'],
@@ -1565,6 +1790,7 @@ def _create_task_admin(data, creator):
         status=data.get('status', 'todo'),
         priority=data.get('priority', 'medium'),
         assigned_to=assigned_employee,
+        manager=manager_employee,
         created_by=creator,
         due_date=data.get('due_date')
     )
@@ -1588,6 +1814,12 @@ def tasks_api(request):
                 if emp.role == 'admin':
                     # ADMIN PATH
                     tasks_data = _get_admin_task_manager_data()
+                elif emp.role == 'manager':
+                    # MANAGER PATH - Sees their own tasks + their employees' tasks
+                    own_tasks = _get_employee_my_tasks_data(emp)
+                    subordinate_tasks = _get_manager_employees_tasks_data(emp)
+                    # Merge and remove duplicates if any (though shouldn't be)
+                    tasks_data = own_tasks + [t for t in subordinate_tasks if t['id'] not in [ot['id'] for ot in own_tasks]]
                 else:
                     # EMPLOYEE PATH
                     tasks_data = _get_employee_my_tasks_data(emp)
@@ -1741,6 +1973,65 @@ def task_detail_api(request, task_id):
          return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['POST'])
+@parser_classes([JSONParser])
+def task_comment_api(request):
+    """Add a comment to a task"""
+    data = request.data
+    task_id = data.get('task_id')
+    author_id = data.get('author_id')
+    content = data.get('content')
+
+    if not all([task_id, author_id, content]):
+        return Response({
+            'success': False,
+            'message': 'task_id, author_id, and content are required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        task = Task.objects.get(id=task_id)
+        author = Employee.objects.get(id=author_id)
+        
+        # Permission check: Admin, Manager of the assigned employee, or the assigned employee themselves
+        can_comment = False
+        if author.role == 'admin':
+            can_comment = True
+        elif task.assigned_to.id == author.id:
+            can_comment = True
+        elif task.assigned_to.manager and task.assigned_to.manager.id == author.id:
+            can_comment = True
+            
+        if not can_comment:
+            return Response({
+                'success': False,
+                'message': 'You do not have permission to comment on this task'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        comment = TaskComment.objects.create(
+            task=task,
+            author=author,
+            content=content
+        )
+        
+        return Response({
+            'success': True,
+            'message': 'Comment added successfully',
+            'comment': {
+                'id': comment.id,
+                'author_name': author.name,
+                'content': comment.content,
+                'created_at': comment.created_at.isoformat()
+            }
+        })
+
+    except Task.DoesNotExist:
+        return Response({'success': False, 'message': 'Task not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Employee.DoesNotExist:
+        return Response({'success': False, 'message': 'Author not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 
 
 
@@ -1788,7 +2079,7 @@ def wfh_request_reject(request):
 def employees_simple_list(request):
     """Get simple list of employees for dropdowns"""
     try:
-        employees = Employee.objects.filter(is_active=True).values('id', 'name', 'role').order_by('name')
+        employees = Employee.objects.filter(is_active=True).values('id', 'name', 'role', 'manager_id').order_by('name')
         return Response({
             'success': True,
             'employees': list(employees)
@@ -1832,6 +2123,39 @@ def wfh_request_approve(request):
                  request_obj.reviewed_by = admin_user
 
         request_obj.save()
+
+        # If approved, create or update AttendanceRecord to reflect in calendar
+        if status_val == 'approved':
+            # Determine the status to set based on request type
+            req_type = request_obj.request_type
+            if req_type == 'wfh':
+                attendance_status = 'wfh'
+                attendance_type = 'wfh'
+            elif req_type == 'full_day':
+                attendance_status = 'absent'  # Full day leave shows as absent
+                attendance_type = 'office'
+            elif req_type == 'half_day':
+                attendance_status = 'half_day'
+                attendance_type = 'office'
+            else:
+                attendance_status = 'absent'
+                attendance_type = 'office'
+
+            # Create or update attendance record for each day in the request date range
+            from datetime import timedelta
+            current_date = request_obj.start_date
+            while current_date <= request_obj.end_date:
+                AttendanceRecord.objects.update_or_create(
+                    employee=request_obj.employee,
+                    date=current_date,
+                    defaults={
+                        'type': attendance_type,
+                        'status': attendance_status,
+                        'is_half_day': (req_type == 'half_day'),
+                        'notes': f'Approved {req_type} request',
+                    }
+                )
+                current_date += timedelta(days=1)
 
         return Response({
             'success': True,
@@ -1905,6 +2229,39 @@ def leave_request_approve(request):
         req.admin_response = admin_response
         req.reviewed_at = timezone.now()
         req.save()
+
+        # If approved, create or update AttendanceRecord to reflect in calendar
+        if status_val == 'approved':
+            # Determine the status to set based on request type
+            req_type = req.request_type
+            if req_type == 'wfh':
+                attendance_status = 'wfh'
+                attendance_type = 'wfh'
+            elif req_type == 'full_day':
+                attendance_status = 'absent'  # Full day leave shows as absent
+                attendance_type = 'office'
+            elif req_type == 'half_day':
+                attendance_status = 'half_day'
+                attendance_type = 'office'
+            else:
+                attendance_status = 'absent'
+                attendance_type = 'office'
+
+            # Create or update attendance record for each day in the request date range
+            from datetime import timedelta
+            current_date = req.start_date
+            while current_date <= req.end_date:
+                AttendanceRecord.objects.update_or_create(
+                    employee=req.employee,
+                    date=current_date,
+                    defaults={
+                        'type': attendance_type,
+                        'status': attendance_status,
+                        'is_half_day': (req_type == 'half_day'),
+                        'notes': f'Approved {req_type} request',
+                    }
+                )
+                current_date += timedelta(days=1)
         
         return Response({'success': True, 'message': f'Request {status_val}'})
     except Exception as e:
