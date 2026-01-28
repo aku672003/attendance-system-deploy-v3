@@ -154,6 +154,33 @@
                 </div>
             </div>
 
+            <!-- Notification Bar -->
+            <div class="notification-bar" id="notificationBar">
+                <div class="notification-container">
+                    <div class="notification-header" onclick="toggleNotifications()">
+                        <span class="notification-title">
+                            <div class="notification-icon-wrapper">
+                                <span class="notification-icon">🔔</span>
+                                <span class="notification-badge" id="notificationBadge" style="display:none">0</span>
+                            </div>
+                            <span class="notification-text">Notifications</span>
+                        </span>
+                        <div class="notification-toggle-btn">
+                            <span id="toggleIcon">▼</span>
+                        </div>
+                    </div>
+
+                    <div class="notification-list" id="notificationList" style="display: none;">
+                        <div id="notificationItems">
+                            <!-- Notifications will be populated here -->
+                        </div>
+                        <div class="notification-footer">
+                            <button class="btn btn-subtle btn-sm" onclick="markAllAsRead()">Mark all as read</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Employee Stats Grid (shown for non-admin users) -->
             <div class="stats-grid" id="employeeStatsGrid">
                 <div class="stat-card">
@@ -161,22 +188,70 @@
                     <div class="stat-card-value" id="todayStatus">Not Marked</div>
                     <div class="stat-card-timing" id="todayTiming"></div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-card-title" style="display:flex;justify-content:space-between;align-items:center;">
-                        <span>This Month</span>
-                        <button onclick="openAttendanceCalendar()"
-                            style="font-size:12px;padding:4px 8px;border-radius:999px;border:none;cursor:pointer;">
-                            📅 Calendar
-                        </button>
-                    </div>
-                    <div class="stat-card-value" id="monthlyDays">0</div>
-                    <div class="stat-card-timing">Working Days</div>
+                <div class="stat-card calendar-card" onclick="openAttendanceCalendar()"
+                    style="padding: 12px; display: flex; flex-direction: column; justify-content: center; cursor: pointer;">
+                    <div id="miniCalendarContainer"
+                        style="width: 100%; height: 100%; display: flex; flex-direction: column;"></div>
                 </div>
 
-                <div class="stat-card">
-                    <div class="stat-card-title">WFH Used</div>
-                    <div class="stat-card-value" id="wfhCount">0/1</div>
-                    <div class="stat-card-timing">This Month</div>
+                <!-- Premium Status Card -->
+                <div class="stat-card status-card premium-glass" onclick="openMyRequests()">
+                    <div class="card-glow"></div>
+
+                    <!-- SVG Gradient Definitions -->
+                    <svg style="width:0;height:0;position:absolute;" aria-hidden="true" focusable="false">
+                        <linearGradient id="gradientWFH" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#2563eb" /> <!-- primary-color -->
+                            <stop offset="100%" stop-color="#1e40af" /> <!-- primary-darker -->
+                        </linearGradient>
+                        <linearGradient id="gradientLeaves" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#f59e0b" />
+                            <stop offset="100%" stop-color="#ef4444" />
+                        </linearGradient>
+                    </svg>
+
+                    <div class="status-header">
+                        <span class="status-title">Status Overview</span>
+                        <span class="status-action-icon">⇲</span>
+                    </div>
+
+                    <div class="status-content">
+                        <!-- WFH Section -->
+                        <div class="status-metric">
+                            <div class="progress-ring-container">
+                                <svg class="progress-ring" width="80" height="80">
+                                    <circle class="progress-ring-bg" stroke="rgba(0,0,0,0.05)" stroke-width="6"
+                                        fill="transparent" r="32" cx="40" cy="40" />
+                                    <circle class="progress-ring-fill" id="wfhRing" stroke="url(#gradientWFH)"
+                                        stroke-width="6" fill="transparent" r="32" cx="40" cy="40" />
+                                </svg>
+                                <div class="metric-icon">🏠</div>
+                            </div>
+                            <div class="metric-details">
+                                <span class="metric-value" id="statWFH">0/2</span>
+                                <span class="metric-label">WFH Available</span>
+                            </div>
+                        </div>
+
+                        <div class="vertical-divider"></div>
+
+                        <!-- Leaves Section -->
+                        <div class="status-metric">
+                            <div class="progress-ring-container">
+                                <svg class="progress-ring" width="80" height="80">
+                                    <circle class="progress-ring-bg" stroke="rgba(0,0,0,0.05)" stroke-width="6"
+                                        fill="transparent" r="32" cx="40" cy="40" />
+                                    <circle class="progress-ring-fill" id="leavesRing" stroke="url(#gradientLeaves)"
+                                        stroke-width="6" fill="transparent" r="32" cx="40" cy="40" />
+                                </svg>
+                                <div class="metric-icon">✈️</div>
+                            </div>
+                            <div class="metric-details">
+                                <span class="metric-value" id="statLeaves">0/1</span>
+                                <span class="metric-label">Leaves Used</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-card-title">Location Status</div>
@@ -227,7 +302,13 @@
                 </div>
                 <div id="calendarModal" class="modal">
                     <div class="modal-content calendar-modal-content">
-                        <h3>Attendance Calendar – <span id="calendarMonthLabel"></span></h3>
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <h3 style="margin: 0;">Attendance Calendar – <span id="calendarMonthLabel"></span></h3>
+                            <button onclick="closeModal('calendarModal')"
+                                style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--gray-500); padding: 4px 8px; line-height: 1;"
+                                title="Close">&times;</button>
+                        </div>
 
                         <div class="calendar-items-legend">
                             <div class="legend-chip"><span class="calendar-dot cal-present"></span> Office</div>
@@ -924,6 +1005,7 @@
                             <label class="form-label">Role</label>
                             <select id="newUserRole" class="form-control">
                                 <option value="employee">Employee</option>
+                                <option value="manager">Manager</option>
                                 <option value="admin">Admin</option>
                             </select>
                         </div>
@@ -931,6 +1013,12 @@
                             <label class="form-label">Password</label>
                             <input id="newUserPassword" type="password" class="form-control" placeholder="min 6 chars">
                         </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Reporting Manager</label>
+                        <select id="newUserReportingManager" class="form-control">
+                            <option value="none">No Manager</option>
+                        </select>
                     </div>
                     <div style="display:flex; gap:8px;">
                         <button class="btn btn-success" onclick="submitNewUser()">➕ Add User</button>
@@ -962,6 +1050,7 @@
                                     <th>Mobile</th>
                                     <th>Department</th>
                                     <th>Role</th>
+                                    <th>Manager</th>
                                     <th style="width:160px">Actions</th>
                                 </tr>
                             </thead>
@@ -1031,6 +1120,39 @@
                 <button class="btn btn-primary" onclick="downloadSelectedDocs()">Download</button>
             </div>
 
+        </div>
+    </div>
+
+    <!-- Export Attendance Modal -->
+    <!-- Camera Permission Modal -->
+    <div id="cameraPermissionModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div
+                style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; margin-bottom: 20px; text-align: center; color: white;">
+                <div style="font-size: 3rem; margin-bottom: 12px;">📷</div>
+                <h3 style="margin: 0 0 12px; color: white">Camera Access Required</h3>
+                <p style="margin: 0; font-size: 0.95rem; opacity: 0.95;">To verify your identity and mark attendance, we
+                    need access to your camera.</p>
+            </div>
+
+            <div style="background: #f8f9fa; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+                <h4 style="margin: 0 0 12px; font-size: 0.95rem; color: var(--gray-700);">How to enable camera access:
+                </h4>
+                <ul style="margin: 0; padding-left: 20px; font-size: 0.9rem; color: var(--gray-600);">
+                    <li style="margin-bottom: 8px;"><strong>Chrome:</strong> Click the camera icon 📷 in the address bar
+                        → Select "Allow"</li>
+                    <li style="margin-bottom: 8px;"><strong>Safari:</strong> Safari menu → Settings for This Website →
+                        Camera → Allow</li>
+                    <li><strong>Firefox:</strong> Click the camera icon in the address bar → Allow camera access</li>
+                </ul>
+            </div>
+
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeCameraPermissionModal()">Cancel</button>
+                <button class="btn btn-primary" id="enableCameraBtn" onclick="requestCameraPermission()">
+                    📷 Enable Camera
+                </button>
+            </div>
         </div>
     </div>
 
@@ -1109,14 +1231,8 @@
 
     <!-- Requests Modal -->
     <div id="requestsModal" class="modal">
-        <div class="modal-content" style="max-width: 900px; max-height: 80vh; overflow-y: auto;">
-            <div class="modal-header">
-                <h3>📋 Pending Requests</h3>
-                <div class="modal-actions">
-                    <button class="btn btn-secondary" onclick="refreshRequests()">🔄 Refresh</button>
-                    <button class="btn btn-secondary" onclick="closeModal('requestsModal')">✕ Close</button>
-                </div>
-            </div>
+        <div class="modal-content"
+            style="max-width: 1200px; max-height: 85vh; overflow-y: auto; padding: 0; border-radius: 24px;">
 
             <div id="requestsContent">
                 <div class="text-center" style="padding: 40px;">
@@ -1129,9 +1245,14 @@
 
     <!-- Task Manager Modal -->
     <div id="taskManagerModal" class="modal">
-        <div class="modal-content" style="max-width: 1200px; max-height: 90vh; overflow-y: auto;">
+        <div class="modal-content"
+            style="max-width: 1200px; max-height: 90vh; overflow-y: auto; padding: 0; border-radius: 24px;">
             <div class="modal-header">
-                <h3> Task Manager</h3>
+                <div style="display: flex; flex-direction: column;">
+                    <h3 style="margin: 0; font-size: 1.8rem; color: #1e293b;">Task Manager</h3>
+                    <p style="margin: 4px 0 0; color: var(--gray-500); font-size: 0.9rem; font-weight: 500;">Oversee and
+                        allocate team tasks</p>
+                </div>
                 <div class="modal-actions">
                     <button class="btn btn-primary" onclick="addNewTask()">➕ Add Task</button>
                     <button class="btn btn-secondary" onclick="refreshTasks()">🔄 Refresh</button>
@@ -1175,9 +1296,14 @@
 
     <!-- My Tasks Modal (Employee Only) -->
     <div id="myTasksModal" class="modal">
-        <div class="modal-content" style="max-width: 1200px; max-height: 90vh; overflow-y: auto;">
+        <div class="modal-content"
+            style="max-width: 1200px; max-height: 90vh; overflow-y: auto; padding: 0; border-radius: 24px;">
             <div class="modal-header">
-                <h3> My Tasks</h3>
+                <div style="display: flex; flex-direction: column;">
+                    <h3 style="margin: 0; font-size: 1.8rem; color: #1e293b;">My Tasks</h3>
+                    <p style="margin: 4px 0 0; color: var(--gray-500); font-size: 0.9rem; font-weight: 500;">View and
+                        manage your assignments</p>
+                </div>
                 <div class="modal-actions">
                     <button class="btn btn-secondary" onclick="refreshMyTasks()">🔄 Refresh</button>
                     <button class="btn btn-secondary" onclick="closeModal('myTasksModal')">✕ Close</button>
@@ -1219,7 +1345,45 @@
         </div>
     </div>
 
-    <!-- Add Task Modal -->
+    <!-- Task Detail Modal (with Comments) -->
+    <div id="taskDetailModal" class="modal">
+        <div class="modal-content" style="max-width: 600px; padding: 0; border-radius: 24px; overflow: hidden;">
+            <div class="modal-header" style="padding: 24px; background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+                <div style="display: flex; flex-direction: column;">
+                    <h3 id="detailTaskTitle" style="margin: 0; font-size: 1.5rem; color: #1e293b;">Task Details</h3>
+                    <div id="detailTaskMeta"
+                        style="margin-top: 8px; display: flex; gap: 12px; font-size: 0.85rem; color: #64748b;">
+                        <!-- Populate via JS -->
+                    </div>
+                </div>
+                <button class="btn-icon-sm" onclick="closeModal('taskDetailModal')"
+                    style="font-size: 1.5rem;">✕</button>
+            </div>
+
+            <div style="padding: 24px;">
+                <div id="detailTaskDescription"
+                    style="margin-bottom: 24px; color: #334155; line-height: 1.6; font-size: 1rem;">
+                    <!-- Populate via JS -->
+                </div>
+
+                <div style="border-top: 1px solid #f1f5f9; padding-top: 24px;">
+                    <h4 style="margin: 0 0 16px; font-size: 1.1rem; color: #1e293b;">Comments</h4>
+                    <div id="taskCommentsList"
+                        style="display: flex; flex-direction: column; gap: 16px; max-height: 300px; overflow-y: auto; margin-bottom: 16px; padding-right: 8px;">
+                        <!-- Populate via JS -->
+                    </div>
+
+                    <div class="comment-input-wrapper"
+                        style="display: flex; gap: 12px; align-items: flex-start; background: #f8fafc; padding: 12px; border-radius: 16px; border: 1px solid #e2e8f0;">
+                        <textarea id="newTaskComment" class="form-control" rows="2" placeholder="Add a comment..."
+                            style="border: none; background: transparent; padding: 4px; resize: none;"></textarea>
+                        <button class="btn btn-primary" onclick="submitTaskComment()"
+                            style="min-width: 80px; align-self: flex-end;">Post</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     <div id="addTaskModal" class="modal">
         <div class="modal-content">
             <h3>Add New Task</h3>
@@ -1233,6 +1397,13 @@
                 <label class="form-label">Assign To</label>
                 <select id="taskAssignee" class="form-control">
                     <option value="">Select Employee...</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Task Manager (Overseer)</label>
+                <select id="taskManager" class="form-control">
+                    <option value="none">Optional: Select Manager...</option>
                 </select>
             </div>
 
@@ -1307,6 +1478,192 @@
     </div>
 
 
+
+    <!-- Status Overview Modal (Redesigned) -->
+    <div id="myRequestsModal" class="modal">
+        <div class="modal-content" style="max-width: 600px; border-radius: 20px; overflow: hidden; padding: 0;">
+
+            <div class="overview-container" style="padding: 24px; background: #f8fafc;">
+                <!-- Header -->
+                <div class="modal-header-clean"
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <div class="modal-title-group" style="display: flex; align-items: center; gap: 12px;">
+                        <span class="modal-icon" style="font-size: 24px;"></span>
+                        <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: var(--gray-900);">Monthly
+                            Overview</h3>
+                    </div>
+                    <span class="modal-date" id="modalDate"
+                        style="font-size: 13px; color: var(--gray-500); font-weight: 500;">-</span>
+                </div>
+
+                <!-- Hero Card -->
+                <div class="overview-hero-card"
+                    style="background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border-radius: 16px; padding: 24px; text-align: center; box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3); margin-bottom: 24px;">
+                    <div class="hero-content">
+                        <span class="hero-label"
+                            style="display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.9; margin-bottom: 8px;">TOTAL
+                            WORKING DAYS</span>
+                        <span class="hero-value" id="ovTotalDays"
+                            style="display: block; font-size: 48px; font-weight: 800; line-height: 1;">0</span>
+                        <span class="hero-sub"
+                            style="display: block; font-size: 13px; opacity: 0.9; margin-top: 4px;">This Month</span>
+                    </div>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="overview-grid"
+                    style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+                    <!-- Office -->
+                    <div class="stat-box"
+                        style="background: white; padding: 16px; border-radius: 12px; display: flex; align-items: center; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                        <div class="stat-icon-bg"
+                            style="width: 40px; height: 40px; border-radius: 50%; background: #dcfce7; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                            🏢</div>
+                        <div class="stat-info">
+                            <span class="stat-num" id="ovOffice"
+                                style="display: block; font-size: 18px; font-weight: 700; color: var(--gray-900);">0</span>
+                            <span class="stat-label" style="font-size: 11px; color: var(--gray-500);">Office Days</span>
+                        </div>
+                    </div>
+
+                    <!-- WFH -->
+                    <div class="stat-box"
+                        style="background: white; padding: 16px; border-radius: 12px; display: flex; align-items: center; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                        <div class="stat-icon-bg"
+                            style="width: 40px; height: 40px; border-radius: 50%; background: #dbeafe; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                            🏠</div>
+                        <div class="stat-info">
+                            <span class="stat-num" id="ovWFH"
+                                style="display: block; font-size: 18px; font-weight: 700; color: var(--gray-900);">0</span>
+                            <span class="stat-label" style="font-size: 11px; color: var(--gray-500);">Work From
+                                Home</span>
+                        </div>
+                    </div>
+
+                    <!-- Half Day -->
+                    <div class="stat-box"
+                        style="background: white; padding: 16px; border-radius: 12px; display: flex; align-items: center; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                        <div class="stat-icon-bg"
+                            style="width: 40px; height: 40px; border-radius: 50%; background: #fef9c3; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                            ⏳</div>
+                        <div class="stat-info">
+                            <span class="stat-num" id="ovHalfDay"
+                                style="display: block; font-size: 18px; font-weight: 700; color: var(--gray-900);">0</span>
+                            <span class="stat-label" style="font-size: 11px; color: var(--gray-500);">Half Days</span>
+                        </div>
+                    </div>
+
+                    <!-- Leaves -->
+                    <div class="stat-box"
+                        style="background: white; padding: 16px; border-radius: 12px; display: flex; align-items: center; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                        <div class="stat-icon-bg"
+                            style="width: 40px; height: 40px; border-radius: 50%; background: #fee2e2; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                            🏖️</div>
+                        <div class="stat-info">
+                            <span class="stat-num" id="ovLeaves"
+                                style="display: block; font-size: 18px; font-weight: 700; color: var(--gray-900);">0</span>
+                            <span class="stat-label" style="font-size: 11px; color: var(--gray-500);">Leaves
+                                Taken</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer: History Toggle -->
+                <div class="overview-footer-card" onclick="toggleHistoryView()"
+                    style="background: white; padding: 16px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; border: 1px solid var(--gray-200); transition: all 0.2s ease;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span class="footer-icon" style="font-size: 18px;">📋</span>
+                        <div style="display: flex; flex-direction: column;">
+                            <span class="footer-text"
+                                style="font-size: 14px; font-weight: 600; color: var(--gray-900);">Request
+                                History</span>
+                            <span class="footer-sub" style="font-size: 11px; color: var(--gray-500);">View and manage
+                                your requests</span>
+                        </div>
+                    </div>
+                    <span class="footer-arrow" style="color: var(--gray-400);">→</span>
+                </div>
+            </div>
+
+            <!-- Detailed History View (Hidden by default) -->
+            <div id="historyView" class="hidden" style="background: white; border-top: 1px solid var(--gray-100);">
+
+                <!-- Blue Hero Header -->
+                <div
+                    style="background: linear-gradient(135deg, #2563eb, #1d4ed8); padding: 24px; display: flex; justify-content: space-between; align-items: center; color: white; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 22px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));">📜</span>
+                        <div style="display: flex; flex-direction: column;">
+                            <h3
+                                style="margin: 0; font-size: 18px; font-weight: 700; color: white; letter-spacing: -0.01em;">
+                                Request History</h3>
+                            <span style="font-size: 11px; opacity: 0.8; font-weight: 500;">Past requests and
+                                approvals</span>
+                        </div>
+                    </div>
+                    <button onclick="toggleHistoryView()" style="
+                        background: rgba(255, 255, 255, 0.15); 
+                        color: white; 
+                        border: 1px solid rgba(255,255,255,0.2); 
+                        font-size: 12px; 
+                        padding: 8px 16px; 
+                        border-radius: 8px; 
+                        backdrop-filter: blur(8px);
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                        font-weight: 500;
+                    ">Back to Overview</button>
+                </div>
+
+                <!-- Scrollable List Container -->
+                <div class="history-list-container" style="flex: 1; overflow-y: auto; padding: 24px;">
+                    <!-- List Header -->
+                    <div
+                        style="display: flex; justify-content: space-between; padding: 0 8px 12px 8px; border-bottom: 1px solid var(--gray-100); margin-bottom: 16px;">
+                        <span
+                            style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--gray-400); letter-spacing: 0.05em;">Request
+                            Details</span>
+                        <span
+                            style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--gray-400); letter-spacing: 0.05em;">Status</span>
+                    </div>
+
+                    <div id="myRequestsList" style="display: flex; flex-direction: column; gap: 12px;">
+                        <!-- Cards will be injected here by JS -->
+                    </div>
+
+                    <div id="myRequestsEmpty" class="text-center text-muted hidden"
+                        style="padding: 32px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+                        <div style="font-size: 24px; opacity: 0.3;">📂</div>
+                        <span>No requests found</span>
+                    </div>
+                </div>
+
+                <div class="text-center"
+                    style="padding: 16px 24px; border-top: 1px solid var(--gray-100); background: #f9fafb;">
+                    <button class="btn btn-secondary btn-full-width"
+                        onclick="closeModal('myRequestsModal')">Close</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Custom Confirmation Modal -->
+    <div id="confirmModal" class="modal">
+        <div class="modal-content" style="max-width: 400px; text-align: center; padding: 40px; border-radius: 28px;">
+            <div id="confirmIcon" style="font-size: 48px; margin-bottom: 20px;">⚠️</div>
+            <h3 id="confirmTitle" style="margin-bottom: 12px; font-size: 1.5rem; font-weight: 700;">Confirm Action</h3>
+            <p id="confirmMessage" style="color: var(--gray-600); line-height: 1.5; margin-bottom: 32px;">Are you sure
+                you want to proceed?</p>
+
+            <div style="display: flex; gap: 16px;">
+                <button id="confirmCancelBtn" class="btn btn-secondary"
+                    style="flex: 1; padding: 12px; font-weight: 600;">Cancel</button>
+                <button id="confirmOkBtn" class="btn btn-primary"
+                    style="flex: 1; padding: 12px; font-weight: 600; background: #ef4444; border-color: #ef4444;">Proceed</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Notification -->
     <div id="notification" class="notification"></div>

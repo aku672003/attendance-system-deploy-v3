@@ -76,6 +76,90 @@ function closeModal(id) {
     document.body.style.overflow = '';
 }
 
+// Camera Permission Modal Functions
+function showCameraPermissionModal() {
+    const modal = document.getElementById('cameraPermissionModal');
+    if (modal) {
+        modal.style.display = 'flex';
+    }
+}
+
+function closeCameraPermissionModal() {
+    const modal = document.getElementById('cameraPermissionModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+async function requestCameraPermission() {
+    const enableBtn = document.getElementById('enableCameraBtn');
+    const originalText = enableBtn.innerHTML;
+
+    try {
+        enableBtn.innerHTML = '⏳ Requesting permission...';
+        enableBtn.disabled = true;
+
+        // Request camera access
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+
+        // Stop the stream immediately (we just needed to trigger the permission prompt)
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+
+        // Close modal and restart camera
+        closeCameraPermissionModal();
+        showNotification('Camera access granted! Starting camera...', 'success');
+
+        // Wait a bit then restart camera
+        setTimeout(() => {
+            startCamera();
+        }, 500);
+
+    } catch (e) {
+        console.error('Camera permission request failed', e);
+        enableBtn.innerHTML = originalText;
+        enableBtn.disabled = false;
+
+        if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+            showNotification('Camera permission denied. Please enable it in your browser settings.', 'error');
+        } else {
+            showNotification('Unable to access camera: ' + e.message, 'error');
+        }
+    }
+}
+
+/**
+ * Premium Custom Confirmation Modal
+ * Returns a promise that resolves to true if OK is clicked, false otherwise
+ */
+function showConfirm(message, title = "Confirm Action", icon = "⚠️") {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('confirmModal');
+        const titleEl = document.getElementById('confirmTitle');
+        const messageEl = document.getElementById('confirmMessage');
+        const iconEl = document.getElementById('confirmIcon');
+        const okBtn = document.getElementById('confirmOkBtn');
+        const cancelBtn = document.getElementById('confirmCancelBtn');
+
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+        iconEl.textContent = icon;
+
+        const cleanup = (value) => {
+            okBtn.onclick = null;
+            cancelBtn.onclick = null;
+            closeModal('confirmModal');
+            resolve(value);
+        };
+
+        okBtn.onclick = () => cleanup(true);
+        cancelBtn.onclick = () => cleanup(false);
+
+        openModal('confirmModal');
+    });
+}
+
 // optional: click backdrop to close
 document.addEventListener('click', (e) => {
     const modal = e.target.closest('.modal');
@@ -533,10 +617,136 @@ function logout() {
 }
 
 // Dashboard Functions
+// Notification System
+async function loadNotifications() {
+    if (!currentUser) return;
+    try {
+        const res = await apiCall('notifications', 'GET', { user_id: currentUser.id });
+
+        if (res && res.success) {
+            displayNotifications(res.notifications);
+            updateNotificationBadge(res.unread_count);
+        }
+    } catch (e) {
+        console.error('Failed to load notifications', e);
+    }
+}
+
+// Set up polling for notifications every 2 minutes
+setInterval(loadNotifications, 120000);
+
+function displayNotifications(notifications) {
+    const container = document.getElementById('notificationItems');
+    if (!container) return;
+
+    if (notifications.length === 0) {
+        container.innerHTML = `
+            <div style="padding: 32px; text-align: center; color: var(--gray-500);">
+                <div style="font-size: 3rem; margin-bottom: 8px;">🔕</div>
+                <p>No new notifications</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = notifications.map(notif => `
+        <div class="notification-item" data-id="${notif.id}" onclick="handleNotificationClick('${notif.type}', '${notif.id}')">
+            <div class="notification-item-icon">${notif.icon}</div>
+            <div class="notification-item-content">
+                <div class="notification-item-message">${notif.message}</div>
+                <div class="notification-item-time">${notif.time}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function handleNotificationClick(type, id) {
+    if (type === 'wish') {
+        // Mark this specific wish as read
+        await apiCall('mark-notifications-read', 'POST', {
+            user_id: currentUser.id,
+            notification_id: id
+        });
+        loadNotifications();
+        showNotification('Wish marked as read', 'success');
+    } else if (type === 'birthday') {
+        openBirthdayCalendar();
+    } else if (type === 'task') {
+        openTaskManagement();
+    } else if (type === 'request') {
+        openPendingRequests();
+    }
+}
+
+function updateNotificationBadge(count) {
+    const badge = document.getElementById('notificationBadge');
+    if (badge) {
+        badge.textContent = count;
+        badge.style.display = count > 0 ? 'inline-block' : 'none';
+
+        // Add wiggle animation if new notifications
+        if (count > 0) {
+            const icon = document.querySelector('.notification-icon');
+            if (icon) {
+                icon.animate([
+                    { transform: 'rotate(0deg)' },
+                    { transform: 'rotate(-10deg)' },
+                    { transform: 'rotate(10deg)' },
+                    { transform: 'rotate(0deg)' }
+                ], {
+                    duration: 500,
+                    iterations: 2
+                });
+            }
+        }
+    }
+}
+
+function toggleNotifications() {
+    const list = document.getElementById('notificationList');
+    const icon = document.getElementById('toggleIcon');
+    if (!list) return;
+
+    const isHidden = list.style.display === 'none' || list.classList.contains('hidden');
+
+    if (isHidden) {
+        list.style.display = 'block';
+        list.classList.remove('hidden');
+        if (icon) icon.textContent = '▲';
+    } else {
+        list.style.display = 'none';
+        list.classList.add('hidden');
+        if (icon) icon.textContent = '▼';
+    }
+}
+
+async function markAllAsRead() {
+    try {
+        await apiCall('mark-notifications-read', 'POST', { user_id: currentUser.id });
+        updateNotificationBadge(0);
+        const list = document.getElementById('notificationList');
+        if (list) {
+            list.style.display = 'none';
+            list.classList.add('hidden');
+        }
+        const icon = document.getElementById('toggleIcon');
+        if (icon) icon.textContent = '▼';
+
+        showNotification('All notifications marked as read', 'success');
+        loadNotifications(); // Refresh list
+    } catch (e) {
+        console.error('Failed to mark notifications as read', e);
+    }
+}
+
+
 async function loadDashboardData() {
     if (!currentUser) return;
 
     document.getElementById('userName').textContent = currentUser.name;
+
+    // Load notifications for all users
+    loadNotifications();
 
     if (currentUser.role === 'admin') {
         // Admin sees admin stats grid and admin-specific cards
@@ -750,43 +960,67 @@ async function openBirthdayCalendar() {
         window.currentBirthdayYear = d.getFullYear();
     }
 
-    const monthToSend = window.currentBirthdayMonth + 1;
-    const yearToSend = window.currentBirthdayYear;
+    const viewingMonth = window.currentBirthdayMonth;
+    const viewingYear = window.currentBirthdayYear;
+
+    const monthToSend = viewingMonth + 1;
+    const yearToSend = viewingYear;
+
+    // Load all birthdays once for global search if not already loaded
+    if (!window.allBirthdaysLoaded) {
+        loadAllBirthdays();
+    }
 
     try {
         const res = await apiCall(`upcoming-birthdays?month=${monthToSend}&year=${yearToSend}`, 'GET');
         if (res && res.success) {
             const birthdays = res.birthdays || [];
-            const currentDate = new Date();
-            const currentMonth = currentDate.getMonth();
-            const currentYear = currentDate.getFullYear();
-
             const total = birthdays.length;
-            const upcoming = birthdays.filter(b => new Date(b.date_of_birth) >= currentDate).length;
+            const currentDate = new Date();
+            const upcoming = birthdays.filter(b => {
+                const bDate = new Date(b.date_of_birth);
+                // Compare only month and day for "upcoming" in the viewed month
+                const todayMonth = currentDate.getMonth();
+                const todayDay = currentDate.getDate();
+                const bMonth = bDate.getMonth();
+                const bDay = bDate.getDate();
 
-            const calendarData = createBirthdayCalendarData(birthdays, currentYear, currentMonth);
-            const dateStr = new Date(currentYear, currentMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                if (viewingYear > currentDate.getFullYear()) return true;
+                if (viewingYear < currentDate.getFullYear()) return false;
+                if (viewingMonth > todayMonth) return true;
+                if (viewingMonth < todayMonth) return false;
+                return bDay >= todayDay;
+            }).length;
+
+            const calendarData = createBirthdayCalendarData(birthdays, viewingYear, viewingMonth);
+            const dateStr = new Date(viewingYear, viewingMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
             content.innerHTML = `
                 <div class="premium-calendar-wrap">
                     <!-- Premium Header -->
                     <div class="premium-header">
                         <div class="header-title">
-                            📅 <span>${dateStr}</span>
+                            <span style="font-size: 1.8rem;">📅</span>
+                            <div style="display:flex; flex-direction:column;">
+                                <span style="font-size: 1.4rem; font-weight: 800; color: #1e293b;">${dateStr}</span>
+                                <span style="font-size: 0.85rem; font-weight: 500; color: #64748b;">Employee Birthdays</span>
+                            </div>
                         </div>
-                        <div style="display:flex; gap:12px;">
-                            <button class="btn-premium" onclick="changeBirthdayMonth(-1)">Previous</button>
-                            <button class="btn-premium btn-premium-primary" onclick="jumpToToday()">Today</button>
-                            <button class="btn-premium" onclick="changeBirthdayMonth(1)">Next</button>
-                            <button class="btn-premium btn-premium-danger" onclick="closeModal('birthdayCalendarModal')">Close</button>
+                        <div style="display:flex; gap:12px; align-items:center;">
+                            <div class="btn-group-premium" style="display:flex; background: #f1f5f9; padding: 4px; border-radius: 12px; gap: 4px;">
+                                <button class="btn-premium-toggle" onclick="changeBirthdayMonth(-1)" title="Previous Month">←</button>
+                                <button class="btn-premium-toggle active" onclick="jumpToToday()">Today</button>
+                                <button class="btn-premium-toggle" onclick="changeBirthdayMonth(1)" title="Next Month">→</button>
+                            </div>
+                            <button class="btn-premium-close" onclick="closeModal('birthdayCalendarModal')" style="background: #fef2f2; color: #ef4444; border: 1px solid #fee2e2; padding: 10px 20px; border-radius: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s;">Close</button>
                         </div>
                     </div>
 
                     <div class="calendar-main-split">
                         <!-- Left: Clean Calendar -->
                         <div class="clean-calendar-panel">
-                            <div class="clean-calendar">
-                                ${createBirthdayCalendarHTML(calendarData, currentYear, currentMonth)}
+                            <div class="clean-calendar" style="box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05);">
+                                ${createBirthdayCalendarHTML(calendarData, viewingYear, viewingMonth)}
                             </div>
                         </div>
 
@@ -805,9 +1039,13 @@ async function openBirthdayCalendar() {
                             </div>
 
                             <!-- Search -->
-                            <input type="text" class="premium-search" placeholder="Search birthdays..." onkeyup="filterPremiumList(this.value)">
+                            <div style="position:relative;">
+                                <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#94a3b8;">🔍</span>
+                                <input type="text" class="premium-search" style="padding-left:40px;" placeholder="Search birthdays..." onkeyup="filterPremiumList(this.value)">
+                            </div>
 
                             <!-- List -->
+                            <div style="margin-top: 8px; font-weight: 700; font-size: 0.8rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">List View</div>
                             <div class="premium-list" id="premiumListContainer">
                                 ${createPremiumListHTML(birthdays)}
                             </div>
@@ -816,9 +1054,7 @@ async function openBirthdayCalendar() {
                 </div>
             `;
 
-            // Store state
-            window.currentBirthdayMonth = currentMonth;
-            window.currentBirthdayYear = currentYear;
+            // Store birthdays for current view
             window.birthdayData = birthdays;
         } else {
             content.innerHTML = '<div class="text-center" style="padding: 40px;"><p class="text-danger">Failed to load data</p><button class="btn-premium btn-premium-danger" onclick="closeModal(\'birthdayCalendarModal\')">Close</button></div>';
@@ -898,6 +1134,35 @@ function sendBirthdayWish() {
     }, 1500);
 }
 
+async function loadAllBirthdays() {
+    try {
+        const res = await apiCall('upcoming-birthdays?all=1', 'GET');
+        // If 'all' param isn't supported by backend, we'd need to loop or change backend.
+        // Assuming backend support or that we might need to adjust.
+        // Actually, looking at views.py, it only filters by month if month param is provided.
+        // Wait, views.py 1401: current_month = int(request.GET.get('month', today.month))
+        // So it ALWAYS filters by month. I should probably update backend or fetch all 12.
+
+        // I will fetch all 12 months for true global search if backend doesn't support 'all'
+        let allBirthdays = [];
+        const promises = [];
+        for (let i = 1; i <= 12; i++) {
+            promises.push(apiCall(`upcoming-birthdays?month=${i}`, 'GET'));
+        }
+
+        const results = await Promise.all(promises);
+        results.forEach(r => {
+            if (r.success) allBirthdays = allBirthdays.concat(r.birthdays);
+        });
+
+        // Remove duplicates if any (though there shouldn't be across months)
+        window.allBirthdays = allBirthdays;
+        window.allBirthdaysLoaded = true;
+    } catch (e) {
+        console.error("Failed to load all birthdays:", e);
+    }
+}
+
 // Helpers for Futuristic Calendar
 function createPremiumListHTML(birthdays) {
     if (!birthdays || birthdays.length === 0) {
@@ -915,12 +1180,55 @@ function createPremiumListHTML(birthdays) {
         else timeLeftHtml = '<span style="color:#94a3b8;">passed</span>';
 
         return `
-            <div class="premium-list-item" onclick="showTransmissionEffect('${b.name}')" style="animation: slideInLeft 0.3s forwards; animation-delay: ${idx * 50}ms; opacity:0; transform:translateX(-10px);">
+            <div class="premium-list-item" onclick="selectBirthday('${b.id}', '${b.name}', '${b.date_of_birth}', '${zodiac}', '${daysLeft}')" style="animation: slideInLeft 0.3s forwards; animation-delay: ${idx * 50}ms; opacity:0; transform:translateX(-10px);">
+                <div class="premium-avatar">${b.name.charAt(0)}</div>
+                <div class="premium-info" style="flex:1;">
+                    <h5 style="margin:0; font-size:1rem;">${b.name}</h5>
+                    <div class="premium-meta">
+                        <span>${timeLeftHtml}</span>
+                        <span>•</span>
+                        <span class="premium-badge">${zodiac}</span>
+                    </div>
+                </div>
+                <div style="color: #cbd5e1; font-size: 1.2rem;">›</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function filterPremiumList(query) {
+    const list = document.getElementById('premiumListContainer');
+    const term = query.toLowerCase();
+
+    if (!term) {
+        // Reset to current month's birthdays
+        list.innerHTML = createPremiumListHTML(window.birthdayData);
+        return;
+    }
+
+    // Search globally
+    const filteredGlobal = window.allBirthdays.filter(b => b.name.toLowerCase().includes(term));
+    list.innerHTML = createPremiumGlobalListHTML(filteredGlobal);
+}
+
+function createPremiumGlobalListHTML(birthdays) {
+    if (!birthdays || birthdays.length === 0) {
+        return '<p class="text-center" style="margin-top:20px; color:#94a3b8; font-size:0.9rem;">No matches found.</p>';
+    }
+
+    return birthdays.map((b, idx) => {
+        const dateObj = new Date(b.date_of_birth);
+        const monthName = dateObj.toLocaleDateString('en-US', { month: 'short' });
+        const day = dateObj.getDate();
+        const zodiac = getZodiacSign(day, dateObj.getMonth() + 1);
+
+        return `
+            <div class="premium-list-item" onclick="jumpToBirthday('${b.date_of_birth}')" style="animation: slideInLeft 0.3s forwards; animation-delay: ${idx * 50}ms; opacity:0; transform:translateX(-10px);">
                 <div class="premium-avatar">${b.name.charAt(0)}</div>
                 <div class="premium-info">
                     <h5>${b.name}</h5>
                     <div class="premium-meta">
-                        <span>${timeLeftHtml}</span>
+                        <span style="color:#3b82f6; font-weight:600;">${monthName} ${day}</span>
                         <span>•</span>
                         <span class="premium-badge">${zodiac}</span>
                     </div>
@@ -930,19 +1238,117 @@ function createPremiumListHTML(birthdays) {
     }).join('');
 }
 
-function filterPremiumList(query) {
-    const list = document.getElementById('premiumListContainer');
-    const items = list.getElementsByClassName('premium-list-item');
-    const term = query.toLowerCase();
+function jumpToBirthday(dateStr) {
+    const date = new Date(dateStr);
+    window.currentBirthdayMonth = date.getMonth();
+    window.currentBirthdayYear = new Date().getFullYear(); // Assume current year view
+    openBirthdayCalendar();
+}
 
-    Array.from(items).forEach(item => {
-        const name = item.querySelector('h5').textContent.toLowerCase();
-        if (name.includes(term)) {
-            item.style.display = 'flex';
-        } else {
-            item.style.display = 'none'; // changed from flex/none to utilize animation handling better if needed, but display none is fine
+function selectBirthday(id, name, dateStr, zodiac, daysLeft) {
+    const list = document.getElementById('premiumListContainer');
+    const sidePanel = document.querySelector('.premium-side-panel');
+
+    // Create or find detail container
+    let detailContainer = document.getElementById('birthdayDetailContainer');
+    if (!detailContainer) {
+        detailContainer = document.createElement('div');
+        detailContainer.id = 'birthdayDetailContainer';
+        detailContainer.className = 'premium-birthday-detail';
+        sidePanel.appendChild(detailContainer);
+    }
+
+    const fullDate = new Date(dateStr).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+    const isToday = parseInt(daysLeft) === 0;
+
+    detailContainer.innerHTML = `
+        <div style="animation: slideInRight 0.4s forwards; background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 24px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); margin-top: 10px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 20px;">
+                <div class="premium-avatar" style="width: 56px; height: 56px; font-size: 1.5rem; border-radius: 16px;">${name.charAt(0)}</div>
+                <button onclick="closeBirthdayDetail()" style="background:transparent; border:none; color:#94a3b8; cursor:pointer; font-size:1.2rem; transition: color 0.2s;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'">✕</button>
+            </div>
+            <h4 style="margin: 0 0 4px; font-size: 1.25rem; font-weight: 800; color: #1e293b;">${name}</h4>
+            <p style="margin: 0; color: #64748b; font-size: 0.9rem; font-weight: 500;">${fullDate}</p>
+            
+            <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 12px;">
+                <div style="background: #f8fafc; padding: 12px 16px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between;">
+                    <span style="font-size: 0.8rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Zodiac</span>
+                    <span class="premium-badge" style="background: #fdf2f8; color: #db2777; border-radius: 8px; padding: 4px 12px;">${zodiac}</span>
+                </div>
+                <div style="background: #f8fafc; padding: 12px 16px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between;">
+                    <span style="font-size: 0.8rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Status</span>
+                    <span style="font-size: 0.9rem; font-weight: 600; color: ${isToday ? '#10b981' : '#64748b'};">${isToday ? '🎉 Today!' : (parseInt(daysLeft) > 0 ? `In ${daysLeft} days` : 'Passed')}</span>
+                </div>
+            </div>
+
+            <button class="btn-wish" onclick="confirmWish('${id}', '${name}')" ${currentUser.id == id ? 'disabled' : ''} style="margin-top: 24px; width: 100%; height: 50px; background: ${currentUser.id == id ? '#cbd5e1' : 'linear-gradient(135deg, #3b82f6, #2563eb)'}; color: white; border: none; border-radius: 16px; font-weight: 700; font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
+                <span>🎈</span> ${currentUser.id == id ? "It's You!" : "Send Wishes"}
+            </button>
+        </div>
+    `;
+
+    // Hide stats to show detail if needed, or just append
+    const statsArea = document.querySelector('.premium-stats');
+    if (statsArea) statsArea.style.display = 'none';
+
+    const searchArea = document.querySelector('.premium-search')?.parentElement;
+    if (searchArea) searchArea.style.display = 'none';
+
+    detailContainer.scrollIntoView({ behavior: 'smooth' });
+}
+function closeBirthdayDetail() {
+    const detailContainer = document.getElementById('birthdayDetailContainer');
+    if (detailContainer) detailContainer.innerHTML = '';
+
+    const statsArea = document.querySelector('.premium-stats');
+    if (statsArea) statsArea.style.display = 'flex';
+
+    const searchArea = document.querySelector('.premium-search')?.parentElement;
+    if (searchArea) searchArea.style.display = 'block';
+}
+
+async function confirmWish(id, name) {
+    if (id == currentUser.id) {
+        showNotification("You can't send wishes to yourself!", 'warning');
+        return;
+    }
+
+    // Call API
+    try {
+        const btn = document.querySelector('.btn-wish');
+        if (btn) {
+            btn.innerHTML = 'Sending...';
+            btn.disabled = true;
         }
-    });
+
+        const result = await apiCall('send-wish', 'POST', {
+            sender_id: currentUser.id,
+            receiver_id: id,
+            message: "Wishing you a very Happy Birthday! 🎂"
+        });
+
+        if (result.success) {
+            showNotification(`Best wishes sent to ${name}! 🎉`, 'success');
+            if (btn) {
+                btn.innerHTML = '<span>✅</span> Wishes Sent';
+                btn.style.background = '#4ade80';
+            }
+        } else {
+            showNotification(result.message || "Failed to send wishes", 'error');
+            if (btn) {
+                btn.innerHTML = '<span>🎈</span> Send Wishes';
+                btn.disabled = false;
+            }
+        }
+    } catch (e) {
+        console.error(e);
+        showNotification("An error occurred", 'error');
+        const btn = document.querySelector('.btn-wish');
+        if (btn) {
+            btn.innerHTML = '<span>🎈</span> Send Wishes';
+            btn.disabled = false;
+        }
+    }
 }
 
 function getZodiacSign(day, month) {
@@ -1112,7 +1518,7 @@ function createBirthdayCalendarHTML(calendarInfo, year, month) {
 
         // If multiple birthdays, show a small counter, otherwise just the day number
         const count = dayData.birthdays.length;
-        const indicator = count > 1 ? `<span style="font-size:0.6rem; position:absolute; bottom:4px;">${count}</span>` : '';
+        const indicator = count > 1 ? `<span style="font-size:0.65rem; position:absolute; bottom:8px; background:#ec4899; color:white; width:16px; height:16px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 4px rgba(236, 72, 153, 0.3);">${count}</span>` : '';
 
         // Add hover events only if there are birthdays
         const hoverAttrs = dayData.hasBirthday ?
@@ -1206,61 +1612,67 @@ async function openRequestsModal() {
             const leaveCount = requests.filter(r => r.type === 'full_day' || r.type === 'half_day').length;
 
             let html = `
-                <div class="requests-modal-container">
-                    <!-- Dashboard Header -->
-                    <div class="requests-dashboard-header">
-                        <div class="requests-title-row">
-                             <h3>🚀 Request Command Center</h3>
-                             <button class="modal-close-btn" onclick="closeModal('requestsModal')">✕</button>
-                        </div>
-                        
-                        <!-- Stats Row -->
-                        <div class="requests-stats-row">
-                            <div class="stat-chip stat-total">
-                                <div class="stat-chip-icon">📊</div>
-                                <div class="stat-chip-info">
-                                    <span class="stat-chip-value">${total}</span>
-                                    <span class="stat-chip-label">Total Pending</span>
-                                </div>
-                            </div>
-                            <div class="stat-chip stat-wfh">
-                                <div class="stat-chip-icon">🏠</div>
-                                <div class="stat-chip-info">
-                                    <span class="stat-chip-value">${wfhCount}</span>
-                                    <span class="stat-chip-label">WFH Requests</span>
-                                </div>
-                            </div>
-                            <div class="stat-chip stat-leave">
-                                <div class="stat-chip-icon">🏖️</div>
-                                <div class="stat-chip-info">
-                                    <span class="stat-chip-value">${leaveCount}</span>
-                                    <span class="stat-chip-label">Leave Requests</span>
-                                </div>
+                <div class="premium-calendar-wrap">
+                    <!-- Premium Header -->
+                    <div class="premium-header">
+                        <div class="header-title">
+                            <span style="font-size: 1.8rem;">📥</span>
+                            <div style="display:flex; flex-direction:column;">
+                                <span style="font-size: 1.4rem; font-weight: 800; color: #1e293b;">Pending Requests</span>
+                                <span style="font-size: 0.85rem; font-weight: 500; color: #64748b;">Review and manage employee submissions</span>
                             </div>
                         </div>
-
-                        <!-- Toolbar -->
-                        <div class="requests-toolbar">
-                            <div class="tech-search">
-                                <span class="tech-search-icon">🔍</span>
-                                <input type="text" placeholder="Search employee..." onkeyup="filterRequests(this.value)">
+                        <div style="display:flex; gap:12px; align-items:center;">
+                            <div class="btn-group-premium" style="display:flex; background: #f1f5f9; padding: 4px; border-radius: 12px; gap: 4px;">
+                                <button class="btn-premium-toggle active" onclick="filterRequestsByType('all', this)">All</button>
+                                <button class="btn-premium-toggle" onclick="filterRequestsByType('wfh', this)">WFH</button>
+                                <button class="btn-premium-toggle" onclick="filterRequestsByType('leave', this)">Leave</button>
                             </div>
-                            
-                            <div class="requests-filters">
-                                <button class="filter-tab active" onclick="filterRequestsByType('all', this)">All</button>
-                                <button class="filter-tab" onclick="filterRequestsByType('wfh', this)">WFH</button>
-                                <button class="filter-tab" onclick="filterRequestsByType('leave', this)">Leave</button>
-                            </div>
+                            <button class="btn-premium-close" onclick="closeModal('requestsModal')">Close</button>
                         </div>
                     </div>
 
-                    <!-- List Container -->
-                    <div class="requests-futuristic-list" id="requestsListContainer">
-                        ${renderRequestCards(requests)}
+                    <div class="calendar-main-split">
+                        <!-- Left: List -->
+                        <div class="clean-calendar-panel" style="padding: 24px;">
+                             <div style="margin-bottom: 24px; position:relative;">
+                                <span style="position:absolute; left:16px; top:50%; transform:translateY(-50%); color:#94a3b8;">🔍</span>
+                                <input type="text" class="premium-search" style="padding: 14px 14px 14px 48px; min-height: 52px;" placeholder="Search by name or username..." onkeyup="filterRequests(this.value)">
+                            </div>
+                            <div id="requestsListContainer" style="display:flex; flex-direction:column; gap:12px;">
+                                ${renderRequestCards(requests)}
+                            </div>
+                        </div>
+
+                        <!-- Right: Side Panel -->
+                        <div class="premium-side-panel">
+                            <div style="font-weight: 700; font-size: 0.8rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px;">Quick Stats</div>
+                            <div class="premium-stats">
+                                <div class="premium-stat-card">
+                                    <span class="premium-stat-val" style="color:#8b5cf6;">${total}</span>
+                                    <span class="premium-stat-label">Total</span>
+                                </div>
+                                <div class="premium-stat-card">
+                                    <span class="premium-stat-val" style="color:#10b981;">${wfhCount}</span>
+                                    <span class="premium-stat-label">WFH</span>
+                                </div>
+                                <div class="premium-stat-card">
+                                    <span class="premium-stat-val" style="color:#f59e0b;">${leaveCount}</span>
+                                    <span class="premium-stat-label">Leave</span>
+                                </div>
+                            </div>
+                            
+                            <div id="requestDetailContainer" style="margin-top:24px; flex:1;">
+                                <div style="height: 100%; border: 2px dashed #e2e8f0; border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; color: #94a3b8;">
+                                    <span style="font-size: 3rem; margin-bottom: 16px;">🔍</span>
+                                    <p style="font-weight: 600; margin: 0; color: #64748b;">Select a request</p>
+                                    <p style="font-size: 0.85rem; margin-top: 4px;">Click any card to review details</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
-
             content.innerHTML = html;
 
         } else {
@@ -1297,21 +1709,29 @@ function renderRequestCards(requests) {
         const delay = index * 50;
 
         return `
-            <div class="req-card-tech ${typeClass}" style="animation: slideInUp 0.3s forwards; animation-delay: ${delay}ms;">
-                <div class="req-avatar-tech">${initials}</div>
+            <div class="req-card-tech ${typeClass}" onclick="selectRequest(${req.id})" style="animation: slideInUp 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; animation-delay: ${delay}ms; cursor: pointer;">
+                <div class="req-avatar-tech" style="background: linear-gradient(135deg, #f8fafc, #f1f5f9); color: #475569; width: 60px; height: 60px; border-radius: 18px; border: 1px solid #f1f5f9;">${initials}</div>
                 <div class="req-content-tech">
                     <div class="req-header-tech">
-                        <h4 class="req-name-tech">${req.employee_name}</h4>
+                        <div>
+                            <h4 class="req-name-tech" style="font-size: 1.2rem; margin-bottom: 4px;">${req.employee_name}</h4>
+                            <div class="req-badges-tech">
+                                <span class="req-badge ${badgeClass}" style="padding: 6px 12px; border-radius: 8px;">${typeLabel}</span>
+                                <span style="font-size:0.85rem; color: #64748b; font-weight:600; display: flex; align-items: center; gap: 4px;">
+                                    <span style="font-size: 1rem;">📅</span> ${req.date}
+                                </span>
+                            </div>
+                        </div>
                         <div class="req-actions-tech">
-                            <button class="btn-tech btn-tech-approve" onclick="approveRequest(${req.id}, '${req.type}')" title="Approve">✓</button>
-                            <button class="btn-tech btn-tech-reject" onclick="rejectRequest(${req.id}, '${req.type}')" title="Reject">✕</button>
+                            <button class="btn-tech btn-tech-approve" onclick="approveRequest(${req.id}, '${req.type}')" title="Approve" style="width: 48px; height: 48px; border-radius: 14px;">✓</button>
+                            <button class="btn-tech btn-tech-reject" onclick="rejectRequest(${req.id}, '${req.type}')" title="Reject" style="width: 48px; height: 48px; border-radius: 14px;">✕</button>
                         </div>
                     </div>
-                    <div class="req-badges-tech">
-                        <span class="req-badge ${badgeClass}">${typeLabel}</span>
-                        <span style="font-size:0.8rem; color:var(--gray-500); font-weight:600;">📅 ${req.date}</span>
-                    </div>
-                    ${req.reason ? `<p style="margin:4px 0 0; color:var(--gray-600); font-size:0.9rem;">"${req.reason}"</p>` : ''}
+                    ${req.reason ? `
+                        <div style="margin-top: 12px; padding: 12px; background: #f8fafc; border-radius: 10px; border-left: 3px solid #e2e8f0;">
+                            <p style="margin:0; color:var(--gray-600); font-size:0.95rem; font-style: italic; line-height: 1.5;">"${req.reason}"</p>
+                        </div>
+                    ` : ''}
                 </div>
             </div>
         `;
@@ -1420,26 +1840,33 @@ function renderTaskBoard() {
                 (task.priority === 'Medium' ? 'priority-medium' : 'priority-low');
 
             return `
-                <div class="premium-task-card" id="task-${task.id}" draggable="true" ondragstart="drag(event)" style="animation: slideInUp 0.3s forwards; animation-delay: ${idx * 50}ms; opacity:1;">
+                <div class="premium-task-card" id="task-${task.id}" draggable="true" ondragstart="drag(event)" onclick="openTaskDetail(${task.id})" style="animation: slideInUp 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; animation-delay: ${idx * 50}ms; opacity:1; cursor:pointer;">
                     <div class="premium-card-header">
-                        <span class="premium-priority-badge ${priorityClass}">${task.priority || 'Medium'}</span>
-                        <div style="display:flex; gap:4px;">
+                        <span class="premium-priority-badge ${priorityClass}" style="border-radius: 6px; padding: 4px 10px;">${task.priority || 'Medium'}</span>
+                        <div style="display:flex; gap:8px;">
                             ${typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin' ? `
-                            <button class="btn-icon-sm" onclick="editTask(${task.id})" style="background:none; border:none; color:#94a3b8; cursor:pointer;" title="Edit">✎</button>
-                            <button class="btn-icon-sm" onclick="deleteTask(${task.id})" style="background:none; border:none; color:#ef4444; cursor:pointer;" title="Delete">🗑</button>
+                            <button class="btn-icon-sm" onclick="event.stopPropagation(); editTask(${task.id})" style="background:#f1f5f9; border:none; color:#64748b; cursor:pointer; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; transition:all 0.2s;" title="Edit">✎</button>
+                            <button class="btn-icon-sm" onclick="event.stopPropagation(); deleteTask(${task.id})" style="background:#fef2f2; border:none; color:#ef4444; cursor:pointer; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; transition:all 0.2s;" title="Delete">🗑</button>
                             ` : ''}
                         </div>
                     </div>
                     
-                    <h5 class="premium-task-title" style="margin-bottom:8px;">${task.title}</h5>
-                    <p style="font-size:0.85rem; color:#64748b; margin-bottom:12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${task.description || ''}</p>
+                    <h5 class="premium-task-title" style="margin: 0; font-size: 1.1rem; line-height: 1.5;">${task.title}</h5>
+                    <p style="font-size:0.9rem; color:#64748b; margin: 0; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${task.description || ''}</p>
                     
-                    <div class="premium-task-meta">
-                        <div style="display:flex; align-items:center; gap:6px;">
-                            <span class="premium-user-avatar" style="width:24px; height:24px; font-size:10px;">${avatar}</span>
-                            <span style="font-size:0.8rem; color:#64748b;">${task.assigned_to_name || 'Unassigned'}</span>
+                    <div class="premium-task-meta" style="margin-top: 4px; padding-top: 12px; border-top: 1px solid #f1f5f9;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span class="premium-user-avatar" style="width:28px; height:28px; font-size:11px; background: linear-gradient(135deg, #f8fafc, #f1f5f9); border: 1px solid #e2e8f0; color: #475569;">${avatar}</span>
+                            <span style="font-size:0.85rem; color:#475569; font-weight: 500;">${task.assigned_to_name || 'Unassigned'}</span>
                         </div>
-                        <span style="font-size:0.75rem; color:#94a3b8;">${task.due_date ? new Date(task.due_date).toLocaleDateString() : ''}</span>
+                        <div style="display:flex; flex-direction:column; align-items:flex-end;">
+                            <span style="font-size:0.8rem; color:#94a3b8; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                                <span style="font-size: 1rem;">📅</span> ${task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No date'}
+                            </span>
+                            ${task.comments && task.comments.length > 0 ? `
+                                <span style="font-size:0.75rem; color:#3b82f6; font-weight: 600; margin-top: 4px;">💬 ${task.comments.length} comments</span>
+                            ` : ''}
+                        </div>
                     </div>
                 </div>
             `;
@@ -1499,22 +1926,27 @@ function renderMyTaskBoard() {
                 (task.priority === 'Medium' ? 'priority-medium' : 'priority-low');
 
             return `
-                <div class="premium-task-card" id="mytask-${task.id}" style="animation: slideInUp 0.3s forwards; animation-delay: ${idx * 50}ms; opacity:1;">
-                    <div class="premium-card-header">
-                        <span class="premium-priority-badge ${priorityClass}">${task.priority || 'Medium'}</span>
+                <div class="premium-task-card" id="mytask-${task.id}" onclick="openTaskDetail(${task.id})" style="animation: slideInUp 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; animation-delay: ${idx * 50}ms; opacity:1; cursor:pointer;">
+                    <div class="premium-card-header" style="margin-bottom: 0;">
+                        <span class="premium-priority-badge ${priorityClass}" style="border-radius: 6px; padding: 4px 10px;">${task.priority || 'Medium'}</span>
+                        ${task.comments && task.comments.length > 0 ? `
+                            <span style="font-size:0.75rem; color:#3b82f6; font-weight: 600;">💬 ${task.comments.length}</span>
+                        ` : ''}
                     </div>
                     
-                    <h5 class="premium-task-title" style="margin-bottom:8px;">${task.title}</h5>
-                    <p style="font-size:0.85rem; color:#64748b; margin-bottom:12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${task.description || ''}</p>
+                    <h5 class="premium-task-title" style="margin: 0; font-size: 1.1rem; line-height: 1.5;">${task.title}</h5>
+                    <p style="font-size:0.9rem; color:#64748b; margin: 0; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${task.description || ''}</p>
                     
-                    <div class="premium-task-meta">
-                        <span style="font-size:0.75rem;">📅 ${task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No Date'}</span>
+                    <div class="premium-task-meta" style="margin-top: 4px; padding-top: 12px; border-top: 1px solid #f1f5f9;">
+                        <span style="font-size:0.85rem; color:#94a3b8; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                            <span style="font-size: 1rem;">📅</span> ${task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No date'}
+                        </span>
                     </div>
 
-                    <div style="margin-top:12px; display:flex; gap:8px; justify-content:flex-end;">
-                        ${task.status !== 'todo' ? `<button onclick="moveTask(${task.id}, 'todo', true)" style="font-size:0.7rem; padding:2px 6px; border:1px solid #e2e8f0; border-radius:4px; background:white; color:#64748b; cursor:pointer;">← Todo</button>` : ''}
-                        ${task.status !== 'in_progress' ? `<button onclick="moveTask(${task.id}, 'in_progress', true)" style="font-size:0.7rem; padding:2px 6px; border:1px solid #e2e8f0; border-radius:4px; background:white; color:#3b82f6; cursor:pointer;">In Prog</button>` : ''}
-                        ${task.status !== 'completed' ? `<button onclick="moveTask(${task.id}, 'completed', true)" style="font-size:0.7rem; padding:2px 6px; border:1px solid #e2e8f0; border-radius:4px; background:white; color:#10b981; cursor:pointer;">Done ✓</button>` : ''}
+                    <div style="margin-top: 4px; display:flex; gap:8px; justify-content:flex-end;" onclick="event.stopPropagation()">
+                        ${task.status !== 'todo' ? `<button onclick="moveTask(${task.id}, 'todo', true)" style="font-size:0.75rem; padding:6px 12px; border:1px solid #e2e8f0; border-radius:8px; background:#f8fafc; color:#64748b; cursor:pointer; font-weight: 600; transition: all 0.2s;">← Todo</button>` : ''}
+                        ${task.status !== 'in_progress' ? `<button onclick="moveTask(${task.id}, 'in_progress', true)" style="font-size:0.75rem; padding:6px 12px; border:1px solid #dbeafe; border-radius:8px; background:#eff6ff; color:#3b82f6; cursor:pointer; font-weight: 600; transition: all 0.2s;">In Prog</button>` : ''}
+                        ${task.status !== 'completed' ? `<button onclick="moveTask(${task.id}, 'completed', true)" style="font-size:0.75rem; padding:6px 12px; border:1px solid #dcfce7; border-radius:8px; background:#f0fdf4; color:#10b981; cursor:pointer; font-weight: 600; transition: all 0.2s;">Done ✓</button>` : ''}
                     </div>
                 </div>
             `;
@@ -1534,12 +1966,16 @@ function updateDashboardVisibility() {
     const adminStatsGrid = document.getElementById('adminStatsGrid');
     const employeeStatsGrid = document.getElementById('employeeStatsGrid');
 
-    if (currentUser.role === 'admin') {
-        // Show Task Manager (Admin), Hide My Tasks (Employee)
+    if (currentUser.role === 'admin' || currentUser.role === 'manager') {
+        // Show Task Manager (Admin/Manager), Hide My Tasks (Employee - unless manager wants both)
         if (taskManagerCard) taskManagerCard.classList.remove('hidden');
-        if (myTasksCard) myTasksCard.classList.add('hidden');
+        if (myTasksCard) {
+            // Managers might still want "My Tasks" for a focused view of their own work
+            if (currentUser.role === 'manager') myTasksCard.classList.remove('hidden');
+            else myTasksCard.classList.add('hidden');
+        }
 
-        // Ensure Admin Stats Grid is visible
+        // Ensure Admin Stats Grid is visible for Admin/Manager
         if (adminStatsGrid) adminStatsGrid.classList.remove('hidden');
         if (employeeStatsGrid) employeeStatsGrid.classList.add('hidden');
     } else {
@@ -1562,9 +1998,53 @@ function addNewTask() {
     document.getElementById('taskPriority').value = 'medium';
     document.getElementById('taskDueDate').value = '';
     document.getElementById('taskAssignee').value = '';
+    if (document.getElementById('taskManager')) document.getElementById('taskManager').value = 'none';
+
+    // Reset button text and state
+    document.getElementById('saveTaskText').textContent = 'Save Task';
+    window.currentEditingTaskId = null;
 
     // Populate assignee dropdown
     populateTaskAssigneeDropdown();
+
+    openModal('addTaskModal');
+}
+
+/**
+ * Populate Edit Task Modal
+ */
+async function editTask(taskId) {
+    if (!tasks || !Array.isArray(tasks)) {
+        showNotification('Task data not loaded', 'error');
+        return;
+    }
+
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) {
+        showNotification('Task not found', 'error');
+        return;
+    }
+
+    // Change title and button text
+    document.getElementById('saveTaskText').textContent = 'Update Task';
+    window.currentEditingTaskId = taskId;
+
+    // Populate form
+    document.getElementById('taskTitle').value = task.title;
+    document.getElementById('taskDescription').value = task.description || '';
+
+    // Map priority if needed
+    const priority = (task.priority || 'medium').toLowerCase();
+    document.getElementById('taskPriority').value = priority;
+
+    document.getElementById('taskDueDate').value = task.due_date || '';
+
+    // For assignee, we need to ensure the dropdown is populated first
+    await populateTaskAssigneeDropdown();
+    document.getElementById('taskAssignee').value = task.assigned_to;
+    if (document.getElementById('taskManager')) {
+        document.getElementById('taskManager').value = task.manager_id || 'none';
+    }
 
     openModal('addTaskModal');
 }
@@ -1574,13 +2054,38 @@ async function populateTaskAssigneeDropdown() {
     try {
         const res = await apiCall('employees-simple', 'GET');
         if (res && res.success && Array.isArray(res.employees)) {
-            select.innerHTML = '<option value="">Select Employee...</option>' +
+            window.allEmployeesSimple = res.employees; // Store for lookup
+            const options = '<option value="">Select Employee...</option>' +
                 res.employees.map(emp => `<option value="${emp.id}">${emp.name} (${emp.role})</option>`).join('');
+            select.innerHTML = options;
+
+            const managerSelect = document.getElementById('taskManager');
+            if (managerSelect) {
+                // Allow selecting any employee as a manager/overseer
+                managerSelect.innerHTML = '<option value="none">Optional: Select Manager...</option>' +
+                    res.employees.map(emp => `<option value="${emp.id}">${emp.name} (${emp.role})</option>`).join('');
+            }
         }
     } catch (error) {
         console.error('Error loading users for task assignment:', error);
     }
 }
+
+// Auto-select manager when assignee changes
+document.addEventListener('change', (e) => {
+    if (e.target.id === 'taskAssignee') {
+        const empId = parseInt(e.target.value);
+        if (!empId || !window.allEmployeesSimple) return;
+
+        const emp = window.allEmployeesSimple.find(x => x.id === empId);
+        if (emp && emp.manager_id) {
+            const managerSelect = document.getElementById('taskManager');
+            if (managerSelect) {
+                managerSelect.value = emp.manager_id;
+            }
+        }
+    }
+});
 
 async function saveNewTask() {
     const title = document.getElementById('taskTitle').value.trim();
@@ -1603,22 +2108,30 @@ async function saveNewTask() {
     spinner.classList.remove('hidden');
 
     try {
-        const res = await apiCall('tasks', 'POST', {
+        const url = window.currentEditingTaskId ? `tasks/${window.currentEditingTaskId}` : 'tasks';
+        const method = 'POST'; // Backend uses POST for both creation (at /tasks) and update (at /tasks/<id>)
+
+        const payload = {
             title,
             description,
             priority,
             due_date: dueDate || null,
             assigned_to: assigneeId || null,
+            manager_id: document.getElementById('taskManager') ? document.getElementById('taskManager').value : null,
+            user_id: typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null,
             created_by: typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null
-        });
+        };
+
+        const res = await apiCall(url, method, payload);
 
         if (res && res.success) {
-            showNotification('Task created successfully');
+            showNotification(window.currentEditingTaskId ? 'Task updated successfully' : 'Task created successfully');
             closeModal('addTaskModal');
+            window.currentEditingTaskId = null;
             await refreshTasks();
             await loadActiveTasks(); // Update dashboard count
         } else {
-            showNotification(res?.message || 'Failed to create task', 'error');
+            showNotification(res?.message || (window.currentEditingTaskId ? 'Failed to update task' : 'Failed to create task'), 'error');
         }
     } catch (error) {
         console.error('Error creating task:', error);
@@ -1627,6 +2140,81 @@ async function saveNewTask() {
         btn.disabled = false;
         btnText.classList.remove('hidden');
         spinner.classList.add('hidden');
+    }
+}
+
+let currentSelectedTaskId = null;
+
+function openTaskDetail(taskId) {
+    const task = [...tasks, ...myTasks].find(t => t.id === taskId);
+    if (!task) return;
+
+    currentSelectedTaskId = taskId;
+    document.getElementById('detailTaskTitle').textContent = task.title;
+    document.getElementById('detailTaskDescription').textContent = task.description || 'No description provided.';
+
+    document.getElementById('detailTaskMeta').innerHTML = `
+        <span>👤 ${task.assigned_to_name}</span>
+        <span>🚩 ${task.priority}</span>
+        <span>📅 ${task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No date'}</span>
+    `;
+
+    renderTaskComments(task.comments || []);
+    document.getElementById('newTaskComment').value = '';
+
+    openModal('taskDetailModal');
+}
+
+function renderTaskComments(comments) {
+    const list = document.getElementById('taskCommentsList');
+    if (!comments.length) {
+        list.innerHTML = '<p style="text-align:center; color:#94a3b8; font-size:0.9rem; margin-top:20px;">No comments yet.</p>';
+        return;
+    }
+
+    list.innerHTML = comments.map(c => `
+        <div style="display: flex; flex-direction: column; gap: 4px; background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #f1f5f9;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">${c.author_name}</span>
+                <span style="font-size: 0.75rem; color: #94a3b8;">${new Date(c.created_at).toLocaleString()}</span>
+            </div>
+            <p style="margin: 0; color: #334155; font-size: 0.95rem; line-height: 1.5;">${c.content}</p>
+        </div>
+    `).join('');
+
+    // Scroll to bottom
+    setTimeout(() => {
+        list.scrollTop = list.scrollHeight;
+    }, 100);
+}
+
+async function submitTaskComment() {
+    const content = document.getElementById('newTaskComment').value.trim();
+    if (!content || !currentSelectedTaskId) return;
+
+    try {
+        const res = await apiCall('task-comment', 'POST', {
+            task_id: currentSelectedTaskId,
+            author_id: currentUser.id,
+            content: content
+        });
+
+        if (res && res.success) {
+            document.getElementById('newTaskComment').value = '';
+            // Refresh tasks to get the new comment (or we could just append locally)
+            await Promise.all([refreshTasks(), refreshMyTasks()]);
+
+            // Find updated task and re-render comments
+            const updatedTask = [...tasks, ...myTasks].find(t => t.id === currentSelectedTaskId);
+            if (updatedTask) {
+                renderTaskComments(updatedTask.comments || []);
+            }
+        } else {
+            showNotification(res.message || 'Failed to add comment', 'error');
+        }
+    } catch (error) {
+        console.error('Error adding comment:', error);
+        showNotification('An error occurred', 'error');
     }
 }
 
@@ -1654,7 +2242,7 @@ async function moveTask(taskId, newStatus, isMyTask = false) {
 }
 
 async function deleteTask(taskId) {
-    if (!confirm('Are you sure you want to delete this task?')) return;
+    if (!(await showConfirm('Are you sure you want to delete this task?', 'Delete Task', '🗑️'))) return;
 
     try {
         const payload = {
@@ -1718,6 +2306,206 @@ async function rejectRequest(requestId, type) {
         showNotification('Error rejecting request', 'error');
     }
 }
+
+/* ==================== MY REQUESTS POPUP ==================== */
+
+/* ==================== MY REQUESTS POPUP (STATUS OVERVIEW) ==================== */
+
+function openMyRequests() {
+    openModal('myRequestsModal');
+    loadStatusOverview();
+}
+
+async function loadStatusOverview() {
+    if (!currentUser) return;
+
+    // Reset View
+    const ovContainer = document.querySelector('.overview-container');
+    const histView = document.getElementById('historyView');
+    if (ovContainer) ovContainer.classList.remove('hidden');
+    if (histView) histView.classList.add('hidden');
+
+    // 1. Set Date
+    const today = new Date();
+    const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    const dateStr = today.toLocaleDateString('en-US', dateOptions);
+    const modalDate = document.getElementById('modalDate');
+    if (modalDate) modalDate.textContent = dateStr;
+
+    // 2. Fetch Monthly Stats
+    try {
+        const result = await apiCall('monthly-stats', 'GET', {
+            employee_id: currentUser.id
+        });
+
+        if (result && result.success && result.stats) {
+            const stats = result.stats;
+
+            // Populate Hero Card
+            const totalDaysEl = document.getElementById('ovTotalDays');
+            // Backend returns: office_days, wfh_days, half_days, client_days
+            const officeCount = stats.office_days || 0;
+            const wfhCount = stats.wfh_days || 0;
+            const halfCount = stats.half_days || 0;
+
+            // Total Days calculation
+            const total = officeCount + wfhCount + halfCount;
+            if (totalDaysEl) totalDaysEl.textContent = stats.total_working_days || total;
+
+            // Populate Grid
+            const officeEl = document.getElementById('ovOffice');
+            const wfhEl = document.getElementById('ovWFH');
+            const halfDayEl = document.getElementById('ovHalfDay');
+            const leavesEl = document.getElementById('ovLeaves');
+
+            if (officeEl) officeEl.textContent = officeCount;
+            if (wfhEl) wfhEl.textContent = wfhCount;
+            if (halfDayEl) halfDayEl.textContent = halfCount;
+
+            // Leaves are fetched from profile separately, but if present in stats use them, else ignored here (handle in profile fetch if needed)
+            if (leavesEl) leavesEl.textContent = stats.leave_days || 0;
+
+            // Apply Premium Animations
+            const heroCard = document.querySelector('.overview-hero-card');
+            if (heroCard) {
+                heroCard.classList.remove('animate-entry');
+                void heroCard.offsetWidth; // Trigger reflow
+                heroCard.classList.add('animate-entry');
+            }
+
+            const statBoxes = document.querySelectorAll('.stat-box');
+            statBoxes.forEach((box, index) => {
+                box.classList.remove('animate-entry', `delay-${index + 1}`);
+                void box.offsetWidth;
+                box.classList.add('animate-entry', `delay-${index + 1}`);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading overview stats:', error);
+    }
+}
+
+function toggleHistoryView() {
+    const overview = document.querySelector('.overview-container');
+    const history = document.getElementById('historyView');
+
+    if (overview && history) {
+        if (history.classList.contains('hidden')) {
+            // Show History
+            overview.classList.add('hidden');
+            history.classList.remove('hidden');
+            loadMyRequests(); // Load data
+        } else {
+            // Show Overview
+            history.classList.add('hidden');
+            overview.classList.remove('hidden');
+        }
+    }
+}
+
+async function loadMyRequests() {
+    if (!currentUser) return;
+
+    const listEl = document.getElementById('myRequestsList');
+    const emptyEl = document.getElementById('myRequestsEmpty');
+    if (!listEl) return;
+
+    listEl.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--gray-500);">Loading history...</div>';
+    if (emptyEl) emptyEl.classList.add('hidden');
+
+    try {
+        const res = await apiCall('my-requests', 'GET', { employee_id: currentUser.id });
+
+        if (res && res.success && Array.isArray(res.requests) && res.requests.length > 0) {
+            listEl.innerHTML = res.requests.map(req => {
+                let statusClass = 'status-badge status-absent'; // default gray/redish
+                let statusText = req.status || 'Pending';
+                let statusColor = '#ef4444'; // red
+                let statusBg = '#fee2e2';
+
+                if (statusText === 'approved') {
+                    statusClass = 'status-badge status-present';
+                    statusColor = '#10b981'; // green
+                    statusBg = '#dcfce7';
+                } else if (statusText === 'pending') {
+                    statusClass = 'status-badge status-half_day';
+                    statusColor = '#f59e0b'; // orange
+                    statusBg = '#fef3c7';
+                }
+
+                // Icon & Title
+                let icon = '📄';
+                let title = 'Request';
+                let iconBg = '#f3f4f6';
+
+                if (req.request_type === 'wfh') { icon = '🏠'; title = 'Work From Home'; iconBg = '#e0e7ff'; }
+                else if (req.request_type === 'full_day') { icon = '🏖️'; title = 'Leave (Full)'; iconBg = '#fee2e2'; }
+                else if (req.request_type === 'half_day') { icon = '⏳'; title = 'Leave (Half)'; iconBg = '#fef9c3'; }
+
+                // Date Formatting
+                const dateDisplay = req.start_date === req.end_date
+                    ? req.start_date
+                    : `${req.start_date} → ${req.end_date}`;
+
+                return `
+                    <div class="history-card" style="
+                        display: flex; 
+                        justify-content: space-between; 
+                        align-items: center; 
+                        padding: 16px; 
+                        background: white; 
+                        border-radius: 12px; 
+                        border: 1px solid var(--gray-100); 
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+                        transition: all 0.2s ease;
+                    " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 6px -1px rgba(0,0,0,0.05)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 1px 3px rgba(0,0,0,0.02)';">
+                        
+                        <div style="display: flex; align-items: center; gap: 16px;">
+                            <div style="
+                                width: 48px; 
+                                height: 48px; 
+                                border-radius: 12px; 
+                                background: ${iconBg}; 
+                                display: flex; 
+                                align-items: center; 
+                                justify-content: center; 
+                                font-size: 20px;
+                            ">${icon}</div>
+                            
+                            <div style="display: flex; flex-direction: column; gap: 2px;">
+                                <div style="font-size: 14px; font-weight: 600; color: var(--gray-900);">${title}</div>
+                                <div style="font-size: 12px; font-weight: 500; color: var(--gray-500);">${dateDisplay}</div>
+                                <div style="font-size: 12px; color: var(--gray-400); margin-top: 2px; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${req.reason || ''}</div>
+                                ${req.admin_response ? `<div style="font-size: 11px; color: var(--primary-color); margin-top: 2px;">Admin: ${req.admin_response}</div>` : ''}
+                            </div>
+                        </div>
+
+                        <div style="flex-shrink: 0;">
+                            <span style="
+                                display: inline-block;
+                                padding: 6px 12px;
+                                border-radius: 20px;
+                                font-size: 11px;
+                                font-weight: 600;
+                                text-transform: uppercase;
+                                letter-spacing: 0.05em;
+                                color: ${statusColor};
+                                background: ${statusBg};
+                            ">${statusText}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } else {
+            listEl.innerHTML = '';
+            if (emptyEl) emptyEl.classList.remove('hidden');
+        }
+    } catch (error) {
+        console.error('Error loading my requests:', error);
+        listEl.innerHTML = '<div style="text-align: center; color: #ef4444;">Failed to load requests</div>';
+    }
+}
+
 
 async function openAttendanceCalendar() {
     if (!currentUser) {
@@ -1867,7 +2655,7 @@ async function loadMonthlyStats() {
         });
 
         const monthlyDaysElement = document.getElementById('monthlyDays');
-        if (result.success && result.stats) {
+        if (monthlyDaysElement && result.success && result.stats) {
             monthlyDaysElement.textContent = result.stats.total_days || 0;
         }
     } catch (error) {
@@ -1882,17 +2670,46 @@ async function loadWFHEligibility() {
             date: getCurrentDateTime().date
         });
 
-        const wfhCountElement = document.getElementById('wfhCount');
+        const statWFH = document.getElementById('statWFH');
+        const statLeaves = document.getElementById('statLeaves');
+        const wfhRing = document.getElementById('wfhRing');
+        const leavesRing = document.getElementById('leavesRing');
+
         if (result) {
             const currentCount = result.current_count || 0;
-            const maxLimit = 1; // CHANGED: Force 1 per month
+            const maxWfhLimit = 2; // Monthly WFH limit
 
-            wfhCountElement.textContent = `${currentCount}/${maxLimit}`;
+            // Fetch employee profile for leave balances
+            const profileResult = await apiCall('employee-profile', 'GET', { employee_id: currentUser.id });
+            const leavesUsed = (profileResult && profileResult.success && profileResult.profile)
+                ? (profileResult.profile.planned_leaves || 0) + (profileResult.profile.unplanned_leaves || 0)
+                : 0;
+            const maxLeaveLimit = 1; // Monthly leave limit
 
-            if (currentCount >= maxLimit) {
-                wfhCountElement.className = 'stat-card-value warning';
-            } else {
-                wfhCountElement.className = 'stat-card-value success';
+            // Update WFH
+            if (statWFH) {
+                statWFH.textContent = `${currentCount}/${maxWfhLimit}`;
+                statWFH.style.color = currentCount >= maxWfhLimit ? '#ef4444' : '#10b981';
+
+                // Animate Ring (Circumference ~ 201)
+                if (wfhRing) {
+                    const wfhPercent = Math.min((currentCount / maxWfhLimit), 1);
+                    const wfhOffset = 201 - (wfhPercent * 201);
+                    wfhRing.style.strokeDashoffset = wfhOffset;
+                }
+            }
+
+            // Update Leaves
+            if (statLeaves) {
+                statLeaves.textContent = `${leavesUsed}/${maxLeaveLimit}`;
+                statLeaves.style.color = leavesUsed >= maxLeaveLimit ? '#ef4444' : '#10b981';
+
+                // Animate Ring (Circumference ~ 201)
+                if (leavesRing) {
+                    const leavesPercent = Math.min((leavesUsed / maxLeaveLimit), 1);
+                    const leavesOffset = 201 - (leavesPercent * 201);
+                    leavesRing.style.strokeDashoffset = leavesOffset;
+                }
             }
         }
     } catch (error) {
@@ -2321,7 +3138,7 @@ async function requestWFHExtension(ev) {
 
 
 /* When user taps WFH / Office / Client */
-function selectType(type, e) {
+async function selectType(type, e) {
     // block if WFH disabled (inside geofence)
     if (type === 'wfh' && document.getElementById('wfhOption').classList.contains('disabled')) {
         showNotification('You are within an office geofence. WFH is not allowed.', 'warning');
@@ -2338,8 +3155,26 @@ function selectType(type, e) {
     }
 
     if (type === 'office') {
+        // Show notification about location requirement
+        showNotification('Checking location for office attendance...', 'info');
+
         document.getElementById('officeBlock').style.display = 'grid';
-        loadOfficeSelection();
+
+        // Auto-request location permission if needed
+        if (navigator.permissions && navigator.permissions.query) {
+            try {
+                const status = await navigator.permissions.query({ name: 'geolocation' });
+                if (status.state === 'prompt') {
+                    showNotification('Please allow location access to mark office attendance', 'warning');
+                } else if (status.state === 'denied') {
+                    showNotification('Location access is blocked. Please enable it in your browser settings.', 'error');
+                }
+            } catch (e) {
+                console.log('Permission query not supported', e);
+            }
+        }
+
+        await loadOfficeSelection();
         document.getElementById('cameraSection').classList.add('hidden');
     } else {
         // WFH / Client -> no office list
@@ -2366,34 +3201,83 @@ async function loadOfficeSelection() {
         return;
     }
 
+    // Check geolocation support
+    if (!navigator.geolocation) {
+        showNotification('Geolocation is not supported by your browser', 'error');
+        renderOfficeCardsWithoutLocation();
+        return;
+    }
+
+    // Check permission state
     if (navigator.permissions && navigator.permissions.query) {
         try {
             const st = await navigator.permissions.query({ name: 'geolocation' });
+
             if (st.state === 'denied') {
+                showNotification('Location permission denied. Please enable it in browser settings.', 'error');
                 renderOfficeCardsWithoutLocation();
                 return;
             }
+
             if (st.state === 'prompt') {
-                const container = document.getElementById('officeSelection');
-                container.insertAdjacentHTML('afterbegin', `<div style="margin:6px 0;"><button class="btn btn-primary" id="officeGeoBtn">Enable Location</button></div>`);
+                // Show a prominent button to request permission
+                container.innerHTML = `
+                    <div style="background: #fef3c7; border: 2px solid #f59e0b; border-radius: 12px; padding: 20px; margin-bottom: 16px; text-align: center;">
+                        <div style="font-size: 2rem; margin-bottom: 8px;">📍</div>
+                        <h4 style="margin: 0 0 8px; color: #92400e;">Location Access Needed</h4>
+                        <p style="margin: 0 0 16px; color: #78350f; font-size: 0.9rem;">To mark office attendance, we need to verify you're at the office location.</p>
+                        <button class="btn btn-primary" id="officeGeoBtn" style="padding: 12px 24px; font-size: 1rem;">
+                            📍 Enable Location Access
+                        </button>
+                    </div>
+                    <div id="officeCardsPlaceholder"></div>
+                `;
+
                 const btn = document.getElementById('officeGeoBtn');
-                if (btn) btn.onclick = async () => {
-                    await requestLocationOnce();
-                    loadOfficeSelection();
-                };
+                if (btn) {
+                    btn.onclick = async () => {
+                        btn.textContent = 'Requesting permission...';
+                        btn.disabled = true;
+                        await requestLocationOnce();
+                        // Reload to get actual location
+                        loadOfficeSelection();
+                    };
+                }
+
+                // Still show office cards but without distance info
+                renderOfficeCardsWithoutLocation(document.getElementById('officeCardsPlaceholder'));
+                return;
             }
-        } catch { }
+        } catch (e) {
+            console.log('Permission API not available', e);
+        }
     }
 
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            (pos) => renderOfficeCards(pos.coords.latitude, pos.coords.longitude),
-            () => renderOfficeCardsWithoutLocation(),
-            { timeout: 6000 }
-        );
-    } else {
-        renderOfficeCardsWithoutLocation();
-    }
+    // Try to get current position
+    navigator.geolocation.getCurrentPosition(
+        (pos) => {
+            showNotification('Location detected successfully', 'success');
+            renderOfficeCards(pos.coords.latitude, pos.coords.longitude);
+        },
+        (error) => {
+            console.error('Geolocation error:', error);
+            let errorMsg = 'Unable to get your location. ';
+            if (error.code === 1) {
+                errorMsg = 'Location permission denied. Please enable it in your browser settings.';
+            } else if (error.code === 2) {
+                errorMsg = 'Location unavailable. Please check your device settings.';
+            } else if (error.code === 3) {
+                errorMsg = 'Location request timed out. Please try again.';
+            }
+            showNotification(errorMsg, 'error');
+            renderOfficeCardsWithoutLocation();
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 8000,
+            maximumAge: 0
+        }
+    );
 }
 
 function renderOfficeCards(userLat, userLng) {
@@ -2422,9 +3306,21 @@ function renderOfficeCards(userLat, userLng) {
     }
 }
 
-function renderOfficeCardsWithoutLocation() {
-    const container = document.getElementById('officeSelection');
+function renderOfficeCardsWithoutLocation(containerElement) {
+    const container = containerElement || document.getElementById('officeSelection');
     container.innerHTML = '';
+
+    // Add helpful info banner if showing in main container
+    if (!containerElement) {
+        const helpBanner = document.createElement('div');
+        helpBanner.style.cssText = 'background: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px; margin-bottom: 12px; font-size: 0.9rem; color: #991b1b;';
+        helpBanner.innerHTML = `
+            <strong>⚠️ Location check unavailable</strong><br>
+            <span style="font-size: 0.85rem;">You can still select an office, but distance verification is disabled. Please enable location access for full functionality.</span>
+        `;
+        container.appendChild(helpBanner);
+    }
+
     for (const o of accessibleOffices) {
         const card = document.createElement('div');
         card.className = 'office-card';
@@ -2432,7 +3328,7 @@ function renderOfficeCardsWithoutLocation() {
             <span class="action-card-icon">🏢</span>
             <h3>${o.name}</h3>
             <p>${o.address || ''}</p>
-            <div class="location-status checking">Location check unavailable</div>
+            <div class="location-status checking">Distance check disabled</div>
         `;
         card.onclick = (ev) => selectOffice(ev, o.id);
         container.appendChild(card);
@@ -2461,6 +3357,20 @@ async function startCamera() {
 
     if (!video) return;
 
+    // Check camera permission before attempting to access
+    if (navigator.permissions && navigator.permissions.query) {
+        try {
+            const permissionStatus = await navigator.permissions.query({ name: 'camera' });
+
+            if (permissionStatus.state === 'denied') {
+                showCameraPermissionModal();
+                return;
+            }
+        } catch (e) {
+            console.log('Permission API not available', e);
+        }
+    }
+
     try {
         // open stream only once
         if (!stream) {
@@ -2482,7 +3392,17 @@ async function startCamera() {
 
     } catch (e) {
         console.error('startCamera error', e);
-        alert('Unable to access camera. Please allow camera permission.');
+
+        // Show custom modal instead of alert
+        if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+            showCameraPermissionModal();
+        } else if (e.name === 'NotFoundError') {
+            showNotification('No camera found on this device', 'error');
+        } else if (e.name === 'NotReadableError') {
+            showNotification('Camera is already in use by another application', 'error');
+        } else {
+            showNotification('Unable to access camera. Please check your settings.', 'error');
+        }
     }
 }
 
@@ -2801,10 +3721,11 @@ async function confirmCheckOut() {
 
         // 2️⃣ Between 4.5 and 8 hours → warning + confirmation
         if (workHours < 8) {
-            const proceed = confirm(
-                `You have worked ${workHours.toFixed(2)} hours.\n` +
-                'You have worked less than 8 hours. This will be marked as a half day.\n\n' +
-                'Do you still want to check out?'
+            const proceed = await showConfirm(
+                `You have worked ${workHours.toFixed(2)} hours. ` +
+                'You have worked less than 8 hours. This will be marked as a half day.',
+                'Half Day Warning',
+                '⏳'
             );
             if (!proceed) {
                 return; // user cancelled
@@ -3229,7 +4150,7 @@ async function deleteAttendance(id) {
         showNotification('Admins only.', 'warning');
         return;
     }
-    if (!confirm('Are you sure you want to delete this attendance record?')) return;
+    if (!(await showConfirm('Are you sure you want to delete this attendance record?', 'Delete Record', '🗑️'))) return;
 
     // Using POST + _method='DELETE' so it works with your router
     const res = await apiCall(`attendance-record/${id}`, 'POST', { _method: 'DELETE' });
@@ -3373,6 +4294,7 @@ async function openAdminPanel() {
         refreshAdminOffices(),
         refreshAdminUsers(),
         refreshPrimaryOfficeSelects(),
+        refreshManagerDropdown(),
         refreshAdminProfiles()          // 🔹 load extended user details
     ]);
 
@@ -3513,7 +4435,7 @@ async function startEditOffice(id) {
 }
 
 async function deleteOffice(id) {
-    if (!confirm('Delete this office?')) return;
+    if (!(await showConfirm('Delete this office?', 'Delete Office', '🏢'))) return;
     let res = await fetch(`${apiBaseUrl}/office/${id}`, { method: 'DELETE' })
         .then(r => r.json()).catch(() => null);
     if (res && res.success) {
@@ -3550,12 +4472,29 @@ async function refreshAdminUsers() {
             <td>${u.phone || ''}</td>
             <td>${u.department || ''}</td>
             <td>${u.role || ''}</td>
+            <td>${u.manager_name || '<small class="text-muted">None</small>'}</td>
             <td style="white-space:nowrap;">
                 <button class="btn btn-secondary" onclick="startEditUser(${u.id})">Edit</button>
                 <button class="btn" style="background:#ef4444;color:#fff" onclick="deleteUser(${u.id})">Delete</button>
             </td>
         </tr>
     `).join('');
+}
+
+async function refreshManagerDropdown() {
+    const sel = document.getElementById('newUserReportingManager');
+    if (!sel) return;
+    try {
+        const res = await apiCall('employees-simple', 'GET');
+        if (res && res.success && Array.isArray(res.employees)) {
+            // Filter for admins and managers
+            const potentials = res.employees.filter(emp => emp.role === 'admin' || emp.role === 'manager');
+            sel.innerHTML = '<option value="none">No Manager</option>' +
+                potentials.map(emp => `<option value="${emp.id}">${emp.name} (${emp.role})</option>`).join('');
+        }
+    } catch (e) {
+        console.error('Failed to refresh manager dropdown', e);
+    }
 }
 
 // Populate Primary Office dropdowns (signup + admin add user)
@@ -3592,6 +4531,7 @@ async function submitNewUser() {
         department: document.getElementById('newUserDepartment').value,
         primary_office: document.getElementById('newUserPrimaryOffice').value,
         role: document.getElementById('newUserRole').value,
+        manager_id: document.getElementById('newUserReportingManager').value,
     };
 
     const passwordVal = document.getElementById('newUserPassword').value.trim();
@@ -3642,6 +4582,7 @@ function clearUserForm() {
     document.getElementById('newUserDepartment').value = '';
     document.getElementById('newUserPrimaryOffice').value = '';
     document.getElementById('newUserRole').value = 'employee';
+    document.getElementById('newUserReportingManager').value = 'none';
     document.getElementById('addUserMsg').textContent = '';
 }
 
@@ -3665,6 +4606,7 @@ async function startEditUser(id) {
         document.getElementById('newUserDepartment').value = u.department || '';
         document.getElementById('newUserPrimaryOffice').value = u.primary_office || '';
         document.getElementById('newUserRole').value = u.role || 'employee';
+        document.getElementById('newUserReportingManager').value = u.manager_id || 'none';
         document.getElementById('newUserPassword').value = ''; // don't prefill password
 
         document.getElementById('addUserMsg').textContent = 'Editing user #' + u.id;
@@ -3679,7 +4621,7 @@ async function startEditUser(id) {
 
 
 async function deleteUser(id) {
-    if (!confirm('Delete this user?')) return;
+    if (!(await showConfirm('Delete this user?', 'Delete User', '👤'))) return;
 
     // Try real DELETE
     let res = await fetch(`${apiBaseUrl}/admin-user/${id}`, { method: 'DELETE' })
@@ -4164,7 +5106,7 @@ function renderUserDocuments(docs) {
     });
 }
 
-function deleteSelectedDocuments() {
+async function deleteSelectedDocuments() {
     const checked = [...document.querySelectorAll('.my-doc-checkbox:checked')]
         .map(c => c.value);
 
@@ -4173,7 +5115,7 @@ function deleteSelectedDocuments() {
         return;
     }
 
-    if (!confirm('Delete selected documents?')) return;
+    if (!(await showConfirm('Delete selected documents?', 'Delete Documents', '🗑️'))) return;
 
     apiCall('delete-documents', 'POST', {
         document_ids: checked
@@ -4545,7 +5487,7 @@ function downloadSelectedDocs() {
 
 
 async function adminDeleteProfile(id) {
-    if (!confirm('Delete extended profile details for this user?')) return;
+    if (!(await showConfirm('Delete extended profile details for this user?', 'Delete Profile', '👤'))) return;
 
     const res = await fetch(`${apiBaseUrl}/admin-profile/${id}`, {
         method: 'DELETE'
@@ -4946,4 +5888,164 @@ async function submitRequest() {
 }
 
 
+/* Mini Calendar Widget Logic (Async with Employee Data) */
+async function generateMiniCalendar() {
+    const container = document.getElementById("miniCalendarContainer");
+    if (!container) return;
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+
+    // Fetch attendance data for this month
+    let statusMap = {};
+    if (currentUser) {
+        try {
+            // Format dates for API: YYYY-MM-DD
+            const startDate = new Date(year, month, 1);
+            const endDate = new Date(year, month + 1, 0);
+
+            const records = await apiCall("attendance-records", "GET", {
+                employee_id: currentUser.id,
+                start_date: formatDate(startDate),
+                end_date: formatDate(endDate)
+            });
+
+            if (records && records.success && Array.isArray(records.data)) {
+                records.data.forEach(record => {
+                    // record.date is YYYY-MM-DD. record.status is "present", "absent", "wfh", etc.
+                    statusMap[record.date] = record.status;
+                });
+            }
+        } catch (e) {
+            console.error("MiniCalendar data fetch error", e);
+        }
+    }
+
+    const monthNames = ["January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ];
+
+    // Header
+    const headerHtml = `
+        <div class="mini-cal-header">
+            <span>${monthNames[month]} ${year}</span>
+        </div>
+    `;
+
+    // Grid
+    let gridHtml = "<div class=\"mini-cal-grid\">";
+
+    // Day Names (S M T W T F S)
+    const days = ["S", "M", "T", "W", "T", "F", "S"];
+    days.forEach(d => {
+        gridHtml += `<div class="mini-cal-day-name">${d}</div>`;
+    });
+
+    // Days
+    const firstDay = new Date(year, month, 1).getDay();
+    const totalDays = new Date(year, month + 1, 0).getDate();
+    const today = now.getDate();
+
+    // Empty cells
+    for (let i = 0; i < firstDay; i++) {
+        gridHtml += `<div class="mini-cal-day empty"></div>`;
+    }
+
+    // Days
+    for (let i = 1; i <= totalDays; i++) {
+        const isToday = (i === today);
+
+        // Format date key YYYY-MM-DD for map lookup
+        const dayStr = i.toString().padStart(2, "0");
+        const monthStr = (month + 1).toString().padStart(2, "0");
+        const dateKey = `${year}-${monthStr}-${dayStr}`;
+
+        const status = statusMap[dateKey];
+        let statusClass = "";
+
+        if (status) {
+            if (status === "present") statusClass = "status-present";
+            else if (status === "wfh") statusClass = "status-wfh";
+            else if (status === "absent") statusClass = "status-absent";
+            else if (status === "leave") statusClass = "status-leave";
+            else if (status === "half_day") statusClass = "status-half-day";
+        }
+
+        gridHtml += `<div class="mini-cal-day ${isToday ? "today" : ""} ${statusClass}" title="${status || ""}">${i}</div>`;
+    }
+
+    gridHtml += "</div>";
+
+    container.innerHTML = headerHtml + gridHtml;
+}
+
+// Initialize Mini Calendar
+document.addEventListener("DOMContentLoaded", () => {
+    generateMiniCalendar();
+});
+
+// Fallback execution
+generateMiniCalendar();
+
+function selectRequest(requestId) {
+    if (!window.currentRequests) return;
+    const req = window.currentRequests.find(r => r.id === requestId);
+    if (!req) return;
+
+    const detailContainer = document.getElementById('requestDetailContainer');
+    if (!detailContainer) return;
+
+    let typeLabel = req.type;
+    if (req.type === 'wfh') typeLabel = 'Work from Home';
+    else if (req.type === 'full_day') typeLabel = 'Full Day Leave';
+    else if (req.type === 'half_day') typeLabel = 'Half Day Leave';
+
+    const initials = req.employee_name ? req.employee_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : '??';
+
+    detailContainer.innerHTML = `
+        <div style="animation: slideInRight 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 24px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); height: 100%; display: flex; flex-direction: column;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 24px;">
+                <div style="display:flex; align-items:center; gap:16px;">
+                    <div class="req-avatar-tech" style="width: 56px; height: 56px; border-radius: 16px; margin: 0; background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center; font-weight: 700;">${initials}</div>
+                    <div style="display:flex; flex-direction:column;">
+                        <h4 style="margin:0; font-size:1.1rem; font-weight:800;">${req.employee_name}</h4>
+                        <span style="font-size:0.8rem; color:#64748b;">@${req.username || 'user'}</span>
+                    </div>
+                </div>
+                <button onclick="document.getElementById('requestDetailContainer').innerHTML = '<div style=\'height: 100%; border: 2px dashed #e2e8f0; border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; color: #94a3b8;\'><span style=\'font-size: 3rem; margin-bottom: 16px;\'>🔍</span><p style=\'font-weight: 600; margin: 0; color: #64748b;\'>Select a request</p><p style=\'font-size: 0.85rem; margin-top: 4px;\'>Click any card to review details</p></div>'" style="background:transparent; border:none; color:#94a3b8; cursor:pointer; font-size:1.2rem;">✕</button>
+            </div>
+            
+            <div style="display:flex; flex-direction:column; gap:16px; flex: 1;">
+                 <div style="background: #f8fafc; padding: 16px; border-radius: 16px;">
+                    <span style="font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 8px;">Request Type</span>
+                    <span class="req-badge ${req.type === 'wfh' ? 'badge-tech-wfh' : 'badge-tech-leave'}" style="padding: 8px 16px; border-radius: 10px; font-size: 0.9rem; font-weight: 700;">${typeLabel}</span>
+                </div>
+
+                <div style="background: #f8fafc; padding: 16px; border-radius: 16px;">
+                    <span style="font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 8px;">Selected Date</span>
+                    <div style="display:flex; align-items:center; gap:8px; font-weight:700; color:#1e293b;">
+                        <span style="font-size:1.2rem;">📅</span> ${req.date}
+                    </div>
+                </div>
+
+                ${req.reason ? `
+                    <div style="background: #f8fafc; padding: 16px; border-radius: 16px;">
+                        <span style="font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 8px;">Employee Reason</span>
+                        <p style="margin:0; font-size:0.95rem; line-height:1.6; color:#334155; font-style: italic;">"${req.reason}"</p>
+                    </div>
+                ` : ''}
+            </div>
+
+            <div style="margin-top:24px; display:flex; gap:12px;">
+                <button class="btn-tech btn-tech-approve" onclick="approveRequest(${req.id}, '${req.type}')" style="flex:1; height: 52px; border-radius: 16px; font-weight: 700; font-size: 1rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <span>✓</span> Approve
+                </button>
+                <button class="btn-tech btn-tech-reject" onclick="rejectRequest(${req.id}, '${req.type}')" style="flex:1; height: 52px; border-radius: 16px; font-weight: 700; font-size: 1rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <span>✕</span> Reject
+                </button>
+            </div>
+        </div>
+    `;
+}
 

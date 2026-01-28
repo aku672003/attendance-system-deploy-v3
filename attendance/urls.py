@@ -24,6 +24,7 @@ urlpatterns = [
     path('leave-request', views.leave_request, name='leave_request'),
     path('leave-request-approve', views.leave_request_approve, name='leave_request_approve'),
     path('wfh-request-approve', views.wfh_request_approve, name='wfh_request_approve'),
+    path('my-requests', views.my_requests, name='my_requests'),
     
     # Profile
     path('employee-profile', views.employee_profile, name='employee_profile'),  # GET and POST
@@ -53,7 +54,13 @@ urlpatterns = [
     path('employees-simple', views.employees_simple_list, name='employees_simple_list'),
     path('tasks', views.tasks_api, name='tasks_api'),
     path('tasks/<int:task_id>', views.task_detail_api, name='task_detail_api'),
+    path('task-comment', views.task_comment_api, name='task_comment_api'),
 
     # Request Management
     path('wfh-request-reject', views.wfh_request_reject, name='wfh_request_reject'),
+    
+    # Notifications
+    path('notifications', views.get_notifications, name='get_notifications'),
+    path('mark-notifications-read', views.mark_notifications_read, name='mark_notifications_read'),
+    path('send-wish', views.send_birthday_wish, name='send_birthday_wish'),
 ]
