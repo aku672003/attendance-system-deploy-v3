@@ -1,12 +1,30 @@
 from django.contrib import admin
+from django import forms
+from django.contrib.auth.hashers import make_password
 from .models import (
     Employee, EmployeeProfile, OfficeLocation, DepartmentOfficeAccess,
     AttendanceRecord, EmployeeDocument, Task, EmployeeRequest
 )
 
 
+class EmployeeAdminForm(forms.ModelForm):
+    class Meta:
+        model = Employee
+        fields = '__all__'
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        # Hash password if it's not already hashed (basic check)
+        if user.password and not user.password.startswith('pbkdf2_sha256$'):
+             user.password = make_password(user.password)
+        if commit:
+            user.save()
+        return user
+
+
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
+    form = EmployeeAdminForm
     list_display = ['id', 'username', 'name', 'email', 'department', 'role', 'is_active']
     list_filter = ['department', 'role', 'is_active']
     search_fields = ['username', 'name', 'email']
@@ -54,7 +72,7 @@ class EmployeeDocumentAdmin(admin.ModelAdmin):
 
 @admin.register(Task)
 class TaskAdmin(admin.ModelAdmin):
-    list_display = ['id', 'title', 'status', 'priority', 'assigned_to', 'created_by', 'due_date']
+    list_display = ['title', 'status', 'priority', 'assigned_to', 'due_date']
     list_filter = ['status', 'priority', 'due_date']
-    search_fields = ['title', 'description', 'assigned_to__username', 'created_by__username']
+    search_fields = ['title', 'description', 'assigned_to__username']
     date_hierarchy = 'created_at'

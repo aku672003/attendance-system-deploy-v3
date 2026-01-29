@@ -149,17 +149,21 @@ def offices_list(request):
     only_active = active_param not in ['0', 'false', 'False']
     
     try:
-        if department:
-            # Get offices accessible by department
-            offices = OfficeLocation.objects.filter(
-                department_access__department=department,
-                is_active=only_active if only_active else True
-            ).distinct().order_by('name')
-        else:
-            offices = OfficeLocation.objects.all()
-            if only_active:
-                offices = offices.filter(is_active=True)
-            offices = offices.order_by('name')
+        # Return all active offices regardless of department to ensure they appear in the dashboard
+        offices = OfficeLocation.objects.filter(is_active=True).order_by('name')
+        if not only_active:
+             # If caller specifically wants inactive too (rare/debug), we might need to adjust, 
+             # but usually 'active' param defaults to true in logic above or is handled.
+             # Re-reading logic:
+             # only_active is True by default unless active='false' passed.
+             # So if only_active is False, we want ALL.
+             pass
+        
+        # Simpler replacement to match original structure but without department filter:
+        offices = OfficeLocation.objects.all()
+        if only_active:
+            offices = offices.filter(is_active=True)
+        offices = offices.order_by('name')
         
         offices_data = [{
             'id': office.id,
