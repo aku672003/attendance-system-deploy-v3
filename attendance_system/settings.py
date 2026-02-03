@@ -31,6 +31,10 @@ INSTALLED_APPS = [
     'attendance',
     'sslserver',
 ]
+CSRF_TRUSTED_ORIGINS = [
+    "https://roadathena.com",
+    "https://attendance.roadathena.com",
+]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -70,9 +74,9 @@ if DB_ENGINE == 'postgresql':
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.getenv('DB_NAME', 'attendance_db'),
+            'NAME': os.getenv('DB_NAME', 'attendance_django'),
             'USER': os.getenv('DB_USER', 'postgres'),
-            'PASSWORD': os.getenv('DB_PASSWORD', 'postgres'),
+            'PASSWORD': os.getenv('DB_PASSWORD', 'HanuAI@123'),
             'HOST': os.getenv('DB_HOST', 'localhost'),
             'PORT': os.getenv('DB_PORT', '5432'),
         }
