@@ -52,10 +52,13 @@ def login(request):
             'message': 'Username and password are required'
         }, status=status.HTTP_400_BAD_REQUEST)
     
+    print(f"DEBUG LOGIN attempt: username='{username}'")
+    
     try:
         employee = Employee.objects.get(username=username, is_active=True)
         # Check password (support both hashed and plain 'password' for compatibility)
         if check_password(password, employee.password) or password == 'password':
+            print("DEBUG LOGIN: Success")
             user_data = {
                 'id': employee.id,
                 'username': employee.username,
@@ -72,16 +75,21 @@ def login(request):
                 'message': 'Login successful'
             })
         else:
+            print(f"DEBUG LOGIN: Password mismatch for user '{username}'")
             return Response({
                 'success': False,
                 'message': 'Invalid username or password'
             }, status=status.HTTP_401_UNAUTHORIZED)
     except Employee.DoesNotExist:
+        print(f"DEBUG LOGIN: User '{username}' not found or inactive")
         return Response({
             'success': False,
             'message': 'Invalid username or password'
         }, status=status.HTTP_401_UNAUTHORIZED)
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"LOGIN ERROR: {e}")
         return Response({
             'success': False,
             'message': 'Login failed. Please try again.'
@@ -462,7 +470,8 @@ def today_attendance(request):
         }, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        today = date.today()
+        # Use server-side local date (timezone aware) to match mark_attendance logic
+        today = timezone.localtime(timezone.now()).date()
         record = AttendanceRecord.objects.filter(
             employee_id=employee_id,
             date=today

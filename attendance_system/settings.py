@@ -77,7 +77,7 @@ if DB_ENGINE == 'postgresql':
             'NAME': os.getenv('DB_NAME', 'attendance_django'),
             'USER': os.getenv('DB_USER', 'postgres'),
             'PASSWORD': os.getenv('DB_PASSWORD', 'HanuAI@123'),
-            'HOST': os.getenv('DB_HOST', 'localhost'),
+            'HOST': os.getenv('DB_HOST', '65.1.191.126'),
             'PORT': os.getenv('DB_PORT', '5432'),
         }
     }
