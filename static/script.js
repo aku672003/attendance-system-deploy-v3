@@ -1,5 +1,7 @@
 // Global Variables
 let currentUser = null;
+let currentAttendanceRecord = null; // Fix for race condition
+let isUserGeoInRange = false;       // Fix for race condition
 let selectedOffice = null;
 let selectedType = null;
 let capturedPhotoData = null;
@@ -816,7 +818,7 @@ async function loadDashboardData() {
         // 1. Run location check first and get its status
         let isUserInRange = false;
         try {
-            const locationStatus = await updateLocationStatus();
+            const locationStatus = await updateLocationStatus(false);
             isUserInRange = locationStatus ? locationStatus.inRange : false;
         } catch (e) {
             console.error("Error updating location status:", e);
@@ -2704,6 +2706,8 @@ async function buildAttendanceCalendar(year, month) {
 }
 
 async function loadTodayAttendance(isUserInRange = false) {
+    // Sync initial state
+    isUserGeoInRange = isUserInRange;
     try {
         const result = await apiCall('today-attendance', 'GET', {
             employee_id: currentUser.id
@@ -2716,6 +2720,7 @@ async function loadTodayAttendance(isUserInRange = false) {
 
         if (result.success && result.record) {
             const record = result.record;
+                 // Store for UI updates
 
             if (record.check_out_time) {
                 statusElement.textContent = 'Completed';
@@ -2730,21 +2735,11 @@ async function loadTodayAttendance(isUserInRange = false) {
                 checkInCard.classList.add('hidden');
                 checkOutCard.classList.remove('hidden');
 
-                // --- NEW GEO-FENCE LOGIC ---
-                if (record.type === 'office' && !isUserInRange) {
-                    // User is checked in for "office" but is NOT in range
-                    checkOutCard.classList.add('disabled'); // Add 'disabled' CSS class
-                    checkOutCard.onclick = () => { // Remove original onclick
-                        showNotification('You must be in the office geofence to check out.', 'error');
-                    };
-                } else {
-                    // User is WFH, Client, or in range
-                    checkOutCard.classList.remove('disabled');
-                    checkOutCard.onclick = () => showCheckOut(); // Restore original onclick
-                }
-                // --- END NEW LOGIC ---
+                // Update UI state based on current location status
+                updateCheckOutButtonState();
             }
         } else {
+            currentAttendanceRecord = null;
             statusElement.textContent = 'Not Marked';
             statusElement.className = 'stat-card-value error';
             timingElement.textContent = '';
@@ -2753,6 +2748,24 @@ async function loadTodayAttendance(isUserInRange = false) {
         }
     } catch (error) {
         console.error('Error loading today attendance:', error);
+    }
+}
+
+function updateCheckOutButtonState() {
+    const checkOutCard = document.getElementById('checkOutCard');
+    if (!checkOutCard || !currentAttendanceRecord) return;
+
+    // Only apply geofence logic if it's an OFFICE check-in
+    if (currentAttendanceRecord.type === 'office' && !isUserGeoInRange) {
+        // User is checked in for "office" but is NOT in range
+        checkOutCard.classList.add('disabled'); // Add 'disabled' CSS class
+        checkOutCard.onclick = () => { // Remove original onclick
+            showNotification('You must be in the office geofence to check out.', 'error');
+        };
+    } else {
+        // User is WFH, Client, or in range
+        checkOutCard.classList.remove('disabled');
+        checkOutCard.onclick = () => showCheckOut(); // Restore original onclick
     }
 }
 
@@ -2825,16 +2838,16 @@ async function loadWFHEligibility() {
     }
 }
 
-async function updateLocationStatus() {
+async function updateLocationStatus(updateAttendance = true) {
     if (typeof checkAndUpdateLocationStatus === 'function') {
-        return await checkAndUpdateLocationStatus();
+        return await checkAndUpdateLocationStatus(updateAttendance);
     }
     return null;
 }
 
 
 // Computes "Location Status" on the dashboard and updates the UI
-async function checkAndUpdateLocationStatus() {
+async function checkAndUpdateLocationStatus(updateAttendance = true) {
     const statusEl = document.getElementById('locationStatus');
     const distEl = document.getElementById('locationDistance');
 
@@ -2919,6 +2932,7 @@ async function checkAndUpdateLocationStatus() {
             statusEl.textContent = 'No offices';
             statusEl.className = 'stat-card-value warning';
             distEl.textContent = '';
+            if (updateAttendance) { isUserGeoInRange = false; updateCheckOutButtonState(); }
             return { inRange: false }; // <-- MODIFIED (logically required)
         }
 
@@ -2926,6 +2940,7 @@ async function checkAndUpdateLocationStatus() {
         statusEl.textContent = inRange ? 'In Office Range' : 'Out of Range';
         statusEl.className = 'stat-card-value ' + (inRange ? 'success' : 'warning');
         distEl.textContent = `${nearest.office.name} • ${Math.round(nearest.d)} m`;
+        if (updateAttendance) { isUserGeoInRange = inRange; updateCheckOutButtonState(); }
         return { inRange: inRange }; // <-- MODIFIED
 
     } catch (err) {
