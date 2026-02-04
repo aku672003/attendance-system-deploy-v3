@@ -241,89 +241,64 @@ def check_location(request):
 @api_view(['POST'])
 @parser_classes([JSONParser])
 def mark_attendance(request):
-    """Mark attendance for an employee"""
+    """Mark attendance and handle existing auto-absent placeholders"""
     data = request.data
     required_fields = ['employee_id', 'type', 'status']
     
     for field in required_fields:
         if not data.get(field):
-            return Response({
-                'success': False,
-                'message': f"Field '{field}' is required"
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'success': False, 'message': f"Field '{field}' is required"}, status=status.HTTP_400_BAD_REQUEST)
     
     employee_id = data['employee_id']
-    # Use server-side local date and time to prevent spoofing
     now_local = timezone.localtime(timezone.now())
     att_date = now_local.date()
     check_in_time = now_local.time().strftime('%H:%M:%S')
     
-    att_type = data['type']
-    att_status = data['status']
-    office_id = data.get('office_id')
-    location = data.get('location')
-    photo = data.get('photo')
-    
-    # Check if already marked
-    if AttendanceRecord.objects.filter(employee_id=employee_id, date=att_date).exists():
-        return Response({
-            'success': False,
-            'message': 'Attendance already marked for today'
-        }, status=status.HTTP_400_BAD_REQUEST)
-    
-    # Check WFH eligibility
-    if att_type == 'wfh':
-        wfh_check = check_wfh_eligibility(employee_id, str(att_date))
-        if not wfh_check.get('can_request', False):
-            return Response({
-                'success': False,
-                'message': 'WFH limit exceeded for this month'
-            }, status=status.HTTP_400_BAD_REQUEST)
-    
-    # For office type, verify location
-    if att_type == 'office':
-        if not office_id or not location:
-            return Response({
-                'success': False,
-                'message': 'Office location data is required'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        location_check = check_location_proximity(
-            location.get('latitude'),
-            location.get('longitude'),
-            office_id
-        )
-        if not location_check.get('in_range', False):
-            return Response({
-                'success': False,
-                'message': 'You are outside the office geofence'
-            }, status=status.HTTP_403_FORBIDDEN)
+    # 1. Check for an active session from ANY date that hasn't been checked out
+    active_session = AttendanceRecord.objects.filter(
+        employee_id=employee_id, 
+        check_out_time__isnull=True
+    ).exclude(status='absent').exists()
+
+    if active_session:
+        return Response({'success': False, 'message': 'You are already checked in.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # 2. Check if an "Absent" record was already created for today by the system
+    record = AttendanceRecord.objects.filter(employee_id=employee_id, date=att_date).first()
     
     try:
-        record = AttendanceRecord.objects.create(
-            employee_id=employee_id,
-            date=att_date,
-            check_in_time=check_in_time,
-            type=att_type,
-            status=att_status,
-            office_id=office_id if office_id else None,
-            check_in_location=location,
-            check_in_photo=photo,
-        )
+        if record:
+            if record.status == 'absent':
+                # Overwrite the auto-absent record with actual check-in data
+                record.check_in_time = check_in_time
+                record.type = data['type']
+                record.status = data['status']
+                record.check_in_location = data.get('location')
+                record.check_in_photo = data.get('photo')
+                record.office_id = data.get('office_id')
+                record.save()
+            else:
+                return Response({'success': False, 'message': 'Attendance already marked for today'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            # Create a brand new record if none exists
+            record = AttendanceRecord.objects.create(
+                employee_id=employee_id,
+                date=att_date,
+                check_in_time=check_in_time,
+                type=data['type'],
+                status=data['status'],
+                office_id=data.get('office_id'),
+                check_in_location=data.get('location'),
+                check_in_photo=data.get('photo'),
+            )
+            
         return Response({
             'success': True,
-            'message': 'Attendance marked',
-            'record_id': record.id,
-            'server_date': str(att_date),
+            'message': 'Attendance marked successfully',
             'server_time': check_in_time
         })
     except Exception as e:
-        return Response({
-            'success': False,
-            'message': 'Failed to mark attendance'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
+        return Response({'success': False, 'message': 'Failed to mark attendance'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 def check_location_proximity(lat, lng, office_id):
     """Helper function to check location proximity"""
     try:
@@ -368,94 +343,62 @@ def check_wfh_eligibility(employee_id, check_date):
 @api_view(['POST'])
 @parser_classes([JSONParser])
 def check_out(request):
-    """Handle employee check-out"""
+    """Handle checkout by finding the open session regardless of date"""
     data = request.data
-    required_fields = ['employee_id']
+    employee_id = data.get('employee_id')
     
-    for field in required_fields:
-        if not data.get(field):
-            return Response({
-                'success': False,
-                'message': f"Field '{field}' is required"
-            }, status=status.HTTP_400_BAD_REQUEST)
+    if not employee_id:
+        return Response({'success': False, 'message': 'employee_id is required'}, status=status.HTTP_400_BAD_REQUEST)
     
-    employee_id = data['employee_id']
-    # Use server-side local date and time
     now_local = timezone.localtime(timezone.now())
-    att_date = now_local.date()
-    check_out_time = now_local.time().strftime('%H:%M:%S')
-    
-    location = data.get('location')
-    photo = data.get('photo')
     
     try:
-        record = AttendanceRecord.objects.get(employee_id=employee_id, date=att_date)
-        
-        if record.check_out_time:
-             return Response({
-                'success': False,
-                'message': 'Already checked out for today'
-            }, status=status.HTTP_400_BAD_REQUEST)
+        # FIX: Find the latest record where user checked in but never checked out.
+        # We exclude 'absent' records because they have null check-in times.
+        record = AttendanceRecord.objects.filter(
+            employee_id=employee_id, 
+            check_out_time__isnull=True
+        ).exclude(status='absent').latest('date')
 
-        if not record.check_in_time:
-            return Response({
-                'success': False,
-                'message': 'No check-in time found'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
+        # Convert check_in_time to a full datetime object for math
         if isinstance(record.check_in_time, str):
             check_in_t = datetime.strptime(record.check_in_time, '%H:%M:%S').time()
         else:
             check_in_t = record.check_in_time
             
-        check_in = datetime.combine(record.date, check_in_t)
-        check_out_dt = datetime.combine(record.date, now_local.time())
+        # Combine record date + check_in time and make it timezone-aware
+        check_in_dt = timezone.make_aware(datetime.combine(record.date, check_in_t))
         
-        if check_out_dt < check_in:
-            check_out_dt += timedelta(days=1)
+        # Calculate hours accurately
+        worked_hours = round((now_local - check_in_dt).total_seconds() / 3600, 2)
         
-        worked_hours = (check_out_dt - check_in).total_seconds() / 3600
-        worked_hours = round(worked_hours, 2)
-        
-        # Check minimum hours (4.5 hours)
+        # Minimum hours check (4.5 hours)
         if worked_hours < 4.5:
             return Response({
                 'success': False,
-                'message': 'You cannot check out before completing 4.5 hours of work.',
-                'work_hours': worked_hours,
-                'is_half_day': False
+                'message': f'Cannot check out before 4.5 hours. Worked: {worked_hours}h',
+                'work_hours': worked_hours
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Determine if half day
-        is_half_day = worked_hours < 8.0
-        new_status = 'half_day' if is_half_day else record.status
-        
-        # Update record
-        record.check_out_time = check_out_time
-        record.check_out_location = location
-        record.check_out_photo = photo
+        # Update and Close the session
+        record.check_out_time = now_local.time().strftime('%H:%M:%S')
+        record.check_out_location = data.get('location')
+        record.check_out_photo = data.get('photo')
         record.total_hours = worked_hours
-        record.is_half_day = is_half_day
-        record.status = new_status
+        record.is_half_day = worked_hours < 8.0
+        record.status = 'half_day' if record.is_half_day else 'present'
         record.save()
         
         return Response({
-            'success': True,
+            'success': True, 
             'message': 'Checked out successfully',
-            'work_hours': worked_hours,
-            'is_half_day': is_half_day,
-            'server_time': check_out_time
+            'work_hours': worked_hours
         })
+
     except AttendanceRecord.DoesNotExist:
-        return Response({
-            'success': False,
-            'message': 'No attendance record found for today'
-        }, status=status.HTTP_404_NOT_FOUND)
+        return Response({'success': False, 'message': 'No active session found to check out from.'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        return Response({
-            'success': False,
-            'message': 'Failed to record check-out'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'success': False, 'message': f'Server Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])
