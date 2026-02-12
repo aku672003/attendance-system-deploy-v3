@@ -30,11 +30,11 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     phi2 = math.radians(float(lat2))
     delta_phi = math.radians(float(lat2) - float(lat1))
     delta_lambda = math.radians(float(lon2) - float(lon1))
-    
+
     a = math.sin(delta_phi / 2) ** 2 + \
         math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    
+
     return R * c
 
 
@@ -45,15 +45,15 @@ def login(request):
     data = request.data
     username = data.get('username')
     password = data.get('password')
-    
+
     if not username or not password:
         return Response({
             'success': False,
             'message': 'Username and password are required'
         }, status=status.HTTP_400_BAD_REQUEST)
-    
+
     print(f"DEBUG LOGIN attempt: username='{username}'")
-    
+
     try:
         employee = Employee.objects.get(username=username, is_active=True)
         # Check password (support both hashed and plain 'password' for compatibility)
@@ -102,28 +102,28 @@ def register(request):
     """Register a new employee with validated details"""
     data = request.data
     required_fields = ['username', 'password', 'name', 'email', 'phone', 'department', 'primary_office']
-    
+
     for field in required_fields:
         if not data.get(field):
             return Response({
                 'success': False,
                 'message': f"Field '{field}' is required"
             }, status=status.HTTP_400_BAD_REQUEST)
-    
+
     # Validate phone number
     if not data['phone'].isdigit() or len(data['phone']) != 10:
         return Response({
             'success': False,
             'message': 'Phone number must be exactly 10 digits'
         }, status=status.HTTP_400_BAD_REQUEST)
-    
+
     # Check if username or email already exists
     if Employee.objects.filter(Q(username=data['username']) | Q(email=data['email'])).exists():
         return Response({
             'success': False,
             'message': 'Username or email already exists'
         }, status=status.HTTP_400_BAD_REQUEST)
-    
+
     try:
         employee = Employee.objects.create(
             username=data['username'],
@@ -155,24 +155,24 @@ def offices_list(request):
     department = request.GET.get('department')
     active_param = request.GET.get('active')
     only_active = active_param not in ['0', 'false', 'False']
-    
+
     try:
         # Return all active offices regardless of department to ensure they appear in the dashboard
         offices = OfficeLocation.objects.filter(is_active=True).order_by('name')
         if not only_active:
-             # If caller specifically wants inactive too (rare/debug), we might need to adjust, 
-             # but usually 'active' param defaults to true in logic above or is handled.
-             # Re-reading logic:
-             # only_active is True by default unless active='false' passed.
-             # So if only_active is False, we want ALL.
-             pass
-        
+            # If caller specifically wants inactive too (rare/debug), we might need to adjust, 
+            # but usually 'active' param defaults to true in logic above or is handled.
+            # Re-reading logic:
+            # only_active is True by default unless active='false' passed.
+            # So if only_active is False, we want ALL.
+            pass
+
         # Simpler replacement to match original structure but without department filter:
         offices = OfficeLocation.objects.all()
         if only_active:
             offices = offices.filter(is_active=True)
         offices = offices.order_by('name')
-        
+
         offices_data = [{
             'id': office.id,
             'name': office.name,
@@ -182,7 +182,7 @@ def offices_list(request):
             'radius_meters': office.radius_meters,
             'is_active': office.is_active,
         } for office in offices]
-        
+
         return Response({
             'success': True,
             'offices': offices_data
@@ -202,20 +202,20 @@ def check_location(request):
     user_lat = data.get('latitude')
     user_lng = data.get('longitude')
     office_id = data.get('office_id')
-    
+
     if not all([user_lat, user_lng, office_id]):
         return Response({
             'success': False,
             'message': 'Latitude, longitude, and office_id are required'
         }, status=status.HTTP_400_BAD_REQUEST)
-    
+
     try:
         office = OfficeLocation.objects.get(id=office_id)
         distance = calculate_distance(
             user_lat, user_lng,
             float(office.latitude), float(office.longitude)
         )
-        
+
         return Response({
             'success': True,
             'distance': distance,
@@ -237,68 +237,54 @@ def check_location(request):
             'message': 'Failed to check location'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
 @api_view(['POST'])
 @parser_classes([JSONParser])
 def mark_attendance(request):
-    """Mark attendance and handle existing auto-absent placeholders"""
     data = request.data
-    required_fields = ['employee_id', 'type', 'status']
-    
-    for field in required_fields:
-        if not data.get(field):
-            return Response({'success': False, 'message': f"Field '{field}' is required"}, status=status.HTTP_400_BAD_REQUEST)
-    
-    employee_id = data['employee_id']
+    employee_id = data.get('employee_id')
     now_local = timezone.localtime(timezone.now())
     att_date = now_local.date()
-    check_in_time = now_local.time().strftime('%H:%M:%S')
     
-    # 1. Check for an active session from ANY date that hasn't been checked out
-    active_session = AttendanceRecord.objects.filter(
+    # 1. Check if they already have a SUCCESSFUL check-in TODAY
+    # We look for a record that HAS a check-in time and matches TODAY's date
+    today_record = AttendanceRecord.objects.filter(
         employee_id=employee_id, 
-        check_out_time__isnull=True
-    ).exclude(status='absent').exists()
+        date=att_date
+    ).exclude(status='absent').first()
 
-    if active_session:
-        return Response({'success': False, 'message': 'You are already checked in.'}, status=status.HTTP_400_BAD_REQUEST)
+    if today_record and today_record.check_in_time:
+        return Response({
+            'success': False,
+            'message': 'Attendance already marked for today'
+        }, status=status.HTTP_400_BAD_REQUEST)
 
-    # 2. Check if an "Absent" record was already created for today by the system
-    record = AttendanceRecord.objects.filter(employee_id=employee_id, date=att_date).first()
+    # 2. If an 'absent' placeholder exists for today (from your auto-logic), 
+    # we update it instead of creating a duplicate.
+    absent_record = AttendanceRecord.objects.filter(employee_id=employee_id, date=att_date, status='absent').first()
     
     try:
-        if record:
-            if record.status == 'absent':
-                # Overwrite the auto-absent record with actual check-in data
-                record.check_in_time = check_in_time
-                record.type = data['type']
-                record.status = data['status']
-                record.check_in_location = data.get('location')
-                record.check_in_photo = data.get('photo')
-                record.office_id = data.get('office_id')
-                record.save()
-            else:
-                return Response({'success': False, 'message': 'Attendance already marked for today'}, status=status.HTTP_400_BAD_REQUEST)
+        if absent_record:
+            absent_record.check_in_time = now_local.time().strftime('%H:%M:%S')
+            absent_record.status = data.get('status')
+            absent_record.type = data.get('type')
+            absent_record.check_in_location = data.get('location')
+            absent_record.save()
+            record = absent_record
         else:
-            # Create a brand new record if none exists
             record = AttendanceRecord.objects.create(
                 employee_id=employee_id,
                 date=att_date,
-                check_in_time=check_in_time,
-                type=data['type'],
-                status=data['status'],
-                office_id=data.get('office_id'),
+                check_in_time=now_local.time().strftime('%H:%M:%S'),
+                type=data.get('type'),
+                status=data.get('status'),
                 check_in_location=data.get('location'),
                 check_in_photo=data.get('photo'),
+                office_id=data.get('office_id')
             )
-            
-        return Response({
-            'success': True,
-            'message': 'Attendance marked successfully',
-            'server_time': check_in_time
-        })
+        return Response({'success': True, 'message': 'Checked in successfully'})
     except Exception as e:
-        return Response({'success': False, 'message': 'Failed to mark attendance'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'success': False, 'message': str(e)}, status=500)
+
 def check_location_proximity(lat, lng, office_id):
     """Helper function to check location proximity"""
     try:
@@ -322,14 +308,14 @@ def check_wfh_eligibility(employee_id, check_date):
         check_date_obj = datetime.strptime(check_date, '%Y-%m-%d').date()
         year = check_date_obj.year
         month = check_date_obj.month
-        
+
         current_count = AttendanceRecord.objects.filter(
             employee_id=employee_id,
             type='wfh',
             date__year=year,
             date__month=month
         ).count()
-        
+
         max_limit = 4
         return {
             'current_count': current_count,
@@ -337,81 +323,55 @@ def check_wfh_eligibility(employee_id, check_date):
             'can_request': current_count < max_limit
         }
     except:
-        return {'current_count': 0, 'max_limit': 1, 'can_request': False}
+        return {'current_count': 0, 'max_limit': 2, 'can_request': False}
 
 
 @api_view(['POST'])
 @parser_classes([JSONParser])
 def check_out(request):
-    """Handle checkout by finding the open session regardless of date"""
     data = request.data
     employee_id = data.get('employee_id')
-    
-    if not employee_id:
-        return Response({'success': False, 'message': 'employee_id is required'}, status=status.HTTP_400_BAD_REQUEST)
-    
     now_local = timezone.localtime(timezone.now())
     
     try:
-        # FIX: Find the latest record where user checked in but never checked out.
-        # We exclude 'absent' records because they have null check-in times.
+        # Find the latest record that is NOT checked out
+        # This handles the case where they forgot to check out yesterday
         record = AttendanceRecord.objects.filter(
             employee_id=employee_id, 
             check_out_time__isnull=True
         ).exclude(status='absent').latest('date')
 
-        # Convert check_in_time to a full datetime object for math
-        if isinstance(record.check_in_time, str):
-            check_in_t = datetime.strptime(record.check_in_time, '%H:%M:%S').time()
-        else:
-            check_in_t = record.check_in_time
-            
-        # Combine record date + check_in time and make it timezone-aware
+        # Logic to handle if the session is too old (e.g., from yesterday)
+        # You can choose to auto-close it or allow the checkout now.
+        
+        check_in_t = datetime.strptime(str(record.check_in_time), '%H:%M:%S').time()
         check_in_dt = timezone.make_aware(datetime.combine(record.date, check_in_t))
         
-        # Calculate hours accurately
         worked_hours = round((now_local - check_in_dt).total_seconds() / 3600, 2)
         
-        # Minimum hours check (4.5 hours)
         if worked_hours < 4.5:
-            return Response({
-                'success': False,
-                'message': f'Cannot check out before 4.5 hours. Worked: {worked_hours}h',
-                'work_hours': worked_hours
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Update and Close the session
+            return Response({'success': False, 'message': f'Worked only {worked_hours}h. Min 4.5h required.'}, status=400)
+
         record.check_out_time = now_local.time().strftime('%H:%M:%S')
-        record.check_out_location = data.get('location')
-        record.check_out_photo = data.get('photo')
         record.total_hours = worked_hours
-        record.is_half_day = worked_hours < 8.0
-        record.status = 'half_day' if record.is_half_day else 'present'
+        record.status = 'half_day' if worked_hours < 8 else 'present'
         record.save()
         
-        return Response({
-            'success': True, 
-            'message': 'Checked out successfully',
-            'work_hours': worked_hours
-        })
-
+        return Response({'success': True, 'message': 'Checked out successfully'})
     except AttendanceRecord.DoesNotExist:
-        return Response({'success': False, 'message': 'No active session found to check out from.'}, status=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        return Response({'success': False, 'message': f'Server Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+        return Response({'success': False, 'message': 'No active session found.'}, status=404)
 
 @api_view(['GET'])
 def today_attendance(request):
     """Get today's attendance for an employee"""
     employee_id = request.GET.get('employee_id')
-    
+
     if not employee_id:
         return Response({
             'success': False,
             'message': 'Employee ID is required'
         }, status=status.HTTP_400_BAD_REQUEST)
-    
+
     try:
         # Use server-side local date (timezone aware) to match mark_attendance logic
         today = timezone.localtime(timezone.now()).date()
@@ -419,7 +379,7 @@ def today_attendance(request):
             employee_id=employee_id,
             date=today
         ).select_related('office').first()
-        
+
         if record:
             record_data = {
                 'id': record.id,
@@ -461,16 +421,16 @@ def attendance_records(request):
     att_type = request.GET.get('type')
     days_limit = request.GET.get('days_limit')
     days_offset = int(request.GET.get('days_offset', 0))
-    
+
     # Auto-mark absentees for today after 12:00pm
     now = timezone.now()
     if now.hour >= 12:
         today = date.today()
         mark_absentees_for_date(today)
-    
+
     try:
         records_qs = AttendanceRecord.objects.select_related('employee', 'office').all()
-        
+
         if employee_id:
             records_qs = records_qs.filter(employee_id=employee_id)
         if start_date:
@@ -479,21 +439,21 @@ def attendance_records(request):
             records_qs = records_qs.filter(date__lte=end_date)
         if att_type:
             records_qs = records_qs.filter(type=att_type)
-        
+
         has_more = False
         if days_limit:
             days_limit = int(days_limit)
             # Get unique dates in DESC order
             unique_dates = records_qs.values_list('date', flat=True).distinct().order_by('-date')
             total_days = unique_dates.count()
-            
+
             target_dates = unique_dates[days_offset : days_offset + days_limit]
             has_more = total_days > (days_offset + days_limit)
-            
+
             records_qs = records_qs.filter(date__in=target_dates)
 
         records_qs = records_qs.order_by('-date', '-created_at')
-        
+
         records_data = []
         for record in records_qs:
             records_data.append({
@@ -517,7 +477,7 @@ def attendance_records(request):
                 'total_hours': float(record.total_hours),
                 'is_half_day': record.is_half_day,
             })
-        
+
         return Response({
             'success': True,
             'records': records_data,
@@ -535,9 +495,9 @@ def mark_absentees_for_date(target_date):
     try:
         all_employees = Employee.objects.filter(is_active=True).values_list('id', flat=True)
         existing_records = AttendanceRecord.objects.filter(date=target_date).values_list('employee_id', flat=True)
-        
+
         absentees = set(all_employees) - set(existing_records)
-        
+
         for emp_id in absentees:
             AttendanceRecord.objects.create(
                 employee_id=emp_id,
@@ -556,20 +516,20 @@ def monthly_stats(request):
     employee_id = request.GET.get('employee_id')
     year = request.GET.get('year') or date.today().year
     month = request.GET.get('month') or date.today().month
-    
+
     if not employee_id:
         return Response({
             'success': False,
             'message': 'Employee ID is required'
         }, status=status.HTTP_400_BAD_REQUEST)
-    
+
     try:
         records = AttendanceRecord.objects.filter(
             employee_id=employee_id,
             date__year=year,
             date__month=month
         )
-        
+
         stats = {
             'total_days': records.count(),
             'total_hours': float(records.aggregate(Sum('total_hours'))['total_hours__sum'] or 0),
@@ -578,7 +538,7 @@ def monthly_stats(request):
             'office_days': records.filter(type='office').count(),
             'client_days': records.filter(type='client').count(),
         }
-        
+
         return Response({
             'success': True,
             'stats': stats
@@ -595,13 +555,13 @@ def wfh_eligibility(request):
     """Check WFH eligibility"""
     employee_id = request.GET.get('employee_id')
     check_date = request.GET.get('date') or date.today().isoformat()
-    
+
     if not employee_id:
         return Response({
             'success': False,
             'message': 'Employee ID is required'
         }, status=status.HTTP_400_BAD_REQUEST)
-    
+
     result = check_wfh_eligibility(employee_id, check_date)
     return Response({
         'success': True,
@@ -617,13 +577,13 @@ def wfh_request(request):
     employee_id = data.get('employee_id')
     requested_date = data.get('date') or date.today().isoformat()
     reason = data.get('reason')
-    
+
     if not employee_id:
         return Response({
             'success': False,
             'message': 'Employee ID is required'
         }, status=status.HTTP_400_BAD_REQUEST)
-    
+
     try:
         EmployeeRequest.objects.create(
             employee_id=employee_id,
@@ -653,17 +613,17 @@ def employee_profile(request):
     if request.method == 'POST':
         data = request.data
         employee_id = data.get('employee_id')
-        
+
         if not employee_id:
             return Response({
                 'success': False,
                 'message': 'Employee ID is required'
             }, status=status.HTTP_400_BAD_REQUEST)
-        
+
         try:
             employee = Employee.objects.get(id=employee_id)
             profile, created = EmployeeProfile.objects.get_or_create(employee=employee)
-            
+
             # Update profile fields
             profile.emergency_contact_name = data.get('emergency_contact_name')
             profile.emergency_contact_phone = data.get('emergency_contact_phone')
@@ -687,7 +647,7 @@ def employee_profile(request):
             profile.gender = data.get('gender')
             profile.date_of_birth = data.get('date_of_birth')
             profile.save()
-            
+
             # Update employee basic info if provided
             if data.get('name'):
                 employee.name = data['name']
@@ -700,7 +660,7 @@ def employee_profile(request):
             if data.get('password'):
                 employee.password = make_password(data['password'])
             employee.save()
-            
+
             return Response({
                 'success': True,
                 'message': 'Profile saved successfully'
@@ -715,20 +675,20 @@ def employee_profile(request):
                 'success': False,
                 'message': 'Failed to save profile'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
+
     # Handle GET (get profile)
     employee_id = request.GET.get('employee_id')
-    
+
     if not employee_id:
         return Response({
             'success': False,
             'message': 'Employee ID is required'
         }, status=status.HTTP_400_BAD_REQUEST)
-    
+
     try:
         employee = Employee.objects.get(id=employee_id)
         profile, _ = EmployeeProfile.objects.get_or_create(employee=employee)
-        
+
         # Get documents
         documents = EmployeeDocument.objects.filter(employee_id=employee_id).order_by('-uploaded_at')
         docs_data = []
@@ -743,7 +703,7 @@ def employee_profile(request):
                 'url': request.build_absolute_uri('/media/' + doc.file_path) if doc.file_path.startswith('uploads/') else request.build_absolute_uri('/' + doc.file_path),
                 'uploaded_at': doc.uploaded_at.isoformat() if doc.uploaded_at else None,
             })
-        
+
         profile_data = {
             'id': employee.id,
             'username': employee.username,
@@ -774,7 +734,7 @@ def employee_profile(request):
             'date_of_birth': str(profile.date_of_birth) if profile.date_of_birth else None,
             'documents': docs_data,
         }
-        
+
         return Response({
             'success': True,
             'profile': profile_data
@@ -797,7 +757,7 @@ def admin_profiles_list(request):
     try:
         employees = Employee.objects.filter(is_active=True).select_related('profile').order_by('id')
         profiles_data = []
-        
+
         for emp in employees:
             profile = getattr(emp, 'profile', None)
             profiles_data.append({
@@ -814,7 +774,7 @@ def admin_profiles_list(request):
                 'skill_set': profile.skill_set if profile else None,
                 'reporting_manager': profile.reporting_manager if profile else None,
             })
-        
+
         return Response({
             'success': True,
             'profiles': profiles_data
@@ -843,7 +803,7 @@ def admin_users(request):
             'manager_name': u.manager.name if u.manager else None,
             'is_active': u.is_active,
         } for u in users]
-        
+
         return Response({
             'success': True,
             'users': users_data
@@ -866,7 +826,7 @@ def admin_user_detail(request, user_id):
             'success': False,
             'message': 'User not found'
         }, status=status.HTTP_404_NOT_FOUND)
-    
+
     if request.method == 'GET':
         return Response({
             'success': True,
@@ -883,10 +843,10 @@ def admin_user_detail(request, user_id):
                 'is_active': employee.is_active,
             }
         })
-    
+
     elif request.method == 'POST':
         data = request.data
-        
+
         # Check if delete
         if data.get('_method') == 'DELETE':
             employee.delete()
@@ -894,7 +854,7 @@ def admin_user_detail(request, user_id):
                 'success': True,
                 'message': 'User deleted'
             })
-        
+
         # Update user
         if data.get('name'):
             employee.name = data['name']
@@ -917,20 +877,20 @@ def admin_user_detail(request, user_id):
                     pass
         elif 'manager_id' in data and not data.get('manager_id'):
             employee.manager = None
-            
+
         if 'is_active' in data:
             employee.is_active = bool(data['is_active'])
         if data.get('primary_office'):
             employee.primary_office = data['primary_office']
         if data.get('password'):
             employee.password = make_password(data['password'])
-        
+
         employee.save()
         return Response({
             'success': True,
             'message': 'User updated'
         })
-    
+
     elif request.method == 'DELETE':
         employee.delete()
         return Response({
@@ -944,13 +904,13 @@ def admin_user_detail(request, user_id):
 def create_office(request):
     """Create a new office (admin)"""
     data = request.data
-    
+
     if not data.get('id') or not data.get('name'):
         return Response({
             'success': False,
             'message': 'Office ID and Office name are required'
         }, status=status.HTTP_400_BAD_REQUEST)
-    
+
     try:
         office = OfficeLocation.objects.create(
             id=data['id'],
@@ -961,7 +921,7 @@ def create_office(request):
             radius_meters=int(data.get('radius_meters') or data.get('radius') or 100),
             is_active=True
         )
-        
+
         # Grant access to all departments
         departments = ['IT', 'HR', 'Surveyors', 'Accounts', 'Growth', 'Others']
         for dept in departments:
@@ -969,7 +929,7 @@ def create_office(request):
                 department=dept,
                 office=office
             )
-        
+
         return Response({
             'success': True,
             'message': 'Office created',
@@ -998,7 +958,7 @@ def office_detail(request, office_id):
             'success': False,
             'message': 'Office not found'
         }, status=status.HTTP_404_NOT_FOUND)
-    
+
     if request.method == 'GET':
         return Response({
             'success': True,
@@ -1012,10 +972,10 @@ def office_detail(request, office_id):
                 'is_active': office.is_active,
             }
         })
-    
+
     elif request.method == 'POST':
         data = request.data
-        
+
         # Check if delete
         if data.get('_method') == 'DELETE':
             office.delete()
@@ -1023,7 +983,7 @@ def office_detail(request, office_id):
                 'success': True,
                 'message': 'Office deleted successfully'
             })
-        
+
         # Update office
         office.name = data.get('name', office.name)
         office.address = data.get('address', office.address)
@@ -1034,12 +994,12 @@ def office_detail(request, office_id):
         if data.get('radius_meters'):
             office.radius_meters = int(data['radius_meters'])
         office.save()
-        
+
         return Response({
             'success': True,
             'message': 'Office updated successfully'
         })
-    
+
     elif request.method == 'DELETE':
         office.delete()
         return Response({
@@ -1059,7 +1019,7 @@ def attendance_record_detail(request, record_id):
             'success': False,
             'message': 'Attendance record not found'
         }, status=status.HTTP_404_NOT_FOUND)
-    
+
     if request.method == 'GET':
         return Response({
             'success': True,
@@ -1075,10 +1035,10 @@ def attendance_record_detail(request, record_id):
                 'total_hours': float(record.total_hours),
             }
         })
-    
+
     elif request.method == 'POST':
         data = request.data
-        
+
         # Check if delete
         if data.get('_method') == 'DELETE':
             record.delete()
@@ -1086,19 +1046,19 @@ def attendance_record_detail(request, record_id):
                 'success': True,
                 'message': 'Attendance deleted'
             })
-        
+
         # Update record
         allowed_fields = ['status', 'type', 'date', 'check_in_time', 'check_out_time', 'office_id', 'notes']
         for field in allowed_fields:
             if field in data:
                 setattr(record, field, data[field])
-        
+
         record.save()
         return Response({
             'success': True,
             'message': 'Attendance updated'
         })
-    
+
     elif request.method == 'DELETE':
         record.delete()
         return Response({
@@ -1114,13 +1074,13 @@ def upload_documents(request):
     """Upload employee documents"""
     employee_id = request.POST.get('employee_id')
     username = request.POST.get('username')
-    
+
     if not employee_id or not username:
         return Response({
             'success': False,
             'message': 'employee_id and username are required'
         }, status=status.HTTP_400_BAD_REQUEST)
-    
+
     try:
         employee = Employee.objects.get(id=employee_id)
     except Employee.DoesNotExist:
@@ -1128,45 +1088,45 @@ def upload_documents(request):
             'success': False,
             'message': 'Employee not found'
         }, status=status.HTTP_404_NOT_FOUND)
-    
+
     MAX_PHOTO_SIZE = 2 * 1024 * 1024  # 2MB
     MAX_PDF_SIZE = 5 * 1024 * 1024  # 5MB
-    
+
     saved_files = []
     upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads')
     os.makedirs(upload_dir, exist_ok=True)
-    
+
     # Handle photo and signature
     image_docs = {
         'user_photo': 'photo',
         'user_signature': 'signature'
     }
-    
+
     for input_name, doc_type in image_docs.items():
         if input_name in request.FILES:
             file = request.FILES[input_name]
-            
+
             if file.size > MAX_PHOTO_SIZE:
                 return Response({
                     'success': False,
                     'message': f'{doc_type.capitalize()} size exceeds 2MB limit'
                 }, status=status.HTTP_400_BAD_REQUEST)
-            
+
             if file.content_type not in ['image/jpeg', 'image/png', 'image/jpg']:
                 continue
-            
+
             ext = os.path.splitext(file.name)[1].lower()
             filename = f"{username}_{doc_type}{ext}"
             file_path = os.path.join(upload_dir, filename)
-            
+
             # Delete old file
             EmployeeDocument.objects.filter(employee_id=employee_id, doc_type=doc_type).delete()
-            
+
             # Save file
             with open(file_path, 'wb') as f:
                 for chunk in file.chunks():
                     f.write(chunk)
-            
+
             # Save to database
             EmployeeDocument.objects.create(
                 employee_id=employee_id,
@@ -1175,38 +1135,38 @@ def upload_documents(request):
                 file_name=filename,
                 file_path=f'uploads/{filename}'
             )
-            
+
             saved_files.append(filename)
-    
+
     # Handle PDF documents
     pdf_docs = ['aadhar', 'pan', 'other_id', 'highest_qualification', 'professional_certificate', 'other_qualification']
-    
+
     for doc_type in pdf_docs:
         file_key = f'file_{doc_type}'
         if file_key in request.FILES:
             file = request.FILES[file_key]
-            
+
             if file.size > MAX_PDF_SIZE:
                 return Response({
                     'success': False,
                     'message': f'{doc_type.capitalize()} file exceeds 5MB limit'
                 }, status=status.HTTP_400_BAD_REQUEST)
-            
+
             if file.content_type != 'application/pdf':
                 continue
-            
+
             filename = request.POST.get(f'{file_key}_filename', f"{username}_{doc_type}.pdf")
             filename = ''.join(c if c.isalnum() or c in '._-' else '_' for c in filename)
             file_path = os.path.join(upload_dir, filename)
-            
+
             # Delete old file
             EmployeeDocument.objects.filter(employee_id=employee_id, doc_type=doc_type).delete()
-            
+
             # Save file
             with open(file_path, 'wb') as f:
                 for chunk in file.chunks():
                     f.write(chunk)
-            
+
             # Save to database
             EmployeeDocument.objects.create(
                 employee_id=employee_id,
@@ -1216,15 +1176,15 @@ def upload_documents(request):
                 file_name=filename,
                 file_path=f'uploads/{filename}'
             )
-            
+
             saved_files.append(filename)
-    
+
     if not saved_files:
         return Response({
             'success': False,
             'message': 'No valid documents uploaded'
         }, status=status.HTTP_400_BAD_REQUEST)
-    
+
     return Response({
         'success': True,
         'uploaded': saved_files,
@@ -1238,25 +1198,25 @@ def delete_documents(request):
     """Delete selected documents"""
     data = request.data
     doc_ids = data.get('document_ids', [])
-    
+
     if not doc_ids:
         return Response({
             'success': False,
             'message': 'No documents selected'
         }, status=status.HTTP_400_BAD_REQUEST)
-    
+
     try:
         documents = EmployeeDocument.objects.filter(id__in=doc_ids)
-        
+
         # Delete files from disk
         for doc in documents:
             file_path = os.path.join(settings.MEDIA_ROOT, doc.file_path)
             if os.path.exists(file_path):
                 os.remove(file_path)
-        
+
         # Delete from database
         documents.delete()
-        
+
         return Response({
             'success': True,
             'message': 'Documents deleted successfully'
@@ -1274,7 +1234,7 @@ def admin_user_docs_list(request, employee_id):
     try:
         documents = EmployeeDocument.objects.filter(employee_id=employee_id).order_by('-uploaded_at')
         docs_data = []
-        
+
         for doc in documents:
             docs_data.append({
                 'id': doc.id,
@@ -1285,7 +1245,7 @@ def admin_user_docs_list(request, employee_id):
                 'url': request.build_absolute_uri('/media/' + doc.file_path) if doc.file_path.startswith('uploads/') else request.build_absolute_uri('/' + doc.file_path),
                 'uploaded_at': doc.uploaded_at.isoformat() if doc.uploaded_at else None,
             })
-        
+
         return Response({
             'success': True,
             'documents': docs_data
@@ -1303,23 +1263,23 @@ def admin_user_docs_zip(request, employee_id):
     try:
         employee = Employee.objects.get(id=employee_id)
         documents = EmployeeDocument.objects.filter(employee_id=employee_id)
-        
+
         if not documents.exists():
             return Response({
                 'success': False,
                 'message': 'No documents found'
             }, status=status.HTTP_404_NOT_FOUND)
-        
+
         # Create ZIP file
         zip_name = f"{employee.username}_documents.zip"
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
-        
+
         with zipfile.ZipFile(temp_file.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for doc in documents:
                 file_path = os.path.join(settings.MEDIA_ROOT, doc.file_path)
                 if os.path.exists(file_path):
                     zipf.write(file_path, doc.file_name)
-        
+
         # Return ZIP file
         response = FileResponse(
             open(temp_file.name, 'rb'),
@@ -1403,10 +1363,10 @@ def predict_attendance(request):
     try:
         today = date.today()
         tomorrow = today + timedelta(days=1)
-        
+
         # We look at historical data for the same day of week as tomorrow
         tomorrow_dow = tomorrow.weekday() # 0=Mon, 6=Sun
-        
+
         # Total active employees
         total_employees = Employee.objects.filter(is_active=True).count()
         if total_employees == 0:
@@ -1414,7 +1374,7 @@ def predict_attendance(request):
 
         # Get records for same DOW over last 4 weeks
         history_dates = [tomorrow - timedelta(weeks=i) for i in range(1, 5)]
-        
+
         counts = []
         for h_date in history_dates:
             present_count = AttendanceRecord.objects.filter(
@@ -1423,15 +1383,15 @@ def predict_attendance(request):
             ).count()
             if present_count > 0 or AttendanceRecord.objects.filter(date=h_date).exists():
                 counts.append(present_count)
-        
+
         if not counts:
             # Fallback to general daily average if no DOW specific data
             all_recent = AttendanceRecord.objects.filter(
                 date__gte=today - timedelta(days=30)
             ).values('date').annotate(count=Count('id', filter=Q(status__in=['present', 'half_day', 'wfh', 'client'])))
-            
+
             counts = [item['count'] for item in all_recent]
-            
+
         if not counts:
             return Response({
                 'success': True,
@@ -1444,31 +1404,31 @@ def predict_attendance(request):
 
         avg_predicted = sum(counts) / len(counts)
         predicted_percent = (avg_predicted / total_employees) * 100 if total_employees > 0 else 0
-        
+
         # Calculate Trend: Compare last 7 days vs previous 7 days
         last_7_days = today - timedelta(days=7)
         prev_7_days = today - timedelta(days=14)
-        
+
         # Formula: Average = Total / Number of working days in a week
         # Over a 7-day period, we assume 5 working days
         current_avg = AttendanceRecord.objects.filter(
             date__gte=last_7_days,
             status__in=['present', 'half_day', 'wfh', 'client']
         ).count() / 5
-        
+
         previous_avg = AttendanceRecord.objects.filter(
             date__gte=prev_7_days,
             date__lt=last_7_days,
             status__in=['present', 'half_day', 'wfh', 'client']
         ).count() / 5
-        
+
         if current_avg > previous_avg * 1.05:
             trend = 'up'
         elif current_avg < previous_avg * 0.95:
             trend = 'down'
         else:
             trend = 'stable'
-            
+
         # Get last 7 days of actual counts for visualization
         recent_history = []
         for i in range(7):
@@ -1510,21 +1470,21 @@ def employee_performance_analysis(request, employee_id):
         employee = Employee.objects.get(id=employee_id)
         today = date.today()
         tomorrow = today + timedelta(days=1)
-        
+
         # 30-Day Attendance History
         last_30_days = today - timedelta(days=30)
         records = AttendanceRecord.objects.filter(
             employee=employee,
             date__gte=last_30_days
         ).order_by('-date')
-        
+
         history = [{
             'date': r.date.strftime('%Y-%m-%d'),
             'status': r.status,
             'type': r.type,
             'hours': float(r.total_hours)
         } for r in records]
-        
+
         # Performance Metrics
         stats = AttendanceRecord.objects.filter(employee=employee, date__gte=last_30_days).aggregate(
             total_present=Count('id', filter=Q(status__in=['present', 'half_day', 'wfh', 'client'])),
@@ -1532,12 +1492,12 @@ def employee_performance_analysis(request, employee_id):
             wfh_count=Count('id', filter=Q(type='wfh')),
             office_count=Count('id', filter=Q(type='office'))
         )
-        
+
         # Calculate Averages
         total_hours_sum = float(stats['sum_hours'] or 0)
         daily_workday_avg = total_hours_sum / 20 
         weekly_avg_hours = total_hours_sum / 4   
- 
+
         # Forecast for tomorrow
         tomorrow = date.today() + timedelta(days=1)
         tomorrow_dow = (tomorrow.weekday() + 1) % 7 + 1 
@@ -1545,13 +1505,13 @@ def employee_performance_analysis(request, employee_id):
             employee=employee,
             date__week_day=tomorrow_dow
         ).order_by('-date')[:8]) 
-        
+
         if habit_records:
             present_in_habit = len([r for r in habit_records if r.status in ['present', 'half_day', 'wfh', 'client']])
             prediction_score = (present_in_habit / len(habit_records)) * 100
         else:
             prediction_score = 85.0
-            
+
         # 4. Task Management Performance
         tasks = Task.objects.filter(assigned_to=employee)
         task_stats = {
@@ -1560,7 +1520,7 @@ def employee_performance_analysis(request, employee_id):
             'in_progress': tasks.filter(status='in_progress').count(),
             'completed': tasks.filter(status='completed').count(),
         }
-        
+
         return Response({
             'success': True,
             'employee_name': employee.name,
@@ -1591,7 +1551,7 @@ def upcoming_birthdays(request):
     """Get upcoming birthdays for filtered month"""
     try:
         today = date.today()
-        
+
         try:
             current_month = int(request.GET.get('month', today.month))
             current_year = int(request.GET.get('year', today.year))
@@ -1614,7 +1574,7 @@ def upcoming_birthdays(request):
                 # If we are viewing a past month in the current year, or future, just straightforward subtraction
                 # However, traditionally age is "upcoming age" for that birthday.
                 # So if birthday is in that year, the age they turn is year - birth_year.
-                
+
                 # Calculate days until birthday (relative to today, for sorting/urgency)
                 # Ensure we construct the date for the viewed year
                 try:
@@ -1622,7 +1582,7 @@ def upcoming_birthdays(request):
                 except ValueError:
                     # Handle Feb 29 on non-leap years
                     birthday_on_viewed_year = birth_date.replace(year=current_year, day=28)
-                
+
                 days_until = (birthday_on_viewed_year - today).days
 
                 birthdays.append({
@@ -1655,15 +1615,15 @@ def get_notifications(request):
     """Get notifications for the current user"""
     user_id = request.GET.get('user_id')
     if not user_id:
-         return Response({'success': False, 'message': 'User ID required'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'success': False, 'message': 'User ID required'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         user = Employee.objects.get(id=user_id)
     except Employee.DoesNotExist:
         return Response({'success': False, 'message': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-    
+
     notifications = []
-    
+
     # 0. Received Birthday Wishes
     received_wishes = BirthdayWish.objects.filter(
         receiver_id=user_id,
@@ -1686,7 +1646,7 @@ def get_notifications(request):
         date_of_birth__day=today.day,
         employee__is_active=True
     ).select_related('employee').exclude(employee_id=user_id)
-    
+
     for profile in birthdays_today:
         notifications.append({
             'type': 'birthday',
@@ -1695,13 +1655,13 @@ def get_notifications(request):
             'time': 'Today',
             'id': f'birthday_{profile.employee.id}'
         })
-    
+
     # 2. Task assignments
     pending_tasks = Task.objects.filter(
         assigned_to_id=user_id,
         status='todo'
     ).order_by('-created_at')[:5]
-    
+
     for task in pending_tasks:
         notifications.append({
             'type': 'task',
@@ -1710,13 +1670,13 @@ def get_notifications(request):
             'time': task.created_at.strftime('%I:%M %p') if task.created_at else 'Unknown',
             'id': f'task_{task.id}'
         })
-    
+
     # 3. Pending requests (for admins)
     if user.role == 'admin':
         pending_requests_count = EmployeeRequest.objects.filter(
             status='pending'
         ).count()
-        
+
         if pending_requests_count > 0:
             notifications.append({
                 'type': 'request',
@@ -1725,7 +1685,7 @@ def get_notifications(request):
                 'time': 'Now',
                 'id': 'pending_requests'
             })
-    
+
     return Response({
         'success': True,
         'notifications': notifications,
@@ -1747,9 +1707,9 @@ def mark_notifications_read(request):
     if notification_id and notification_id.startswith('wish_'):
         wish_id = notification_id.replace('wish_', '')
         wishes = wishes.filter(id=wish_id)
-    
+
     wishes.update(is_read=True)
-    
+
     return Response({'success': True, 'message': 'Notifications marked as read'})
 
 
@@ -1762,12 +1722,12 @@ def send_birthday_wish(request):
     message = request.data.get('message', 'Wishing you a very Happy Birthday! 🎂')
 
     if not all([sender_id, receiver_id]):
-         return Response({'success': False, 'message': 'Sender and Receiver IDs required'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'success': False, 'message': 'Sender and Receiver IDs required'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         sender = Employee.objects.get(id=sender_id)
         receiver = Employee.objects.get(id=receiver_id)
-        
+
         # Prevent duplicate wishes for same day
         today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
         existing_wish = BirthdayWish.objects.filter(
@@ -1775,7 +1735,7 @@ def send_birthday_wish(request):
             receiver=receiver,
             created_at__gte=today_start
         ).exists()
-        
+
         if existing_wish:
             return Response({'success': False, 'message': 'You have already sent a wish today!'})
 
@@ -1884,7 +1844,7 @@ def active_tasks(request):
                     query = query.filter(Q(assigned_to=emp) | Q(manager=emp)).distinct()
             except Employee.DoesNotExist:
                 pass # Or return 0
-        
+
         active_count = query.count()
 
         return Response({
@@ -1930,7 +1890,7 @@ def _serialize_tasks(tasks):
                 'content': comment.content,
                 'created_at': comment.created_at.isoformat()
             })
-            
+
         data.append({
             'id': task.id,
             'title': task.title,
@@ -1955,11 +1915,11 @@ def _create_task_admin(data, creator):
     required_fields = ['title', 'assigned_to']
     for field in required_fields:
         if not data.get(field):
-             raise ValueError(f'{field} is required')
+            raise ValueError(f'{field} is required')
 
     assigned_id = data.get('assigned_to')
     assigned_employee = Employee.objects.get(id=assigned_id)
-    
+
     manager_id = data.get('manager_id')
     manager_employee = None
     if manager_id and manager_id != 'none':
@@ -1984,14 +1944,14 @@ def tasks_api(request):
     if request.method == 'GET':
         try:
             employee_id = request.GET.get('employee_id')
-            
+
             if not employee_id:
-                 # Security default
-                 return Response({'success': True, 'tasks': []})
+                # Security default
+                return Response({'success': True, 'tasks': []})
 
             try:
                 emp = Employee.objects.get(id=employee_id)
-                
+
                 if emp.role == 'admin':
                     # ADMIN PATH
                     tasks_data = _get_admin_task_manager_data()
@@ -2004,14 +1964,14 @@ def tasks_api(request):
                 else:
                     # EMPLOYEE PATH
                     tasks_data = _get_employee_my_tasks_data(emp)
-                    
+
                 return Response({
                     'success': True,
                     'tasks': tasks_data
                 })
 
             except Employee.DoesNotExist:
-                 return Response({'success': True, 'tasks': []})
+                return Response({'success': True, 'tasks': []})
 
         except Exception as e:
             return Response({
@@ -2023,7 +1983,7 @@ def tasks_api(request):
         try:
             data = request.data
             creator_id = data.get('created_by')
-            
+
             # Identify creator
             if creator_id:
                 creator = Employee.objects.get(id=creator_id)
@@ -2047,7 +2007,7 @@ def tasks_api(request):
             })
 
         except ValueError as e:
-             return Response({'success': False, 'message': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'success': False, 'message': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Employee.DoesNotExist:
             return Response({'success': False, 'message': 'Assigned employee or manager not found'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
@@ -2064,11 +2024,11 @@ def _update_task_admin(task, data, user=None):
     is_admin = user_role == 'admin'
     is_overseer = task.manager and user and task.manager.id == user.id
     is_reporting_manager = task.assigned_to.manager and user and task.assigned_to.manager.id == user.id
-    
+
     if task.status == 'completed' and not (is_admin or is_overseer or is_reporting_manager):
-         # User requirement: "if any task is marked completed it can't be changed"
-         # We allow Admins and the Overseer to bypass this for correction/reopening
-         raise ValueError(f"Cannot modify a completed task. Only Admins or Managers can reopen or change finished tasks. (Role: {user_role}, ID: {user.id if user else '?'})")
+        # User requirement: "if any task is marked completed it can't be changed"
+        # We allow Admins and the Overseer to bypass this for correction/reopening
+        raise ValueError(f"Cannot modify a completed task. Only Admins or Managers can reopen or change finished tasks. (Role: {user_role}, ID: {user.id if user else '?'})")
 
     if 'status' in data:
         task.status = data['status']
@@ -2082,11 +2042,11 @@ def _update_task_admin(task, data, user=None):
         task.due_date = data['due_date']
     # Admin can also reassign task if needed (not in original code but logical for admin)
     if 'assigned_to' in data:
-         try:
-             assigned_emp = Employee.objects.get(id=data['assigned_to'])
-             task.assigned_to = assigned_emp
-         except:
-             pass 
+        try:
+            assigned_emp = Employee.objects.get(id=data['assigned_to'])
+            task.assigned_to = assigned_emp
+        except:
+            pass 
 
     if 'manager_id' in data:
         if data['manager_id'] == 'none':
@@ -2105,20 +2065,20 @@ def _update_task_employee(task, data, user=None):
     user_role = str(user.role).lower() if user else 'none'
     # Employee typically only updates status or adds comments (comments not implemented yet)
     if task.status == 'completed' and user_role != 'admin':
-         # STRICTLY BLOCK for generic updates
-         # Exception: If user is trying to reopen? "it can't be changed" implies NO.
-         # Exception: If user is trying to reopen? "it can't be changed" implies NO.
-         # return False - REMOVED to allow raising exception
-         raise ValueError(f"Cannot modify a completed task (ReqID: {user.id if user else '?'})")
+        # STRICTLY BLOCK for generic updates
+        # Exception: If user is trying to reopen? "it can't be changed" implies NO.
+        # Exception: If user is trying to reopen? "it can't be changed" implies NO.
+        # return False - REMOVED to allow raising exception
+        raise ValueError(f"Cannot modify a completed task (ReqID: {user.id if user else '?'})")
 
     if 'status' in data:
         task.status = data['status']
-    
+
     # Employee cannot change title, description, priority, etc. in strict mode
     # But if original UI allowed it, we might need to support it. 
     # User said "My Task totally different", implies restricted flow.
     # We will restrict to Status updates for now as per best practice for "My Tasks".
-    
+
     task.save()
     return True
 
@@ -2136,51 +2096,51 @@ def task_detail_api(request, task_id):
 
     data = request.data
     requesting_user_id = data.get('user_id') # Must be passed from frontend
-    
+
     if not requesting_user_id:
-         return Response({'success': False, 'message': 'User verification required'}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'success': False, 'message': 'User verification required'}, status=status.HTTP_403_FORBIDDEN)
 
     try:
         requesting_user = Employee.objects.get(id=requesting_user_id)
-        
+
         # Check permissions and dispatch
         if request.method == 'POST':
-             # Check for DELETE method simulation (common in some frameworks/this app?)
-             if data.get('_method') == 'DELETE':
-                  if requesting_user.role != 'admin': # Only Admin deletes
-                       return Response({'success': False, 'message': 'Only Admin can delete tasks'}, status=status.HTTP_403_FORBIDDEN)
-                  
-                  task.delete()
-                  return Response({'success': True, 'message': 'Task deleted'})
+            # Check for DELETE method simulation (common in some frameworks/this app?)
+            if data.get('_method') == 'DELETE':
+                if requesting_user.role != 'admin': # Only Admin deletes
+                    return Response({'success': False, 'message': 'Only Admin can delete tasks'}, status=status.HTTP_403_FORBIDDEN)
 
-             # Update Logic
-             role = str(requesting_user.role).lower()
-             
-             if role == 'admin':
-                  _update_task_admin(task, data, requesting_user)
-                  return Response({'success': True, 'message': 'Task updated (Admin)'})
-             
-             elif task.manager and task.manager.id == requesting_user.id:
-                  # Task Overseer can also perform full updates
-                  _update_task_admin(task, data, requesting_user)
-                  return Response({'success': True, 'message': 'Task updated (Overseer)'})
-             
-             elif task.assigned_to.manager and task.assigned_to.manager.id == requesting_user.id:
-                  # Assignee's Reporting Manager can also perform full updates
-                  _update_task_admin(task, data, requesting_user)
-                  return Response({'success': True, 'message': 'Task updated (Manager)'})
-             
-             elif task.assigned_to.id == requesting_user.id:
-                  _update_task_employee(task, data, requesting_user)
-                  return Response({'success': True, 'message': 'Task updated (Employee)'})
-             
-             else:
-                  return Response({'success': False, 'message': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+                task.delete()
+                return Response({'success': True, 'message': 'Task deleted'})
+
+            # Update Logic
+            role = str(requesting_user.role).lower()
+
+            if role == 'admin':
+                _update_task_admin(task, data, requesting_user)
+                return Response({'success': True, 'message': 'Task updated (Admin)'})
+
+            elif task.manager and task.manager.id == requesting_user.id:
+                # Task Overseer can also perform full updates
+                _update_task_admin(task, data, requesting_user)
+                return Response({'success': True, 'message': 'Task updated (Overseer)'})
+
+            elif task.assigned_to.manager and task.assigned_to.manager.id == requesting_user.id:
+                # Assignee's Reporting Manager can also perform full updates
+                _update_task_admin(task, data, requesting_user)
+                return Response({'success': True, 'message': 'Task updated (Manager)'})
+
+            elif task.assigned_to.id == requesting_user.id:
+                _update_task_employee(task, data, requesting_user)
+                return Response({'success': True, 'message': 'Task updated (Employee)'})
+
+            else:
+                return Response({'success': False, 'message': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
 
     except Employee.DoesNotExist:
-         return Response({'success': False, 'message': 'User not found'}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'success': False, 'message': 'User not found'}, status=status.HTTP_403_FORBIDDEN)
     except Exception as e:
-         return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
@@ -2201,7 +2161,7 @@ def task_comment_api(request):
     try:
         task = Task.objects.select_related('assigned_to', 'manager', 'assigned_to__manager').get(id=task_id)
         author = Employee.objects.get(id=author_id)
-        
+
         # Permission check: Admin, Overseer, Manager of the assigned employee, or the assigned employee themselves
         can_comment = False
         role = str(author.role).lower()
@@ -2213,7 +2173,7 @@ def task_comment_api(request):
             can_comment = True
         elif task.assigned_to.manager and task.assigned_to.manager.id == author.id:
             can_comment = True
-            
+
         if not can_comment:
             return Response({
                 'success': False,
@@ -2225,7 +2185,7 @@ def task_comment_api(request):
             author=author,
             content=content
         )
-        
+
         return Response({
             'success': True,
             'message': 'Comment added successfully',
@@ -2323,17 +2283,17 @@ def wfh_request_approve(request):
         request_obj.status = status_val
         request_obj.admin_response = admin_response
         request_obj.reviewed_at = timezone.now()
-        
+
         if reviewer_id:
-             try:
-                 request_obj.reviewed_by = Employee.objects.get(id=reviewer_id)
-             except:
-                 pass
-        
+            try:
+                request_obj.reviewed_by = Employee.objects.get(id=reviewer_id)
+            except:
+                pass
+
         if not request_obj.reviewed_by:
-             admin_user = Employee.objects.filter(role='admin').first()
-             if admin_user:
-                 request_obj.reviewed_by = admin_user
+            admin_user = Employee.objects.filter(role='admin').first()
+            if admin_user:
+                request_obj.reviewed_by = admin_user
 
         request_obj.save()
 
@@ -2394,19 +2354,19 @@ def leave_request(request):
         period = data.get('period') # 'first_half', 'second_half'
 
         if not all([employee_id, date_str, r_type]):
-             return Response({'success': False, 'message': 'Missing fields'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'success': False, 'message': 'Missing fields'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             employee = Employee.objects.get(id=employee_id)
         except Employee.DoesNotExist:
             return Response({'success': False, 'message': 'Employee not found'}, status=status.HTTP_404_NOT_FOUND)
-        
+
         req_date = datetime.strptime(date_str, '%Y-%m-%d').date()
 
         # Check existing
         existing = EmployeeRequest.objects.filter(employee=employee, start_date=req_date).first()
         if existing:
-             return Response({'success': False, 'message': 'Request already exists for this date'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'success': False, 'message': 'Request already exists for this date'}, status=status.HTTP_400_BAD_REQUEST)
 
         EmployeeRequest.objects.create(
             employee=employee,
@@ -2475,7 +2435,7 @@ def leave_request_approve(request):
                     }
                 )
                 current_date += timedelta(days=1)
-        
+
         return Response({'success': True, 'message': f'Request {status_val}'})
     except Exception as e:
         return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
