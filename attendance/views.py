@@ -423,9 +423,9 @@ def attendance_records(request):
     days_offset = int(request.GET.get('days_offset', 0))
 
     # Auto-mark absentees for today after 12:00pm
-    now = timezone.now()
-    if now.hour >= 12:
-        today = date.today()
+    now = timezone.localtime(timezone.now())
+    today = now.date()
+    if now.hour >= 18:
         mark_absentees_for_date(today)
 
     try:
@@ -489,10 +489,15 @@ def attendance_records(request):
             'message': 'Failed to fetch attendance records'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
 def mark_absentees_for_date(target_date):
-    """Mark absentees for a given date"""
     try:
+        # Check if absentees already marked
+        if AttendanceRecord.objects.filter(
+            date=target_date,
+            status='absent'
+        ).exists():
+            return  # Already processed
+
         all_employees = Employee.objects.filter(is_active=True).values_list('id', flat=True)
         existing_records = AttendanceRecord.objects.filter(date=target_date).values_list('employee_id', flat=True)
 
@@ -506,8 +511,8 @@ def mark_absentees_for_date(target_date):
                 type='office',
                 total_hours=0
             )
-    except Exception as e:
-        pass  # Silent fail for background task
+    except:
+        pass
 
 
 @api_view(['GET'])
