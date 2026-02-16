@@ -63,4 +63,13 @@ urlpatterns = [
     path('notifications', views.get_notifications, name='get_notifications'),
     path('mark-notifications-read', views.mark_notifications_read, name='mark_notifications_read'),
     path('send-wish', views.send_birthday_wish, name='send_birthday_wish'),
+    
+    # Attendance Predictions (Admin only)
+    path('attendance-predictions', views.attendance_predictions, name='attendance_predictions'),
+    
+    # Intelligence Hub (Admin only)
+    path('intelligence-hub-forecast', views.intelligence_hub_forecast, name='intelligence_hub_forecast'),
+    path('intelligence-hub-trends', views.intelligence_hub_trends, name='intelligence_hub_trends'),
+    path('intelligence-hub-search', views.intelligence_hub_search, name='intelligence_hub_search'),
+    path('employee-performance-analysis/<int:employee_id>', views.employee_performance_analysis, name='employee_performance_analysis'),
 ]

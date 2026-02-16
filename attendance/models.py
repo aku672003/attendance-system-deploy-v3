@@ -164,6 +164,7 @@ class AttendanceRecord(models.Model):
         ('wfh', 'Work From Home'),
         ('client', 'Client'),
         ('absent', 'Absent'),
+        ('leave', 'Leave'),
     ]
 
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='attendance_records')
@@ -290,6 +291,7 @@ class Task(models.Model):
     manager = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='supervised_tasks')
     created_by = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='created_tasks')
     due_date = models.DateField(null=True, blank=True)
+    accuracy = models.IntegerField(null=True, blank=True) # Task accuracy score (0-100)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -535,13 +535,44 @@ def monthly_stats(request):
             date__month=month
         )
 
+        # Count approved leave requests from EmployeeRequest table
+        leave_requests = EmployeeRequest.objects.filter(
+            employee_id=employee_id,
+            request_type='full_day',
+            status='approved',
+            start_date__year=year,
+            start_date__month=month
+        ).count()
+
+        # Count records with status 'leave' in AttendanceRecord (standard fallback)
+        leave_records = records.filter(status='leave').count()
+        
+        # Use simple addition or max? Frontend overrides absent with request.
+        # Most accurate: take total from requests if they are the primary source.
+        total_leave_days = max(leave_records, leave_requests)
+
+        # Count approved half-day requests from EmployeeRequest table
+        half_day_requests = EmployeeRequest.objects.filter(
+            employee_id=employee_id,
+            request_type='half_day',
+            status='approved',
+            start_date__year=year,
+            start_date__month=month
+        ).count()
+
+        # Count records with is_half_day=True in AttendanceRecord
+        half_day_records = records.filter(is_half_day=True).count()
+        
+        total_half_days = max(half_day_records, half_day_requests)
+
         stats = {
-            'total_days': records.count(),
+            'total_working_days': records.filter(Q(status='present') | Q(status='half_day') | Q(status='wfh') | Q(status='client')).count(),
             'total_hours': float(records.aggregate(Sum('total_hours'))['total_hours__sum'] or 0),
-            'half_days': records.filter(is_half_day=True).count(),
+            'half_days': total_half_days,
             'wfh_days': records.filter(type='wfh').count(),
-            'office_days': records.filter(type='office').count(),
+            'office_days': records.filter(type='office', status='present').count(),
             'client_days': records.filter(type='client').count(),
+            'leave_days': total_leave_days,
         }
 
         return Response({
@@ -760,7 +791,9 @@ def employee_profile(request):
 def admin_profiles_list(request):
     """List all employee profiles (admin)"""
     try:
-        employees = Employee.objects.filter(is_active=True).select_related('profile').order_by('id')
+        employees = Employee.objects.filter(is_active=True).select_related('profile')\
+            .annotate(docs_count=Count('documents'))\
+            .order_by('id')
         profiles_data = []
 
         for emp in employees:
@@ -778,6 +811,7 @@ def admin_profiles_list(request):
                 'date_of_joining': str(profile.date_of_joining) if profile and profile.date_of_joining else None,
                 'skill_set': profile.skill_set if profile else None,
                 'reporting_manager': profile.reporting_manager if profile else None,
+                'docs_count': emp.docs_count,
             })
 
         return Response({
@@ -1517,26 +1551,60 @@ def employee_performance_analysis(request, employee_id):
         else:
             prediction_score = 85.0
 
-        # 4. Task Management Performance
+        # 5. Attendance Habits (Average Check-in/out)
+        attendance_with_time = AttendanceRecord.objects.filter(
+            employee=employee, 
+            date__gte=last_30_days,
+            check_in_time__isnull=False
+        )
+        
+        avg_check_in = None
+        avg_check_out = None
+        
+        if attendance_with_time.exists():
+            # Calculate average seconds from midnight
+            in_seconds = []
+            out_seconds = []
+            for r in attendance_with_time:
+                in_seconds.append(r.check_in_time.hour * 3600 + r.check_in_time.minute * 60 + r.check_in_time.second)
+                if r.check_out_time:
+                    out_seconds.append(r.check_out_time.hour * 3600 + r.check_out_time.minute * 60 + r.check_out_time.second)
+            
+            if in_seconds:
+                avg_in_sec = sum(in_seconds) / len(in_seconds)
+                avg_check_in = f"{int(avg_in_sec // 3600):02d}:{int((avg_in_sec % 3600) // 60):02d}"
+            
+            if out_seconds:
+                avg_out_sec = sum(out_seconds) / len(out_seconds)
+                avg_check_out = f"{int(avg_out_sec // 3600):02d}:{int((avg_out_sec % 3600) // 60):02d}"
+
+        # 4. Task Management Performance (Expanded)
         tasks = Task.objects.filter(assigned_to=employee)
+        completed_tasks = tasks.filter(status='completed')
+        avg_accuracy = completed_tasks.aggregate(avg_acc=Avg('accuracy'))['avg_acc'] or 0
+
         task_stats = {
             'total': tasks.count(),
             'todo': tasks.filter(status='todo').count(),
             'in_progress': tasks.filter(status='in_progress').count(),
-            'completed': tasks.filter(status='completed').count(),
+            'completed': completed_tasks.count(),
+            'avg_accuracy': round(float(avg_accuracy), 1)
         }
 
         return Response({
             'success': True,
             'employee_name': employee.name,
             'department': employee.department,
+            'email': employee.email,
             'history': history,
             'metrics': {
                 'total_present_30d': stats['total_present'] or 0,
                 'avg_hours_present': round(total_hours_sum / (stats['total_present'] or 1), 1),
                 'daily_workday_avg': round(daily_workday_avg, 1),
                 'wfh_ratio': round((stats['wfh_count'] / (stats['total_present'] or 1)) * 100, 1) if stats['total_present'] else 0,
-                'weekly_avg_hours': round(weekly_avg_hours, 1)
+                'weekly_avg_hours': round(weekly_avg_hours, 1),
+                'avg_check_in': avg_check_in,
+                'avg_check_out': avg_check_out
             },
             'tasks': task_stats,
             'prediction': {
@@ -1758,12 +1826,20 @@ def send_birthday_wish(request):
 
 @api_view(['GET'])
 def pending_requests(request):
-    """Get pending WFH and leave requests"""
+    """Get pending or history (approved/rejected) WFH and leave requests"""
     try:
-        # Get pending requests
-        requests_obj = EmployeeRequest.objects.filter(
-            status='pending'
-        ).select_related('employee').order_by('start_date')
+        status_param = request.GET.get('status', 'pending')
+        
+        if status_param == 'history':
+            # Get approved and rejected requests
+            requests_obj = EmployeeRequest.objects.filter(
+                status__in=['approved', 'rejected']
+            ).select_related('employee').order_by('-start_date')
+        else:
+            # Get pending requests
+            requests_obj = EmployeeRequest.objects.filter(
+                status='pending'
+            ).select_related('employee').order_by('start_date')
 
         requests_data = []
         for req in requests_obj:
@@ -2310,13 +2386,13 @@ def wfh_request_approve(request):
                 attendance_status = 'wfh'
                 attendance_type = 'wfh'
             elif req_type == 'full_day':
-                attendance_status = 'absent'  # Full day leave shows as absent
+                attendance_status = 'leave'  # Full day leave shows as leave
                 attendance_type = 'office'
             elif req_type == 'half_day':
                 attendance_status = 'half_day'
                 attendance_type = 'office'
             else:
-                attendance_status = 'absent'
+                attendance_status = 'leave'
                 attendance_type = 'office'
 
             # Create or update attendance record for each day in the request date range
@@ -2354,36 +2430,63 @@ def leave_request(request):
         data = request.data
         employee_id = data.get('employee_id')
         date_str = data.get('date')
+        dates_list = data.get('dates', []) # New:支持列表
         r_type = data.get('type') # 'full_day', 'half_day', 'wfh'
         reason = data.get('reason')
         period = data.get('period') # 'first_half', 'second_half'
 
-        if not all([employee_id, date_str, r_type]):
+        if not employee_id or not r_type:
             return Response({'success': False, 'message': 'Missing fields'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Build list of dates to process
+        target_dates = []
+        if dates_list:
+            target_dates = dates_list
+        elif date_str:
+            target_dates = [date_str]
+        else:
+            return Response({'success': False, 'message': 'Date(s) required'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             employee = Employee.objects.get(id=employee_id)
         except Employee.DoesNotExist:
             return Response({'success': False, 'message': 'Employee not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        req_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        created_count = 0
+        skipped_count = 0
 
-        # Check existing
-        existing = EmployeeRequest.objects.filter(employee=employee, start_date=req_date).first()
-        if existing:
-            return Response({'success': False, 'message': 'Request already exists for this date'}, status=status.HTTP_400_BAD_REQUEST)
+        for d_str in target_dates:
+            try:
+                req_date = datetime.strptime(d_str, '%Y-%m-%d').date()
+                
+                # Check existing
+                existing = EmployeeRequest.objects.filter(employee=employee, start_date=req_date).first()
+                if existing:
+                    skipped_count += 1
+                    continue
 
-        EmployeeRequest.objects.create(
-            employee=employee,
-            request_type=r_type,
-            start_date=req_date,
-            end_date=req_date,
-            reason=reason,
-            status='pending',
-            half_day_period=period if r_type == 'half_day' else None
-        )
+                EmployeeRequest.objects.create(
+                    employee=employee,
+                    request_type=r_type,
+                    start_date=req_date,
+                    end_date=req_date,
+                    reason=reason,
+                    status='pending',
+                    half_day_period=period if r_type == 'half_day' else None
+                )
+                created_count += 1
+            except Exception:
+                skipped_count += 1
 
-        return Response({'success': True, 'message': 'Leave request submitted'})
+        if created_count == 0 and skipped_count > 0:
+            return Response({'success': False, 'message': 'Requests already exist for selected date(s)'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response({
+            'success': True, 
+            'message': f'Submitted {created_count} request(s). {skipped_count} skipped.',
+            'created_count': created_count,
+            'skipped_count': skipped_count
+        })
     except Exception as e:
         return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -2416,13 +2519,13 @@ def leave_request_approve(request):
                 attendance_status = 'wfh'
                 attendance_type = 'wfh'
             elif req_type == 'full_day':
-                attendance_status = 'absent'  # Full day leave shows as absent
+                attendance_status = 'leave'  # Full day leave shows as leave
                 attendance_type = 'office'
             elif req_type == 'half_day':
                 attendance_status = 'half_day'
                 attendance_type = 'office'
             else:
-                attendance_status = 'absent'
+                attendance_status = 'leave'
                 attendance_type = 'office'
 
             # Create or update attendance record for each day in the request date range
@@ -2444,3 +2547,130 @@ def leave_request_approve(request):
         return Response({'success': True, 'message': f'Request {status_val}'})
     except Exception as e:
         return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+@api_view(['GET'])
+def attendance_predictions(request):
+    """Get AI-powered attendance predictions for all employees (Admin only)"""
+    try:
+        # Check if user is admin
+        employee_id = request.GET.get('employee_id')
+        if not employee_id:
+            return Response({
+                'success': False,
+                'message': 'Employee ID is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            employee = Employee.objects.get(id=employee_id)
+            if employee.role != 'admin':
+                return Response({
+                    'success': False,
+                    'message': 'Unauthorized. Admin access required.'
+                }, status=status.HTTP_403_FORBIDDEN)
+        except Employee.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'Employee not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Import prediction engine
+        from .attendance_prediction import get_all_employees_predictions
+        
+        # Get predictions for all employees
+        predictions = get_all_employees_predictions()
+        
+        return Response({
+            'success': True,
+            'count': len(predictions),
+            'predictions': predictions
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({
+            'success': False,
+            'message': f'Failed to generate predictions: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ========== Intelligence Hub API Endpoints ==========
+
+@api_view(['GET'])
+def intelligence_hub_forecast(request):
+    """Get current attendance forecast with confidence and trend"""
+    try:
+        from .intelligence_hub import calculate_forecast, get_current_day_name
+        
+        forecast, confidence, trend = calculate_forecast()
+        day_name = get_current_day_name()
+        
+        return Response({
+            'success': True,
+            'forecast': {
+                'percentage': forecast,
+                'confidence': confidence,
+                'trend': trend,
+                'day_name': day_name,
+                'subtitle': f"{day_name}'s Forecast"
+            }
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({
+            'success': False,
+            'message': f'Failed to calculate forecast: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def intelligence_hub_trends(request):
+    """Get 30-day trend data with comprehensive company overview"""
+    try:
+        from .intelligence_hub import get_company_overview
+        
+        days = int(request.GET.get('days', 30))
+        overview_data = get_company_overview(days)
+        
+        return Response({
+            'success': True,
+            **overview_data  # Unpacks summary, departments, employees, trends
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({
+            'success': False,
+            'message': f'Failed to get trend data: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@parser_classes([JSONParser])
+def intelligence_hub_search(request):
+    """Search personnel with attendance predictions"""
+    try:
+        from .intelligence_hub import search_personnel
+        
+        data = request.data
+        query = data.get('query')
+        department = data.get('department')
+        min_attendance = data.get('min_attendance')
+        max_attendance = data.get('max_attendance')
+        
+        results = search_personnel(query, department, min_attendance, max_attendance)
+        
+        return Response({
+            'success': True,
+            'count': len(results),
+            'results': results
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({
+            'success': False,
+            'message': f'Failed to search personnel: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
