@@ -19,6 +19,8 @@ let attendanceHasMore = false;
 let faceapiLoaded = false;
 let trackingInterval = null;
 const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+let selectedCalendarDates = [];
+let isMultiSelectMode = false;
 // API Configuration
 const apiBaseUrl = "/api";
 
@@ -804,7 +806,8 @@ async function loadDashboardData() {
             loadAdminSummary(),
             loadUpcomingBirthdays(),
             loadPendingRequests(),
-            loadActiveTasks()
+            loadActiveTasks(),
+            loadIntelligenceHubData()
         ]);
     } else {
         // Employee sees employee stats grid and employee-specific cards
@@ -1664,9 +1667,13 @@ async function openRequestsModal() {
                         </div>
                         <div style="display:flex; gap:12px; align-items:center;">
                             <div class="btn-group-premium" style="display:flex; background: #f1f5f9; padding: 4px; border-radius: 12px; gap: 4px;">
-                                <button class="btn-premium-toggle active" onclick="filterRequestsByType('all', this)">All</button>
-                                <button class="btn-premium-toggle" onclick="filterRequestsByType('wfh', this)">WFH</button>
-                                <button class="btn-premium-toggle" onclick="filterRequestsByType('leave', this)">Leave</button>
+                                <button class="btn-premium-toggle active" id="btn-mode-pending" onclick="switchRequestMode('pending')">Active</button>
+                                <button class="btn-premium-toggle" id="btn-mode-history" onclick="switchRequestMode('history')">History</button>
+                            </div>
+                            <div class="btn-group-premium" style="display:flex; background: #f1f5f9; padding: 4px; border-radius: 12px; gap: 4px;">
+                                <button class="btn-premium-toggle active filter-tab" data-type="all" onclick="filterRequestsByType('all', this)">All</button>
+                                <button class="btn-premium-toggle filter-tab" data-type="wfh" onclick="filterRequestsByType('wfh', this)">WFH</button>
+                                <button class="btn-premium-toggle filter-tab" data-type="leave" onclick="filterRequestsByType('leave', this)">Leave</button>
                             </div>
                             <button class="btn-premium-close" onclick="closeModal('requestsModal')">Close</button>
                         </div>
@@ -1763,8 +1770,12 @@ function renderRequestCards(requests) {
                             </div>
                         </div>
                         <div class="req-actions-tech">
-                            <button class="btn-tech btn-tech-approve" onclick="approveRequest(${req.id}, '${req.type}')" title="Approve" style="width: 48px; height: 48px; border-radius: 14px;">✓</button>
-                            <button class="btn-tech btn-tech-reject" onclick="rejectRequest(${req.id}, '${req.type}')" title="Reject" style="width: 48px; height: 48px; border-radius: 14px;">✕</button>
+                            ${req.status === 'pending' ? `
+                                <button class="btn-tech btn-tech-approve" onclick="approveRequest(${req.id}, '${req.type}')" title="Approve" style="width: 48px; height: 48px; border-radius: 14px;">✓</button>
+                                <button class="btn-tech btn-tech-reject" onclick="rejectRequest(${req.id}, '${req.type}')" title="Reject" style="width: 48px; height: 48px; border-radius: 14px;">✕</button>
+                            ` : `
+                                <span class="premium-badge" style="background: ${req.status === 'approved' ? '#dcfce7' : '#fee2e2'}; color: ${req.status === 'approved' ? '#166534' : '#991b1b'}; border-radius: 8px; padding: 6px 14px; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em;">${req.status}</span>
+                            `}
                         </div>
                     </div>
                     ${req.reason ? `
@@ -1788,9 +1799,55 @@ function filterRequestsByType(type, tabElement) {
 
     // Update tabs
     document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
-    tabElement.classList.add('active');
+    if (tabElement) tabElement.classList.add('active');
 
     applyRequestFilters();
+}
+
+async function switchRequestMode(mode) {
+    window.requestMode = mode;
+
+    // Update button visual state
+    document.getElementById('btn-mode-pending').classList.toggle('active', mode === 'pending');
+    document.getElementById('btn-mode-history').classList.toggle('active', mode === 'history');
+
+    // Show loading state in list
+    document.getElementById('requestsListContainer').innerHTML = '<div class="text-center" style="padding: 40px;"><div class="loading-spinner" style="margin: 0 auto 16px;"></div><p>Fetching ' + mode + ' data...</p></div>';
+
+    try {
+        const res = await apiCall('pending-requests' + (mode === 'history' ? '?status=history' : ''), 'GET');
+        if (res && res.success && Array.isArray(res.requests)) {
+            window.currentRequests = res.requests;
+
+            // Re-render stats if they are visible
+            const total = res.requests.length;
+            const wfhCount = res.requests.filter(r => r.type === 'wfh').length;
+            const leaveCount = res.requests.filter(r => r.type === 'full_day' || r.type === 'half_day').length;
+
+            const stats = document.querySelector('.premium-stats');
+            if (stats) {
+                stats.innerHTML = `
+                    <div class="premium-stat-card">
+                        <span class="premium-stat-val" style="color:#8b5cf6;">${total}</span>
+                        <span class="premium-stat-label">Total</span>
+                    </div>
+                    <div class="premium-stat-card">
+                        <span class="premium-stat-val" style="color:#10b981;">${wfhCount}</span>
+                        <span class="premium-stat-label">WFH</span>
+                    </div>
+                    <div class="premium-stat-card">
+                        <span class="premium-stat-val" style="color:#f59e0b;">${leaveCount}</span>
+                        <span class="premium-stat-label">Leave</span>
+                    </div>
+                `;
+            }
+
+            applyRequestFilters();
+        }
+    } catch (e) {
+        console.error(e);
+        showNotification("Failed to fetch requests", "error");
+    }
 }
 
 function applyRequestFilters() {
@@ -2624,19 +2681,71 @@ async function buildAttendanceCalendar(year, month) {
         grid.appendChild(el);
     });
 
-    // Fetch all records for this user (we'll filter by month on client side)
-    const res = await apiCall('attendance-records', 'GET', {
-        employee_id: currentUser.id
-    });
+    // Fetch attendance records and requests in parallel
+    const [attendanceRes, requestsRes] = await Promise.all([
+        apiCall('attendance-records', 'GET', { employee_id: currentUser.id }),
+        apiCall('my-requests', 'GET', { employee_id: currentUser.id })
+    ]);
 
-    const allRecords = (res && res.success && Array.isArray(res.records)) ? res.records : [];
+    const allRecords = (attendanceRes && attendanceRes.success && Array.isArray(attendanceRes.records)) ? attendanceRes.records : [];
+    const allRequests = (requestsRes && requestsRes.success && Array.isArray(requestsRes.requests)) ? requestsRes.requests : [];
+
+    console.log('DEBUG Calendar Records:', allRecords.length);
+    console.log('DEBUG Calendar Requests:', allRequests);
+
     const byDay = {};
 
+    // 1. Map attendance records first
     allRecords.forEach(r => {
         if (!r.date) return;
         const d = new Date(r.date);
         if (d.getFullYear() === year && d.getMonth() === month) {
-            byDay[d.getDate()] = r;
+            byDay[d.getDate()] = { ...r, source: 'attendance' };
+        }
+    });
+
+    // 2. Map requests (Leaves, WFH) - they should override 'absent' or empty slots
+    allRequests.forEach(req => {
+        if (!req.start_date) return;
+
+        // Use a safe date parser to avoid UTC shifts
+        const parseDate = (s) => {
+            const parts = s.split('-');
+            return new Date(parts[0], parts[1] - 1, parts[2]);
+        };
+
+        const start = parseDate(req.start_date);
+        const end = parseDate(req.end_date || req.start_date);
+
+        let curr = new Date(start);
+        while (curr <= end) {
+            if (curr.getFullYear() === year && curr.getMonth() === month) {
+                const dayNum = curr.getDate();
+                const type = req.type; // 'full_day', 'half_day', 'wfh'
+                const reqStatus = req.status; // 'pending', 'approved'
+
+                if (type === 'full_day' || type === 'half_day') {
+                    // Overwrite if empty OR if currently says 'absent'
+                    if (!byDay[dayNum] || byDay[dayNum].status === 'absent') {
+                        byDay[dayNum] = {
+                            ...req,
+                            status: (type === 'half_day') ? 'half_day' : 'leave',
+                            request_status: reqStatus,
+                            source: 'request'
+                        };
+                    }
+                } else if (type === 'wfh') {
+                    if (!byDay[dayNum]) {
+                        byDay[dayNum] = {
+                            ...req,
+                            status: 'wfh',
+                            request_status: reqStatus,
+                            source: 'request'
+                        };
+                    }
+                }
+            }
+            curr.setDate(curr.getDate() + 1);
         }
     });
 
@@ -2666,6 +2775,7 @@ async function buildAttendanceCalendar(year, month) {
         else if (status === 'absent') cls += ' cal-absent';
         else if (status === 'wfh') cls += ' cal-wfh';
         else if (status === 'half_day') cls += ' cal-half';
+        else if (status === 'leave') cls += ' cal-leave';
 
         // Add tooltip details for past dates/records
 
@@ -2693,16 +2803,89 @@ async function buildAttendanceCalendar(year, month) {
         }
 
         // Interactive check for future dates
-        if (currentDate > todayDate) { // Only future dates usually, or >= if same day requests allowed
-            cell.onclick = () => openRequestModal(`${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
+        if (currentDate >= todayDate) { // Allow same day or future requests
+            cell.onclick = () => {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                if (isMultiSelectMode) {
+                    toggleDateSelection(dateStr, cell);
+                } else {
+                    openRequestModal(dateStr);
+                }
+            };
             cell.style.cursor = 'pointer';
-            cell.title = "Click to Request Leave/WFH"; // Override if future
+            cell.title = "Click to Request Leave/WFH";
+
+            // Restore selection state if re-rendering (e.g. month change)
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            if (selectedCalendarDates.includes(dateStr)) {
+                cell.classList.add('selected');
+            }
         }
 
         cell.className = cls;
         cell.textContent = day;
         grid.appendChild(cell);
     }
+}
+
+function toggleMultiSelectMode() {
+    const toggle = document.getElementById('multiSelectToggle');
+    isMultiSelectMode = toggle.checked;
+
+    // Clear selection when toggling
+    selectedCalendarDates = [];
+    document.querySelectorAll('.calendar-day.selected').forEach(el => el.classList.remove('selected'));
+    updateMultiSelectUI();
+}
+
+function toggleDateSelection(dateStr, element) {
+    const index = selectedCalendarDates.indexOf(dateStr);
+    if (index > -1) {
+        selectedCalendarDates.splice(index, 1);
+        element.classList.remove('selected');
+    } else {
+        selectedCalendarDates.push(dateStr);
+        element.classList.add('selected');
+    }
+    updateMultiSelectUI();
+}
+
+function updateMultiSelectUI() {
+    const actions = document.getElementById('multiSelectActions');
+    const btn = document.getElementById('multiRequestBtn');
+    if (!actions || !btn) return;
+
+    if (isMultiSelectMode && selectedCalendarDates.length > 0) {
+        actions.classList.add('visible');
+        btn.textContent = `Request for ${selectedCalendarDates.length} Selected Dates`;
+    } else {
+        actions.classList.remove('visible');
+    }
+}
+
+function openMultiRequestModal() {
+    if (selectedCalendarDates.length === 0) return;
+
+    // Reset form
+    const typeSelect = document.getElementById('requestType');
+    if (typeSelect) typeSelect.value = 'wfh';
+    toggleRequestPeriod();
+
+    const reasonInput = document.getElementById('requestReason');
+    if (reasonInput) reasonInput.value = '';
+
+    const display = document.getElementById('requestActionDateDisplay');
+    if (display) {
+        display.innerHTML = `<strong>${selectedCalendarDates.length} Dates Selected:</strong><br>` +
+            selectedCalendarDates.slice(0, 5).join(', ') +
+            (selectedCalendarDates.length > 5 ? '...' : '');
+    }
+
+    // Use a special value or empty string for the hidden input to indicate multiple
+    const input = document.getElementById('requestActionDate');
+    if (input) input.value = 'multiple';
+
+    openModal('requestActionModal');
 }
 
 async function loadTodayAttendance(isUserInRange = false) {
@@ -2720,7 +2903,7 @@ async function loadTodayAttendance(isUserInRange = false) {
 
         if (result.success && result.record) {
             const record = result.record;
-                 // Store for UI updates
+            // Store for UI updates
 
             if (record.check_out_time) {
                 statusElement.textContent = 'Completed';
@@ -2800,11 +2983,42 @@ async function loadWFHEligibility() {
             const currentCount = result.current_count || 0;
             const maxWfhLimit = 2; // Monthly WFH limit
 
-            // Fetch employee profile for leave balances
-            const profileResult = await apiCall('employee-profile', 'GET', { employee_id: currentUser.id });
-            const leavesUsed = (profileResult && profileResult.success && profileResult.profile)
-                ? (profileResult.profile.planned_leaves || 0) + (profileResult.profile.unplanned_leaves || 0)
-                : 0;
+            // Fetch approved leave requests for current month
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth() + 1;
+
+            const leaveRequestsResult = await apiCall('my-requests', 'GET', {
+                employee_id: currentUser.id
+            });
+
+            console.log('DEBUG: Leave requests result:', leaveRequestsResult);
+
+            let leavesUsed = 0;
+            if (leaveRequestsResult && leaveRequestsResult.success && leaveRequestsResult.requests) {
+                console.log('DEBUG: All requests:', leaveRequestsResult.requests);
+
+                // Use safe date parser to avoid UTC shifts (same as calendar logic)
+                const parseDate = (s) => {
+                    const parts = s.split('-');
+                    return new Date(parts[0], parts[1] - 1, parts[2]);
+                };
+
+                const filteredLeaves = leaveRequestsResult.requests.filter(req => {
+                    console.log('DEBUG: Checking request:', req);
+                    if (req.type !== 'full_day' || req.status !== 'approved') {
+                        console.log('DEBUG: Rejected - type or status mismatch', { type: req.type, status: req.status });
+                        return false;
+                    }
+                    const reqDate = parseDate(req.start_date);
+                    const matches = reqDate.getFullYear() === year && (reqDate.getMonth() + 1) === month;
+                    console.log(`DEBUG: Date check - reqDate: ${reqDate}, year: ${year}, month: ${month}, matches: ${matches}`);
+                    return matches;
+                });
+                console.log('DEBUG: Filtered leaves for current month:', filteredLeaves);
+                leavesUsed = filteredLeaves.length;
+            }
+
             const maxLeaveLimit = 1; // Monthly leave limit
 
             // Update WFH
@@ -4524,6 +4738,16 @@ function resolvePhotoUrl(r) {
 
 
 
+/* Map Global Variables */
+let officeMap = null;
+let officeMarker = null;
+let tempPickerLat = 28.6139;
+let tempPickerLng = 77.2090;
+
+/* Admin Search Cache */
+let allAdminUsers = [];
+let allAdminProfiles = [];
+
 /* Open Admin Panel and ALWAYS pull fresh data from DB */
 // === ADMIN: open panel and load everything ===
 async function openAdminPanel() {
@@ -4545,6 +4769,121 @@ async function openAdminPanel() {
     adminOfficeEditId = null;
     document.getElementById('addOfficeMsg').textContent = '';
     document.getElementById('addUserMsg').textContent = '';
+}
+
+/* Map Picker Modal Functions */
+function openMapPicker() {
+    const currentLat = parseFloat(document.getElementById('newOfficeLat').value) || 28.6139;
+    const currentLng = parseFloat(document.getElementById('newOfficeLng').value) || 77.2090;
+
+    tempPickerLat = currentLat;
+    tempPickerLng = currentLng;
+
+    openModal('mapPickerModal');
+
+    // Initialize map if not exists
+    if (!officeMap) {
+        officeMap = L.map('officeLocationMap').setView([currentLat, currentLng], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(officeMap);
+
+        officeMarker = L.marker([currentLat, currentLng], { draggable: true }).addTo(officeMap);
+
+        officeMap.on('click', function (e) {
+            updatePickerMarker(e.latlng.lat, e.latlng.lng);
+        });
+
+        officeMarker.on('dragend', function (e) {
+            const pos = officeMarker.getLatLng();
+            updatePickerMarker(pos.lat, pos.lng);
+        });
+    } else {
+        officeMap.setView([currentLat, currentLng], 13);
+        officeMarker.setLatLng([currentLat, currentLng]);
+        // Fix Leaflet sizing in modal
+        setTimeout(() => officeMap.invalidateSize(), 200);
+    }
+}
+
+function updatePickerMarker(lat, lng) {
+    tempPickerLat = lat;
+    tempPickerLng = lng;
+    if (officeMarker) officeMarker.setLatLng([lat, lng]);
+    document.getElementById('mapPickerStatus').textContent = `Selected: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+}
+
+function confirmMapLocation() {
+    document.getElementById('newOfficeLat').value = tempPickerLat.toFixed(6);
+    document.getElementById('newOfficeLng').value = tempPickerLng.toFixed(6);
+    closeModal('mapPickerModal');
+}
+
+/* 📡 GPS: Use current device location */
+function useCurrentLocation() {
+    if (!navigator.geolocation) {
+        return showNotification("Geolocation is not supported by your browser", "warning");
+    }
+
+    const btn = event.currentTarget;
+    const originalContent = btn.innerHTML;
+    btn.innerHTML = '<div class="loading-spinner" style="width:20px; height:20px;"></div>';
+    btn.disabled = true;
+
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            updatePickerMarker(lat, lng);
+            officeMap.setView([lat, lng], 16);
+            btn.innerHTML = originalContent;
+            btn.disabled = false;
+            showNotification("Location detected", "success");
+        },
+        (error) => {
+            console.error(error);
+            btn.innerHTML = originalContent;
+            btn.disabled = false;
+            showNotification("Could not get location. Please check permissions.", "error");
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+    );
+}
+
+/* 🔍 Search: Find location by name (Geocoding) */
+async function searchMapLocation() {
+    const query = document.getElementById('mapSearchInput').value.trim();
+    if (!query) return;
+
+    const btn = document.querySelector('button[onclick="searchMapLocation()"]');
+    const originalText = btn.textContent;
+    btn.textContent = 'Searching...';
+    btn.disabled = true;
+
+    try {
+        // Using OpenStreetMap Nominatim API (Free)
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+        const data = await response.json();
+
+        if (data && data.length > 0) {
+            const result = data[0];
+            const lat = parseFloat(result.lat);
+            const lng = parseFloat(result.lon);
+
+            updatePickerMarker(lat, lng);
+            officeMap.setView([lat, lng], 15);
+
+            document.getElementById('mapPickerStatus').textContent = `Found: ${result.display_name.split(',')[0]}`;
+        } else {
+            showNotification("Location not found", "warning");
+        }
+    } catch (error) {
+        console.error("Search failed:", error);
+        showNotification("Search service unavailable", "error");
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
 }
 
 
@@ -4653,10 +4992,15 @@ function clearOfficeForm() {
     document.getElementById('newOfficeId').disabled = false;
     document.getElementById('newOfficeName').value = '';
     document.getElementById('newOfficeAddress').value = '';
+    document.getElementById('newOfficeRadius').value = '100';
+    document.getElementById('addOfficeMsg').textContent = '';
+
+    // Reset Lat/Long fields
     document.getElementById('newOfficeLat').value = '';
     document.getElementById('newOfficeLng').value = '';
-    document.getElementById('newOfficeRadius').value = '';
-    document.getElementById('addOfficeMsg').textContent = '';
+
+    adminOfficeEditId = null;
+    document.querySelector('button[onclick="submitNewOffice()"]').textContent = '➕ Add Office';
 }
 
 async function startEditOffice(id) {
@@ -4671,10 +5015,12 @@ async function startEditOffice(id) {
     document.getElementById('newOfficeId').disabled = true;
     document.getElementById('newOfficeName').value = o.name || '';
     document.getElementById('newOfficeAddress').value = o.address || '';
+    document.getElementById('newOfficeRadius').value = o.radius_meters ?? '';
     document.getElementById('newOfficeLat').value = o.latitude ?? '';
     document.getElementById('newOfficeLng').value = o.longitude ?? '';
-    document.getElementById('newOfficeRadius').value = o.radius_meters ?? '';
     document.getElementById('addOfficeMsg').textContent = 'Editing office #' + o.id;
+
+    document.querySelector('button[onclick="submitNewOffice()"]').textContent = '💾 Update Office';
 }
 
 async function deleteOffice(id) {
@@ -4704,9 +5050,24 @@ async function refreshAdminUsers() {
         </td></tr>`;
 
     const res = await apiCall('admin-users', 'GET');
-    const users = (res && res.success && Array.isArray(res.users)) ? res.users : [];
+    allAdminUsers = (res && res.success && Array.isArray(res.users)) ? res.users : [];
 
+    // Clear search input on refresh
+    const searchInput = document.getElementById('adminUsersSearch');
+    if (searchInput) searchInput.value = '';
+
+    renderAdminUsers(allAdminUsers);
+}
+
+function renderAdminUsers(users) {
+    const tbody = document.getElementById('adminUsersList');
     document.getElementById('userCount').textContent = `(${users.length})`;
+
+    if (users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center" style="padding:20px; color:var(--gray-500)">No matching users found.</td></tr>';
+        return;
+    }
+
     tbody.innerHTML = users.map(u => `
         <tr>
             <td>${u.id}</td>
@@ -4722,6 +5083,23 @@ async function refreshAdminUsers() {
             </td>
         </tr>
     `).join('');
+}
+
+function filterAdminUsers() {
+    const query = document.getElementById('adminUsersSearch').value.toLowerCase().trim();
+    if (!query) {
+        renderAdminUsers(allAdminUsers);
+        return;
+    }
+
+    const filtered = allAdminUsers.filter(u =>
+        (u.name && u.name.toLowerCase().includes(query)) ||
+        (u.username && u.username.toLowerCase().includes(query)) ||
+        (u.department && u.department.toLowerCase().includes(query)) ||
+        (u.id && u.id.toString().includes(query)) ||
+        (u.phone && u.phone.includes(query))
+    );
+    renderAdminUsers(filtered);
 }
 
 async function refreshManagerDropdown() {
@@ -5586,9 +5964,33 @@ async function refreshAdminProfiles() {
         </div>`;
 
     const res = await apiCall('admin-profiles', 'GET', {});
-    const profiles = (res && res.success && Array.isArray(res.profiles)) ? res.profiles : [];
+    allAdminProfiles = (res && res.success && Array.isArray(res.profiles)) ? res.profiles : [];
 
-    box.innerHTML = renderProfilesTable(profiles);
+    // Clear search input on refresh
+    const searchInput = document.getElementById('adminProfilesSearch');
+    if (searchInput) searchInput.value = '';
+
+    box.innerHTML = renderProfilesTable(allAdminProfiles);
+}
+
+function filterAdminProfiles() {
+    const query = document.getElementById('adminProfilesSearch').value.toLowerCase().trim();
+    const box = document.getElementById('adminProfilesList');
+
+    if (!query) {
+        box.innerHTML = renderProfilesTable(allAdminProfiles);
+        return;
+    }
+
+    const filtered = allAdminProfiles.filter(p =>
+        (p.name && p.name.toLowerCase().includes(query)) ||
+        (p.username && p.username.toLowerCase().includes(query)) ||
+        (p.department && p.department.toLowerCase().includes(query)) ||
+        (p.personal_email && p.personal_email.toLowerCase().includes(query)) ||
+        (p.id && p.id.toString().includes(query)) ||
+        (p.reporting_manager && p.reporting_manager.toLowerCase().includes(query))
+    );
+    box.innerHTML = renderProfilesTable(filtered);
 }
 
 function renderProfilesTable(profiles) {
@@ -5596,8 +5998,20 @@ function renderProfilesTable(profiles) {
         return '<p style="color:var(--gray-600)">No user profiles found.</p>';
     }
 
-    const rows = profiles.map(p => `
-        <tr>
+    const rows = profiles.map(p => {
+        const missingDocs = (p.docs_count ?? 0) < 5;
+        const missingFields = !p.name || !p.personal_email || !p.gender || !p.date_of_birth || !p.date_of_joining;
+
+        const isIncomplete = missingDocs || missingFields;
+        const rowClass = isIncomplete ? 'class="row-warning-incomplete"' : '';
+
+        let reason = [];
+        if (missingDocs) reason.push(`Missing documents (${p.docs_count}/5)`);
+        if (missingFields) reason.push('Missing profile details');
+        const titleAttr = isIncomplete ? `title="${reason.join(' & ')}"` : '';
+
+        return `
+        <tr ${rowClass} ${titleAttr}>
             <td>${p.id}</td>
             <td>${p.username || ''}</td>
             <td>${p.name || ''}</td>
@@ -5617,7 +6031,7 @@ function renderProfilesTable(profiles) {
                 </button>
             </td>
         </tr>
-    `).join('');
+    `}).join('');
 
     return `
         <div style="overflow:auto; max-height:420px;">
@@ -6108,13 +6522,29 @@ async function submitRequest() {
             period: (type === 'half_day') ? period : null
         };
 
+        // Multi-date support
+        if (isMultiSelectMode && selectedCalendarDates.length > 0 && dateStr === 'multiple') {
+            body.dates = selectedCalendarDates;
+            delete body.date;
+        }
+
         const res = await apiCall(endpoint, 'POST', body);
 
         if (res && res.success) {
-            showNotification('Request submitted successfully');
+            showNotification(res.message || 'Request submitted successfully');
             closeModal('requestActionModal');
-            // Refresh calendar if open
-            openAttendanceCalendar(); // Reloads calendar data
+
+            // Reset multi-select state after success
+            if (isMultiSelectMode && selectedCalendarDates.length > 0) {
+                selectedCalendarDates = [];
+                isMultiSelectMode = false;
+                const toggle = document.getElementById('multiSelectToggle');
+                if (toggle) toggle.checked = false;
+                updateMultiSelectUI();
+            }
+
+            // Refresh calendar
+            openAttendanceCalendar();
         } else {
             showNotification(res.message || 'Failed to submit request', 'error');
         }
@@ -6352,4 +6782,1038 @@ function closeRequestDetail() {
     }
     // Remove active state
     document.querySelectorAll('.req-card-tech').forEach(c => c.classList.remove('active'));
+}
+
+// ========== Attendance Predictions Functions ==========
+
+async function openPredictionsModal() {
+    const modal = document.getElementById('predictionsModal');
+    const loadingState = document.getElementById('predictionsLoadingState');
+    const content = document.getElementById('predictionsContent');
+
+    modal.classList.add('active');
+    loadingState.style.display = 'block';
+    content.style.display = 'none';
+
+    try {
+        const result = await apiCall('attendance-predictions', 'GET', { employee_id: currentUser.id });
+
+        if (result.success) {
+            renderPredictionsTable(result.predictions);
+            loadingState.style.display = 'none';
+            content.style.display = 'block';
+        } else {
+            showToast(result.message || 'Failed to load predictions', 'error');
+            closePredictionsModal();
+        }
+    } catch (error) {
+        console.error('Error loading predictions:', error);
+        showToast('Failed to load predictions', 'error');
+        closePredictionsModal();
+    }
+}
+
+function closePredictionsModal() {
+    const modal = document.getElementById('predictionsModal');
+    modal.classList.remove('active');
+}
+
+function renderPredictionsTable(predictions) {
+    const tbody = document.getElementById('predictionsTableBody');
+    tbody.innerHTML = '';
+
+    if (!predictions || predictions.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--gray-500);">No employee data available</td></tr>';
+        return;
+    }
+
+    predictions.forEach(pred => {
+        const row = document.createElement('tr');
+        row.style.borderBottom = '1px solid var(--gray-200)';
+
+        // Employee Name
+        const nameCell = document.createElement('td');
+        nameCell.style.padding = '16px 12px';
+        nameCell.innerHTML = `
+            <div style="font-weight: 600;">${pred.employee_name}</div>
+            <div style="font-size: 12px; color: var(--gray-500);">${pred.employee_email}</div>
+        `;
+        row.appendChild(nameCell);
+
+        // Previous 7 Days
+        const prevCell = document.createElement('td');
+        prevCell.style.padding = '16px 12px';
+        prevCell.style.textAlign = 'center';
+        const prevRecord = pred.previous_record;
+        prevCell.innerHTML = `
+            <div style="font-size: 20px; font-weight: 700; color: var(--primary);">${prevRecord.present_days}/${prevRecord.total_days}</div>
+            <div style="font-size: 11px; color: var(--gray-500); margin-top: 4px;">
+                ${prevRecord.attendance_rate}% attendance
+            </div>
+        `;
+        row.appendChild(prevCell);
+
+        // Current Status
+        const currentCell = document.createElement('td');
+        currentCell.style.padding = '16px 12px';
+        currentCell.style.textAlign = 'center';
+        const currentStatus = pred.current_status;
+        const statusColor = currentStatus.is_active ? 'var(--success)' : 'var(--gray-400)';
+        const statusIcon = currentStatus.is_active ? '✓' : '○';
+        currentCell.innerHTML = `
+            <div style="font-size: 24px; color: ${statusColor};">${statusIcon}</div>
+            <div style="font-size: 11px; color: var(--gray-600); margin-top: 4px; text-transform: capitalize;">
+                ${currentStatus.today_status.replace('_', ' ')}
+            </div>
+        `;
+        row.appendChild(currentCell);
+
+        // Next 7 Days Predictions
+        const nextCell = document.createElement('td');
+        nextCell.style.padding = '16px 12px';
+        nextCell.style.textAlign = 'center';
+        const predictedDays = pred.predicted_record.filter(p => p.prediction === 'present' || p.prediction === 'wfh').length;
+        nextCell.innerHTML = `
+            <div style="font-size: 20px; font-weight: 700; color: var(--accent);">${predictedDays}/7</div>
+            <div style="font-size: 11px; color: var(--gray-500); margin-top: 4px;">
+                days predicted present
+            </div>
+        `;
+        row.appendChild(nextCell);
+
+        // Work Status
+        const workStatusCell = document.createElement('td');
+        workStatusCell.style.padding = '16px 12px';
+        workStatusCell.style.textAlign = 'center';
+        const isActive = pred.work_status === 'Active';
+        workStatusCell.innerHTML = `
+            <span style="
+                display: inline-block;
+                padding: 6px 12px;
+                border-radius: 12px;
+                font-size: 12px;
+                font-weight: 600;
+                background: ${isActive ? 'var(--success-light)' : 'var(--gray-200)'};
+                color: ${isActive ? 'var(--success)' : 'var(--gray-600)'};
+            ">${pred.work_status}</span>
+        `;
+        row.appendChild(workStatusCell);
+
+        // Accuracy Rate
+        const accuracyCell = document.createElement('td');
+        accuracyCell.style.padding = '16px 12px';
+        accuracyCell.style.textAlign = 'center';
+        const accuracyColor = pred.accuracy_rate >= 80 ? 'var(--success)' : pred.accuracy_rate >= 60 ? 'var(--warning)' : 'var(--error)';
+        accuracyCell.innerHTML = `
+            <div style="font-size: 18px; font-weight: 700; color: ${accuracyColor};">${pred.accuracy_rate}%</div>
+            <div style="font-size: 11px; color: var(--gray-500); margin-top: 4px;">
+                prediction accuracy
+            </div>
+        `;
+        row.appendChild(accuracyCell);
+
+        // Performance Score
+        const perfCell = document.createElement('td');
+        perfCell.style.padding = '16px 12px';
+        perfCell.style.textAlign = 'center';
+        const perfColor = pred.performance_score >= 80 ? 'var(--success)' : pred.performance_score >= 60 ? 'var(--warning)' : 'var(--error)';
+        perfCell.innerHTML = `
+            <div style="position: relative; width: 60px; height: 60px; margin: 0 auto;">
+                <svg width="60" height="60" style="transform: rotate(-90deg);">
+                    <circle cx="30" cy="30" r="25" fill="none" stroke="var(--gray-200)" stroke-width="6"></circle>
+                    <circle cx="30" cy="30" r="25" fill="none" stroke="${perfColor}" stroke-width="6"
+                        stroke-dasharray="${2 * Math.PI * 25}"
+                        stroke-dashoffset="${2 * Math.PI * 25 * (1 - pred.performance_score / 100)}"
+                        stroke-linecap="round"></circle>
+                </svg>
+                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 14px; font-weight: 700; color: ${perfColor};">
+                    ${Math.round(pred.performance_score)}%
+                </div>
+            </div>
+        `;
+        row.appendChild(perfCell);
+
+        tbody.appendChild(row);
+    });
+}
+
+// Show predictions card for admin users
+if (currentUser && currentUser.role === 'admin') {
+    const predictionsCard = document.getElementById('predictionsCard');
+    if (predictionsCard) {
+        predictionsCard.classList.remove('hidden');
+    }
+
+    // Show Intelligence Hub card
+    const intelligenceHubCard = document.getElementById('intelligenceHubCard');
+    if (intelligenceHubCard) {
+        intelligenceHubCard.classList.remove('hidden');
+    }
+}
+
+// ========== Intelligence Hub Functions ==========
+
+let intelligenceHubData = null;
+let intelligenceHubRefreshInterval = null;
+
+async function loadIntelligenceHubData() {
+    try {
+        const result = await apiCall('intelligence-hub-forecast', 'GET', {});
+
+        if (result.success && result.forecast) {
+            intelligenceHubData = result.forecast;
+            updateIntelligenceHubUI(result); // Pass whole result so data.forecast works
+
+            // Auto-refresh every 5 minutes
+            if (intelligenceHubRefreshInterval) {
+                clearInterval(intelligenceHubRefreshInterval);
+            }
+            intelligenceHubRefreshInterval = setInterval(loadIntelligenceHubData, 5 * 60 * 1000);
+        }
+    } catch (error) {
+        console.error('Failed to load Intelligence Hub data:', error);
+    }
+}
+
+// Update card UI
+function updateIntelligenceHubUI(data) {
+    const card = document.getElementById('intelligenceHubCard');
+    if (!card) return;
+
+    const forecastEl = document.getElementById('hubForecast');
+    const confidenceEl = document.getElementById('hubConfidence');
+    const subtitleEl = document.getElementById('hubSubtitle');
+    const trendBadge = document.getElementById('hubTrendBadge');
+
+    if (data.forecast) {
+        const f = data.forecast;
+        if (forecastEl) forecastEl.textContent = `${f.percentage}%`;
+        if (confidenceEl) confidenceEl.textContent = `${f.confidence}%`;
+        if (subtitleEl) subtitleEl.textContent = f.subtitle || `${f.day_name}'s Forecast`;
+
+        if (trendBadge) {
+            const trend = (f.trend || 'stable').toLowerCase();
+            trendBadge.textContent = trend.toUpperCase();
+            trendBadge.className = `intelligence-hub-trend-badge ${trend}`;
+        }
+    }
+}
+
+// ========== Predictive Analysis (Trends) Functions ==========
+
+async function viewTrends() {
+    try {
+        const result = await apiCall('intelligence-hub-trends', 'GET', { days: 30 });
+
+        if (result.success) {
+            openPredictiveAnalysisModal(result);
+        } else {
+            showNotification('Failed to load performance data', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to load trends:', error);
+        showNotification('Failed to load performance data', 'error');
+    }
+}
+
+function openPredictiveAnalysisModal(data) {
+    let modal = document.getElementById('predictiveModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'predictiveModal';
+        modal.className = 'modal';
+        document.body.appendChild(modal);
+    }
+
+    const summary = data.summary || {};
+    const forecast = summary.forecast || 0;
+    const predictedEmployees = Math.round(summary.total_employees * (forecast / 100));
+    const dayName = getForecastDayName();
+
+    // Determine trend color and icon
+    const isIncreasing = summary.trend === 'UP';
+    const trendColor = isIncreasing ? '#10b981' : '#ef4444';
+    const trendIcon = isIncreasing ? '📈' : '📉';
+    const trendText = isIncreasing ? 'Increasing' : 'Decreasing';
+
+    modal.innerHTML = `
+        <div class="predictive-modal modal-content" style="padding: 0; overflow: hidden; border: none; max-width: 650px; max-height: 94vh; display: flex; flex-direction: column; border-radius: 32px;">
+            <div style="padding: 32px; overflow-y: auto; flex: 1; position: relative; background: #f8fafc;">
+                <div class="predictive-header" style="margin-bottom: 24px;">
+                    <div class="predictive-title" style="font-size: 24px; font-weight: 850; color: #1e293b; letter-spacing: -0.5px;">
+                        <span style="background: rgba(139, 92, 246, 0.1); padding: 12px; border-radius: 16px; margin-right: 14px;">🔮</span> Intelligence Hub
+                    </div>
+                    <div class="forecast-day-label" style="font-weight: 700; color: var(--gray-500); margin-left: 62px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">Forecast for ${summary.tomorrow_day || 'Tomorrow'}</div>
+                    <button onclick="closePredictiveModal()" style="background: white; border: 1px solid #e2e8f0; font-size: 24px; width: 44px; height: 44px; border-radius: 22px; cursor: pointer; color: var(--gray-400); position: absolute; top: 28px; right: 32px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.05); z-index: 10;">&times;</button>
+                </div>
+
+                <div class="main-forecast-card" style="padding: 40px 24px; background: linear-gradient(135deg, white 0%, #f1f5f9 100%); border: 1px solid #eef2f6; box-shadow: 0 15px 30px -10px rgba(0,0,0,0.05); border-radius: 28px; margin-bottom: 24px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between;">
+                    <div style="position: absolute; bottom: -30px; left: -20px; width: 150px; height: 150px; background: var(--primary-color); opacity: 0.04; border-radius: 50%;"></div>
+                    <div>
+                        <div class="main-forecast-value" style="color: var(--primary-color); text-shadow: 0 8px 16px rgba(37, 99, 235, 0.1); font-size: 64px; line-height: 0.9; font-weight: 900;">${Math.round(forecast)}%</div>
+                        <div class="main-forecast-caption" style="color: var(--gray-500); font-weight: 800; letter-spacing: 1.5px; font-size: 11px; margin-top: 14px; display: flex; align-items: center; gap: 8px;">
+                            DATA RELIABILITY: ${Math.round(summary.confidence)}%
+                            <span style="width: 4px; height: 4px; background: #cbd5e1; border-radius: 2px;"></span>
+                            Streak: <span style="color: var(--success-color);">${summary.attendance_streak}d 🔥</span>
+                        </div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 16px; font-weight: 700; color: var(--gray-800);">~${predictedEmployees} Active</div>
+                        <div style="font-size: 11px; color: var(--gray-400); margin-top: 4px; font-weight: 600;">Total Personnel Pool: ${summary.total_employees}</div>
+                        <!-- Sparkline -->
+                        <div style="margin-top: 16px; height: 30px;">
+                            <svg width="100" height="30" style="overflow: visible;">
+                                <path d="M ${(summary.trend_history || []).map((v, i) => `${i * 15} ${30 - (v / 100 * 30)}`).join(' L ')}" fill="none" stroke="var(--primary-color)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+                                <circle cx="${(summary.trend_history?.length - 1) * 15 || 0}" cy="${30 - ((summary.trend_history?.[summary.trend_history?.length - 1] || 0) / 100 * 30)}" r="3" fill="var(--primary-color)" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NEW: Dynamic Analytics Section -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+                    <!-- Arrival Pattern -->
+                    <div style="background: white; padding: 20px; border-radius: 24px; border: 1px solid #eef2f6; display: flex; flex-direction: column; justify-content: space-between;">
+                        <div style="font-size: 10px; font-weight: 800; color: var(--gray-400); text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                            <span>⏱️</span> Arrival Efficiency
+                        </div>
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px;">
+                            <div>
+                                <div style="font-size: 22px; font-weight: 900; color: #1e293b;">${Math.round(100 - summary.late_rate)}%</div>
+                                <div style="font-size: 10px; color: var(--success-color); font-weight: 800; white-space: nowrap;">ON-TIME ARRIVAL</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 14px; font-weight: 700; color: var(--gray-700);">${summary.peak_hour.split(' - ')[0]}</div>
+                                <div style="font-size: 10px; color: var(--gray-400); font-weight: 600; white-space: nowrap;">Peak Start</div>
+                            </div>
+                        </div>
+                        <div style="height: 6px; width: 100%; background: #f1f5f9; border-radius: 3px; overflow: hidden;">
+                            <div style="height: 100%; width: ${Math.round(100 - summary.late_rate)}%; background: var(--success-color); border-radius: 3px;"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Busiest Day Impact -->
+                    <div style="background: white; padding: 20px; border-radius: 24px; border: 1px solid #eef2f6; display: flex; flex-direction: column; justify-content: space-between;">
+                        <div style="font-size: 10px; font-weight: 800; color: var(--gray-400); text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                            <span>📈</span> Load Intensity
+                        </div>
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px;">
+                            <div>
+                                <div style="font-size: 22px; font-weight: 900; color: #1e293b;">+${Math.round(summary.busiest_impact)}%</div>
+                                <div style="font-size: 10px; color: #8b5cf6; font-weight: 800; white-space: nowrap;">PEAK DAY VARIANCE</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 14px; font-weight: 700; color: var(--gray-700);">${summary.peak_day.substring(0, 3)}</div>
+                                <div style="font-size: 10px; color: var(--gray-400); font-weight: 600; white-space: nowrap;">Peak Day</div>
+                            </div>
+                        </div>
+                        <div style="height: 6px; width: 100%; background: #f3f0ff; border-radius: 3px; overflow: hidden;">
+                            <div style="height: 100%; width: ${Math.min(100, summary.busiest_impact * 2)}%; background: #8b5cf6; border-radius: 3px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Weekly Pattern -->
+                <div class="activity-chart-section" style="background: white; padding: 24px; border-radius: 28px; border: 1px solid #eef2f6; margin-bottom: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                        <div style="font-size: 12px; font-weight: 900; color: var(--gray-900); text-transform: uppercase; letter-spacing: 0.5px;">Weekly Participation (Refined)</div>
+                        <div style="font-size: 11px; font-weight: 800; color: var(--primary-color); background: rgba(37, 99, 235, 0.05); padding: 5px 12px; border-radius: 10px; display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 14px;">🌟</span> Peak: ${summary.peak_day}
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-end; height: 120px; padding: 0 10px;">
+                        ${(summary.weekly_stats || [0, 0, 0, 0, 0]).map((rate, i) => {
+        const days = ['MON', 'TUE', 'WED', 'THU', 'FRI'];
+        const count = summary.weekly_counts ? Math.round(summary.weekly_counts[i]) : '--';
+        const isPeak = days[i].toUpperCase() === (summary.peak_day || '').substring(0, 3).toUpperCase();
+        return `
+                                <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; flex: 1;">
+                                    <div style="width: 40px; height: ${Math.max(rate, 20)}px; background: ${isPeak ? 'var(--primary-color)' : '#e2e8f0'}; border-radius: 10px; position: relative; transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: ${isPeak ? '0 8px 16px rgba(37, 99, 235, 0.2)' : 'none'}" title="${Math.round(rate)}% attendance">
+                                        <div style="position: absolute; top: -24px; left: 50%; transform: translateX(-50%); font-size: 12px; font-weight: 900; color: ${isPeak ? 'var(--primary-color)' : 'var(--gray-600)'}; white-space: nowrap;">${count}</div>
+                                    </div>
+                                    <div style="font-size: 11px; font-weight: 800; color: ${isPeak ? 'var(--gray-900)' : 'var(--gray-400)'};">${days[i]}</div>
+                                </div>
+                            `;
+    }).join('')}
+                    </div>
+                </div>
+
+                <!-- Department Rankings -->
+                <div style="background: white; padding: 24px; border-radius: 28px; border: 1px solid #eef2f6; margin-bottom: 24px;">
+                    <div style="font-size: 12px; font-weight: 900; color: var(--gray-900); text-transform: uppercase; margin-bottom: 20px; letter-spacing: 0.5px;">Team Engagement Ranking</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div>
+                            <div style="font-size: 11px; font-weight: 800; color: var(--success-color); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                                <span style="font-size: 14px;">🏆</span> TOP PERFORMERS
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                ${(data.top_departments || []).map(d => `
+                                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(16, 185, 129, 0.04); border: 1px solid rgba(16, 185, 129, 0.08); border-radius: 12px;">
+                                        <span style="font-size: 12px; font-weight: 700; color: #064e3b;">${d.name}</span>
+                                        <span style="font-size: 12px; font-weight: 900; color: var(--success-color);">${Math.round(d.attendance_rate)}%</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; font-weight: 800; color: var(--error-color); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                                <span style="font-size: 14px;">⚠️</span> UNDER REVIEW
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                ${(data.bottom_departments && data.bottom_departments.length > 0) ? data.bottom_departments.map(d => `
+                                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(239, 68, 68, 0.04); border: 1px solid rgba(239, 68, 68, 0.08); border-radius: 12px;">
+                                        <span style="font-size: 12px; font-weight: 700; color: #7f1d1d;">${d.name}</span>
+                                        <span style="font-size: 12px; font-weight: 900; color: var(--error-color);">${Math.round(d.attendance_rate)}%</span>
+                                    </div>
+                                `).join('') : `<div style="padding: 16px; text-align: center; color: var(--gray-400); font-size: 12px; font-weight: 600; background: #f8fafc; border-radius: 12px;">All teams above threshold</div>`}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Executive Insight & Smart Tips -->
+                <div style="padding: 24px; background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%); border: 1px dashed rgba(37, 99, 235, 0.2); border-radius: 28px;">
+                    <div style="font-size: 14px; line-height: 1.7; color: #334155;">
+                        <span style="font-size: 22px; float: left; margin-right: 14px;">📝</span> 
+                        <strong>Executive Insight:</strong> The organizational health is stable with a <strong>${summary.attendance_streak}-day</strong> high-attendance streak. Total absenteeism remains low at <strong>${Math.round(100 - summary.overall_attendance_rate)}%</strong>.
+                        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(37, 99, 235, 0.1); font-size: 13px;">
+                            <span style="color: var(--primary-color); font-weight: 800; font-size: 11px; text-transform: uppercase;">💡 SMART ADVICE:</span>
+                            <div style="margin-top: 4px; font-weight: 600;">
+                                ${summary.late_rate > 15 ?
+            `Congestion detected near the <strong>${summary.peak_hour.split(' - ')[0]}</strong> window. Consider shift staggering to improve arrival efficiency.` :
+            `Consistent patterns detected. Recommended focus: maintaining department ${data.top_departments?.[0]?.name || 'leadership'} standards across other teams.`}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 36px; padding-bottom: 12px;">
+                    <button class="predictive-understood-btn" onclick="closePredictiveModal()" style="width: auto; padding: 18px 80px; font-weight: 900; letter-spacing: 1.5px; background: var(--primary-color); color: white; border: none; border-radius: 20px; cursor: pointer; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.4); text-transform: uppercase; font-size: 13px;">ACKNOWLEDGE INSIGHTS</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    modal.classList.add('active');
+}
+
+function getForecastDayName() {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return days[tomorrow.getDay()];
+}
+
+function renderActivityBars(trends, nextValue, totalEmployees) {
+    if (!trends || trends.length === 0) return '';
+
+    // Get last 7 days of attendance
+    const recentTrends = trends.slice(-7);
+    const maxVal = totalEmployees || 100;
+
+    let html = '';
+    recentTrends.forEach(t => {
+        const height = ((t.present_count || 0) / maxVal) * 80; // Scale to 80px max height
+        html += `
+            <div class="activity-bar-container">
+                <div class="activity-bar" style="height: ${Math.max(5, height)}px;">
+                    <div class="activity-bar-value">${t.present_count || 0}</div>
+                </div>
+            </div>
+        `;
+    });
+
+    // Add NEXT bar (predicted)
+    const nextHeight = (nextValue / maxVal) * 80;
+    html += `
+        <div class="activity-bar-container">
+            <div class="activity-bar next-bar" style="height: ${Math.max(5, nextHeight)}px;">
+                <div class="activity-bar-value">${nextValue}</div>
+            </div>
+        </div>
+    `;
+
+    return html;
+}
+
+function renderActivityDays() {
+    const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    const today = new Date().getDay();
+    let html = '';
+
+    for (let i = today - 6; i <= today; i++) {
+        const dayIdx = (i + 7) % 7;
+        html += `<div class="activity-day">${days[dayIdx]}</div>`;
+    }
+
+    html += `<div class="activity-day next-day">NEXT</div>`;
+    return html;
+}
+
+function closePredictiveModal() {
+    const modal = document.getElementById('predictiveModal');
+    if (modal) modal.classList.remove('active');
+}
+
+function renderDepartmentsTab(data) {
+    const departments = data.departments || [];
+
+    if (departments.length === 0) {
+        return '<div style="text-align: center; padding: 40px; color: var(--gray-500);">No department data available</div>';
+    }
+
+    let html = `
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: var(--gray-100); border-bottom: 2px solid var(--gray-300);">
+                    <th style="padding: 12px; text-align: left; font-size: 13px; font-weight: 600; color: var(--gray-700);">Department</th>
+                    <th style="padding: 12px; text-align: center; font-size: 13px; font-weight: 600; color: var(--gray-700);">Employees</th>
+                    <th style="padding: 12px; text-align: center; font-size: 13px; font-weight: 600; color: var(--gray-700);">Attendance Rate</th>
+                    <th style="padding: 12px; text-align: center; font-size: 13px; font-weight: 600; color: var(--gray-700);">Present Days</th>
+                    <th style="padding: 12px; text-align: center; font-size: 13px; font-weight: 600; color: var(--gray-700);">Performance</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    departments.forEach((dept, index) => {
+        const rateColor = dept.attendance_rate >= 80 ? 'var(--success)' : dept.attendance_rate >= 60 ? 'var(--warning)' : 'var(--error)';
+        const barWidth = dept.attendance_rate;
+
+        html += `
+            <tr style="border-bottom: 1px solid var(--gray-200);">
+                <td style="padding: 12px;">
+                    <div style="font-weight: 600; color: var(--gray-900);">${dept.name}</div>
+                </td>
+                <td style="padding: 12px; text-align: center; color: var(--gray-700);">${dept.employee_count}</td>
+                <td style="padding: 12px; text-align: center;">
+                    <span style="font-weight: 700; font-size: 18px; color: ${rateColor};">${dept.attendance_rate}%</span>
+                </td>
+                <td style="padding: 12px; text-align: center; color: var(--gray-700);">${dept.total_present} / ${dept.total_days}</td>
+                <td style="padding: 12px;">
+                    <div style="background: var(--gray-200); height: 8px; border-radius: 4px; overflow: hidden;">
+                        <div style="background: ${rateColor}; height: 100%; width: ${barWidth}%; transition: width 0.3s;"></div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+
+    html += '</tbody></table>';
+    return html;
+}
+
+function renderEmployeesTab(data) {
+    const employees = data.employees || [];
+
+    if (employees.length === 0) {
+        return '<div style="text-align: center; padding: 40px; color: var(--gray-500);">No employee data available</div>';
+    }
+
+    let html = `
+        <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="font-size: 14px; color: var(--gray-600);">Showing ${employees.length} employees</div>
+            <input type="text" id="employeeSearchInput" placeholder="Search employees..." 
+                style="padding: 8px 12px; border: 1px solid var(--gray-300); border-radius: 6px; width: 300px;"
+                onkeyup="filterEmployeeTable()">
+        </div>
+        <div style="max-height: 500px; overflow-y: auto;">
+            <table id="employeeDataTable" style="width: 100%; border-collapse: collapse;">
+                <thead style="position: sticky; top: 0; background: white; z-index: 5;">
+                    <tr style="background: var(--gray-100); border-bottom: 2px solid var(--gray-300);">
+                        <th style="padding: 12px; text-align: left; font-size: 12px; font-weight: 600; color: var(--gray-700);">Name</th>
+                        <th style="padding: 12px; text-align: left; font-size: 12px; font-weight: 600; color: var(--gray-700);">Department</th>
+                        <th style="padding: 12px; text-align: center; font-size: 12px; font-weight: 600; color: var(--gray-700);">Rate</th>
+                        <th style="padding: 12px; text-align: center; font-size: 12px; font-weight: 600; color: var(--gray-700);">Present</th>
+                        <th style="padding: 12px; text-align: center; font-size: 12px; font-weight: 600; color: var(--gray-700);">Absent</th>
+                        <th style="padding: 12px; text-align: center; font-size: 12px; font-weight: 600; color: var(--gray-700);">Leave</th>
+                        <th style="padding: 12px; text-align: center; font-size: 12px; font-weight: 600; color: var(--gray-700);">WFH</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    employees.forEach(emp => {
+        const rateColor = emp.attendance_rate >= 80 ? 'var(--success)' : emp.attendance_rate >= 60 ? 'var(--warning)' : 'var(--error)';
+
+        html += `
+            <tr class="employee-row" data-name="${emp.name.toLowerCase()}" data-dept="${emp.department.toLowerCase()}" style="border-bottom: 1px solid var(--gray-200);">
+                <td style="padding: 12px;">
+                    <div style="font-weight: 600; color: var(--gray-900);">${emp.name}</div>
+                </td>
+                <td style="padding: 12px; color: var(--gray-700);">${emp.department}</td>
+                <td style="padding: 12px; text-align: center;">
+                    <span style="font-weight: 700; font-size: 16px; color: ${rateColor};">${emp.attendance_rate}%</span>
+                </td>
+                <td style="padding: 12px; text-align: center; color: var(--success);">${emp.present_days}</td>
+                <td style="padding: 12px; text-align: center; color: var(--error);">${emp.absent_days}</td>
+                <td style="padding: 12px; text-align: center; color: var(--warning);">${emp.leave_days}</td>
+                <td style="padding: 12px; text-align: center; color: var(--info);">${emp.wfh_days}</td>
+            </tr>
+        `;
+    });
+
+    html += '</tbody></table></div>';
+    return html;
+}
+
+function filterEmployeeTable() {
+    const input = document.getElementById('employeeSearchInput');
+    const filter = input.value.toLowerCase();
+    const rows = document.querySelectorAll('.employee-row');
+
+    rows.forEach(row => {
+        const name = row.getAttribute('data-name');
+        const dept = row.getAttribute('data-dept');
+
+        if (name.includes(filter) || dept.includes(filter)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+function renderChartTab() {
+    return `
+        <div id="trendsChartContainer" style="width: 100%; height: 400px; position: relative;">
+            <canvas id="trendsChart"></canvas>
+        </div>
+        
+        <div style="margin-top: 20px; display: flex; gap: 20px; justify-content: center;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 20px; height: 3px; background: #3b82f6;"></div>
+                <span style="font-size: 13px; color: var(--gray-600);">Daily Attendance</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 20px; height: 3px; background: #8b5cf6;"></div>
+                <span style="font-size: 13px; color: var(--gray-600);">7-Day Moving Average</span>
+            </div>
+        </div>
+    `;
+}
+
+function renderTrendsChart(trendsData) {
+    const canvas = document.getElementById('trendsChart');
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    const container = document.getElementById('trendsChartContainer');
+
+    // Set canvas size
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight;
+
+    const width = canvas.width;
+    const height = canvas.height;
+    const padding = { top: 30, right: 30, bottom: 50, left: 50 };
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, width, height);
+
+    // Extract data
+    const dates = trendsData.map(d => d.date);
+    const rates = trendsData.map(d => d.attendance_rate);
+    const movingAvgs = trendsData.map(d => d.moving_avg);
+
+    const maxRate = Math.max(...rates, ...movingAvgs);
+    const minRate = Math.min(...rates, ...movingAvgs);
+    const range = maxRate - minRate || 10;
+
+    // Draw grid lines
+    ctx.strokeStyle = '#e5e7eb';
+    ctx.lineWidth = 1;
+
+    for (let i = 0; i <= 5; i++) {
+        const y = padding.top + (chartHeight / 5) * i;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(padding.left + chartWidth, y);
+        ctx.stroke();
+
+        // Y-axis labels
+        const value = maxRate - (range / 5) * i;
+        ctx.fillStyle = '#6b7280';
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(value.toFixed(1) + '%', padding.left - 10, y + 4);
+    }
+
+    // Draw daily attendance line
+    ctx.strokeStyle = '#3b82f6';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+
+    rates.forEach((rate, i) => {
+        const x = padding.left + (chartWidth / (rates.length - 1)) * i;
+        const y = padding.top + chartHeight - ((rate - minRate) / range) * chartHeight;
+
+        if (i === 0) {
+            ctx.moveTo(x, y);
+        } else {
+            ctx.lineTo(x, y);
+        }
+    });
+    ctx.stroke();
+
+    // Draw moving average line
+    ctx.strokeStyle = '#8b5cf6';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+
+    movingAvgs.forEach((avg, i) => {
+        const x = padding.left + (chartWidth / (movingAvgs.length - 1)) * i;
+        const y = padding.top + chartHeight - ((avg - minRate) / range) * chartHeight;
+
+        if (i === 0) {
+            ctx.moveTo(x, y);
+        } else {
+            ctx.lineTo(x, y);
+        }
+    });
+    ctx.stroke();
+
+    // Draw X-axis labels (show every 5th date)
+    ctx.fillStyle = '#6b7280';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+
+    dates.forEach((date, i) => {
+        if (i % 5 === 0 || i === dates.length - 1) {
+            const x = padding.left + (chartWidth / (dates.length - 1)) * i;
+            const dateObj = new Date(date);
+            const label = (dateObj.getMonth() + 1) + '/' + dateObj.getDate();
+            ctx.fillText(label, x, height - padding.bottom + 20);
+        }
+    });
+}
+
+function closeTrendsModal() {
+    const modal = document.getElementById('trendsModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+async function searchPersonnel() {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('personnelSearchModal');
+    if (!modal) {
+        modal = createPersonnelSearchModal();
+        document.body.appendChild(modal);
+    }
+
+    // Show modal
+    modal.classList.add('active');
+
+    // Load initial results (all personnel)
+    await performPersonnelSearch();
+}
+
+function createPersonnelSearchModal() {
+    const modal = document.createElement('div');
+    modal.id = 'personnelSearchModal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 1000px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0;">Personnel Search</h3>
+                <button onclick="closePersonnelSearchModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--gray-500);">×</button>
+            </div>
+            
+            <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+                <input type="text" id="personnelSearchQuery" placeholder="Search by name, username, or email..." 
+                    style="flex: 1; padding: 10px 16px; border: 1px solid var(--gray-300); border-radius: 8px; font-size: 14px;"
+                    onkeypress="if(event.key === 'Enter') performPersonnelSearch()">
+                <select id="personnelSearchDept" style="padding: 10px 16px; border: 1px solid var(--gray-300); border-radius: 8px; font-size: 14px;">
+                    <option value="">All Departments</option>
+                    <option value="IT">IT</option>
+                    <option value="HR">HR</option>
+                    <option value="Surveyors">Surveyors</option>
+                    <option value="Accounts">Accounts</option>
+                    <option value="Growth">Growth</option>
+                    <option value="Others">Others</option>
+                </select>
+                <button class="btn btn-primary" onclick="performPersonnelSearch()">Search</button>
+            </div>
+            
+            <div id="personnelSearchResults" style="max-height: 500px; overflow-y: auto;">
+                <div style="text-align: center; padding: 40px; color: var(--gray-500);">
+                    <span style="font-size: 48px;">🔍</span>
+                    <p>Loading personnel data...</p>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closePersonnelSearchModal()">Close</button>
+            </div>
+        </div>
+    `;
+    return modal;
+}
+
+async function performPersonnelSearch() {
+    const query = document.getElementById('personnelSearchQuery')?.value || '';
+    const department = document.getElementById('personnelSearchDept')?.value || '';
+    const resultsContainer = document.getElementById('personnelSearchResults');
+
+    if (!resultsContainer) return;
+
+    resultsContainer.innerHTML = '<div style="text-align: center; padding: 40px;"><div class="loading-spinner"></div></div>';
+
+    try {
+        const result = await apiCall('intelligence-hub-search', 'POST', {
+            query: query,
+            department: department
+        });
+
+        if (result.success && result.results) {
+            renderPersonnelResults(result.results);
+        } else {
+            resultsContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--gray-500);">No results found</div>';
+        }
+    } catch (error) {
+        console.error('Failed to search personnel:', error);
+        resultsContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--error);">Failed to load results</div>';
+    }
+}
+
+function renderPersonnelResults(results) {
+    const resultsContainer = document.getElementById('personnelSearchResults');
+    if (!resultsContainer) return;
+
+    if (results.length === 0) {
+        resultsContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--gray-500);">No personnel found</div>';
+        return;
+    }
+
+    let html = `
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: var(--gray-100); border-bottom: 2px solid var(--gray-300);">
+                    <th style="padding: 12px; text-align: left; font-size: 12px; font-weight: 600; color: var(--gray-700);">Name</th>
+                    <th style="padding: 12px; text-align: left; font-size: 12px; font-weight: 600; color: var(--gray-700);">Department</th>
+                    <th style="padding: 12px; text-align: center; font-size: 12px; font-weight: 600; color: var(--gray-700);">30-Day Rate</th>
+                    <th style="padding: 12px; text-align: center; font-size: 12px; font-weight: 600; color: var(--gray-700);">Prediction</th>
+                    <th style="padding: 12px; text-align: center; font-size: 12px; font-weight: 600; color: var(--gray-700);">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    results.forEach(person => {
+        const rateColor = person.attendance_rate >= 80 ? 'var(--success)' : person.attendance_rate >= 60 ? 'var(--warning)' : 'var(--error)';
+        const predColor = person.prediction_score >= 80 ? 'var(--success)' : person.prediction_score >= 60 ? 'var(--warning)' : 'var(--error)';
+        const statusColor = person.status === 'Active' ? 'var(--success)' : 'var(--gray-500)';
+
+        html += `
+            <tr style="border-bottom: 1px solid var(--gray-200); cursor: pointer; transition: background 0.2s;" 
+                onmouseover="this.style.background='var(--primary-50)'" 
+                onmouseout="this.style.background='white'"
+                onclick="showEmployeePerformanceAnalysis(${person.id})">
+                <td style="padding: 12px;">
+                    <div style="font-weight: 600; color: var(--gray-900);">${person.name}</div>
+                    <div style="font-size: 12px; color: var(--gray-500);">${person.email}</div>
+                </td>
+                <td style="padding: 12px; color: var(--gray-700);">${person.department}</td>
+                <td style="padding: 12px; text-align: center;">
+                    <span style="font-weight: 700; font-size: 16px; color: ${rateColor};">${person.attendance_rate}%</span>
+                </td>
+                <td style="padding: 12px; text-align: center;">
+                    <span style="font-weight: 700; font-size: 16px; color: ${predColor};">${person.prediction_score}%</span>
+                </td>
+                <td style="padding: 12px; text-align: center;">
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                        <span style="display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; background: ${statusColor}20; color: ${statusColor};">
+                            ${person.status}
+                        </span>
+                        <span style="font-size: 10px; color: var(--primary); font-weight: 600;">View Details →</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+
+    html += '</tbody></table>';
+    resultsContainer.innerHTML = html;
+}
+
+function closePersonnelSearchModal() {
+    const modal = document.getElementById('personnelSearchModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+async function showEmployeePerformanceAnalysis(employeeId) {
+    try {
+        // Do NOT close search modal, just overlay on top
+        const result = await apiCall(`employee-performance-analysis/${employeeId}`, 'GET');
+        if (result.success) {
+            renderEmployeePerformanceModal(result);
+        } else {
+            showNotification(result.message || 'Failed to load performance data', 'error');
+        }
+    } catch (error) {
+        console.error('Performance analysis fetch error:', error);
+        showNotification('An error occurred while fetching analysis', 'error');
+    }
+}
+
+function renderEmployeePerformanceModal(data) {
+    // Remove existing if any
+    const existing = document.getElementById('employeePerformanceModal');
+    if (existing) existing.remove();
+
+    const m = data.metrics;
+    const t = data.tasks;
+    const p = data.prediction;
+
+    // Handle N/A for accuracy if no completed tasks
+    const accuracyValue = (t.completed > 0) ? `${t.avg_accuracy}%` : 'N/A';
+    const accuracyColor = (t.completed > 0) ? (t.avg_accuracy >= 80 ? 'var(--success)' : t.avg_accuracy >= 60 ? 'var(--warning)' : 'var(--error)') : 'var(--gray-400)';
+
+    const modal = document.createElement('div');
+    modal.id = 'employeePerformanceModal';
+    modal.className = 'modal active'; // Use standard modal class
+    modal.style.zIndex = '2100'; // Ensure it's above search modal
+
+    modal.innerHTML = `
+        <div class="predictive-modal modal-content" style="width: 850px; max-width: 95vw; max-height: 90vh; padding: 0 !important; overflow: hidden; background: white; border: none; display: flex; flex-direction: column;">
+            <div class="predictive-header" style="background: #4f46e5; background: linear-gradient(135deg, #4f46e5, #6366f1); color: white; padding: 28px; margin-bottom: 0; border-radius: 0; flex-shrink: 0;">
+                <div style="display: flex; justify-content: space-between; align-items: start; width: 100%;">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <div style="background: rgba(255,255,255,0.2); width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; border-radius: 16px; font-size: 24px;">
+                            👤
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; font-size: 24px; font-weight: 800; color: white !important;">${data.employee_name}</h2>
+                            <p style="margin: 4px 0 0; opacity: 0.9; font-size: 14px; font-weight: 500; color: rgba(255,255,255,0.9);">
+                                ${data.department} • ${data.email}
+                            </p>
+                        </div>
+                    </div>
+                    <button onclick="document.getElementById('employeePerformanceModal').remove()" 
+                        style="background: rgba(255,255,255,0.1); border: none; color: white; width: 36px; height: 36px; border-radius: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.3s;">
+                        ✕
+                    </button>
+                </div>
+            </div>
+
+            <div style="padding: 24px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; background: #f8fafc; overflow-y: auto; flex: 1;">
+                <!-- Left Column: Attendance & Habits -->
+                <div style="display: flex; flex-direction: column; gap: 24px;">
+                    <div class="glass-card" style="padding: 20px; background: white; border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #f1f5f9;">
+                        <h3 style="margin: 0 0 16px; font-size: 16px; font-weight: 700; color: var(--gray-900); display: flex; align-items: center; gap: 8px;">
+                            📅 Attendance Habits (Last 30 Days)
+                        </h3>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                            <div style="background: #f1f5f9; padding: 12px; border-radius: 12px; border-left: 4px solid var(--primary);">
+                                <div style="font-size: 11px; color: var(--gray-500); font-weight: 700; text-transform: uppercase; margin-bottom: 4px;">Avg. Check-In</div>
+                                <div style="font-size: 22px; font-weight: 800; color: var(--primary);">${m.avg_check_in || '--:--'}</div>
+                            </div>
+                            <div style="background: #f1f5f9; padding: 12px; border-radius: 12px; border-left: 4px solid #8b5cf6;">
+                                <div style="font-size: 11px; color: var(--gray-500); font-weight: 700; text-transform: uppercase; margin-bottom: 4px;">Avg. Check-Out</div>
+                                <div style="font-size: 22px; font-weight: 800; color: #8b5cf6;">${m.avg_check_out || '--:--'}</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 16px; padding: 14px; background: rgba(16, 185, 129, 0.05); border-radius: 12px; display: flex; align-items: center; gap: 12px; border: 1px solid rgba(16, 185, 129, 0.1);">
+                            <div style="font-size: 24px;">📈</div>
+                            <div>
+                                <div style="font-size: 11px; font-weight: 700; color: var(--success); text-transform: uppercase;">Likelihood Tomorrow</div>
+                                <div style="font-size: 18px; font-weight: 800; color: var(--gray-900);">${p.likelihood}% <span style="font-size: 12px; font-weight: 500; color: var(--gray-500);">on ${p.tomorrow_day}</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="glass-card" style="padding: 20px; background: white; border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #f1f5f9;">
+                        <h3 style="margin: 0 0 16px; font-size: 16px; font-weight: 700; color: var(--gray-900);">⚡ Work Efficiency</h3>
+                        <div style="display: flex; flex-direction: column; gap: 16px;">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
+                                    <span style="font-weight: 600; color: var(--gray-600);">WFH vs Office Ratio</span>
+                                    <span style="color: var(--primary); font-weight: 700;">${m.wfh_ratio}% WFH</span>
+                                </div>
+                                <div style="height: 10px; width: 100%; background: #e2e8f0; border-radius: 5px; overflow: hidden;">
+                                    <div style="height: 100%; width: ${m.wfh_ratio}%; background: linear-gradient(to right, var(--primary), #6366f1); border-radius: 5px;"></div>
+                                </div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8fafc; border-radius: 12px;">
+                                <div style="text-align: center; flex: 1;">
+                                    <div style="font-size: 22px; font-weight: 800; color: var(--gray-900);">${m.total_present_30d}</div>
+                                    <div style="font-size: 10px; color: var(--gray-500); font-weight: 700; text-transform: uppercase;">Days Present</div>
+                                </div>
+                                <div style="height: 30px; width: 1px; background: #e2e8f0;"></div>
+                                <div style="text-align: center; flex: 1;">
+                                    <div style="font-size: 22px; font-weight: 800; color: var(--gray-900);">${m.daily_workday_avg}h</div>
+                                    <div style="font-size: 10px; color: var(--gray-500); font-weight: 700; text-transform: uppercase;">Daily Avg</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Task Performance -->
+                <div style="display: flex; flex-direction: column; gap: 24px;">
+                    <div class="glass-card" style="padding: 24px; background: white; border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #f1f5f9;">
+                        <h3 style="margin: 0 0 20px; font-size: 16px; font-weight: 700; color: var(--gray-900); display: flex; align-items: center; gap: 8px;">
+                            🎯 Task Performance
+                        </h3>
+                        
+                        <div style="display: flex; justify-content: center; margin-bottom: 24px;">
+                            <div style="position: relative; width: 140px; height: 140px;">
+                                <svg width="140" height="140" style="transform: rotate(-90deg);">
+                                    <circle cx="70" cy="70" r="62" fill="none" stroke="#f1f5f9" stroke-width="14"></circle>
+                                    <circle cx="70" cy="70" r="62" fill="none" stroke="var(--primary)" stroke-width="14"
+                                        stroke-dasharray="${2 * Math.PI * 62}"
+                                        stroke-dashoffset="${2 * Math.PI * 62 * (1 - t.completed / (t.total || 1))}"
+                                        stroke-linecap="round"></circle>
+                                </svg>
+                                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+                                    <div style="font-size: 32px; font-weight: 800; color: var(--primary);">${t.completed}</div>
+                                    <div style="font-size: 10px; font-weight: 700; color: var(--gray-500); text-transform: uppercase;">Completed</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="background: linear-gradient(135deg, #f8fafc, #ffffff); border: 1px solid #e2e8f0; padding: 16px; border-radius: 16px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <div style="font-size: 11px; color: var(--gray-500); font-weight: 700; text-transform: uppercase; margin-bottom: 2px;">Task Accuracy Score</div>
+                                    <div style="font-size: 26px; font-weight: 800; color: ${accuracyColor};">
+                                        ${accuracyValue}
+                                    </div>
+                                </div>
+                                <div style="font-size: 32px; background: white; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">🎯</div>
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px;">
+                            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; text-align: center; border: 1px solid #f1f5f9;">
+                                <div style="font-size: 18px; font-weight: 800; color: #6366f1;">${t.in_progress}</div>
+                                <div style="font-size: 9px; font-weight: 700; color: var(--gray-500); text-transform: uppercase;">In Progress</div>
+                            </div>
+                            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; text-align: center; border: 1px solid #f1f5f9;">
+                                <div style="font-size: 18px; font-weight: 800; color: var(--gray-600);">${t.todo}</div>
+                                <div style="font-size: 9px; font-weight: 700; color: var(--gray-500); text-transform: uppercase;">To Do</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="text-align: center;">
+                        <button onclick="document.getElementById('employeePerformanceModal').remove()" 
+                            style="padding: 14px 40px; border-radius: 14px; border: none; background: #e2e8f0; color: var(--gray-700); font-weight: 700; cursor: pointer; transition: all 0.3s; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);"
+                            onmouseover="this.style.background='#cbd5e1'"
+                            onmouseout="this.style.background='#e2e8f0'">
+                            Close Analysis
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
 }
