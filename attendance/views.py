@@ -11,6 +11,7 @@ from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework import status
 import json
+import uuid
 import math
 import os
 import zipfile
@@ -18,7 +19,7 @@ import tempfile
 from datetime import datetime, date, time, timedelta
 from .models import (
     Employee, EmployeeProfile, OfficeLocation, DepartmentOfficeAccess,
-    AttendanceRecord, EmployeeRequest, EmployeeDocument, Task, BirthdayWish, TaskComment
+    AttendanceRecord, EmployeeRequest, EmployeeDocument, Task, BirthdayWish, TaskComment, Team
 )
 from django.contrib.auth.hashers import make_password, check_password
 
@@ -285,6 +286,120 @@ def mark_attendance(request):
     except Exception as e:
         return Response({'success': False, 'message': str(e)}, status=500)
 
+@api_view(['POST'])
+def create_task(request):
+    try:
+        data = request.data
+        employee_id = data.get('employee_id')
+        
+        # Check role
+        creator = Employee.objects.filter(id=employee_id).first()
+        if not creator:
+             return Response({'success': False, 'message': 'Creator not found'})
+
+        assigned_ids = data.get('assignees') or data.get('assigned_to') # Support both for safety
+        
+        # Normalize to list
+        if not isinstance(assigned_ids, list):
+            assigned_ids = [assigned_ids] if assigned_ids else []
+            
+        task = Task.objects.create(
+            title=data.get('title'),
+            description=data.get('description'),
+            priority=data.get('priority', 'Medium'),
+            due_date=data.get('due_date'),
+            manager=creator, # Assuming creator is manager
+            created_by=creator
+        )
+        
+        # Set ManyToMany assignees
+        task.assignees.set(Employee.objects.filter(id__in=assigned_ids))
+        
+        return Response({'success': True, 'message': 'Task created successfully', 'task_id': task.id})
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)})
+
+
+@api_view(['POST'])
+def create_team(request):
+    try:
+        data = request.data
+        manager_id = data.get('manager_id')
+        name = data.get('name')
+        member_ids = data.get('members', [])
+
+        manager = Employee.objects.filter(id=manager_id).first()
+        if not manager:
+            return Response({'success': False, 'message': 'Manager not found'})
+
+        team = Team.objects.create(name=name, manager=manager)
+        
+        if member_ids:
+            members = Employee.objects.filter(id__in=member_ids)
+            team.members.set(members)
+
+        return Response({'success': True, 'message': 'Team created successfully', 'team_id': team.id})
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)})
+
+@api_view(['POST'])
+def update_team(request):
+    try:
+        data = request.data
+        team_id = data.get('team_id')
+        name = data.get('name')
+        member_ids = data.get('members', [])
+
+        team = Team.objects.filter(id=team_id).first()
+        if not team:
+            return Response({'success': False, 'message': 'Team not found'})
+
+        if name:
+            team.name = name
+        
+        if member_ids:
+            members = Employee.objects.filter(id__in=member_ids)
+            team.members.set(members)
+        
+        team.save()
+        return Response({'success': True, 'message': 'Team updated successfully'})
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)})
+
+@api_view(['DELETE', 'POST']) # Support POST with method override for simplicity if needed
+def delete_team(request):
+    try:
+        team_id = request.data.get('team_id') or request.query_params.get('team_id')
+        team = Team.objects.filter(id=team_id).first()
+        if not team:
+            return Response({'success': False, 'message': 'Team not found'})
+            
+        team.delete()
+        return Response({'success': True, 'message': 'Team deleted successfully'})
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)})
+
+
+@api_view(['GET'])
+def get_teams(request):
+    try:
+        manager_id = request.query_params.get('manager_id')
+        if not manager_id:
+             return Response({'success': False, 'message': 'Manager ID required'})
+             
+        teams = Team.objects.filter(manager_id=manager_id).prefetch_related('members')
+        data = []
+        for t in teams:
+            data.append({
+                'id': t.id,
+                'name': t.name,
+                'members': list(t.members.values('id', 'name', 'username', 'role'))
+            })
+            
+        return Response({'success': True, 'teams': data})
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)})
+
 def check_location_proximity(lat, lng, office_id):
     """Helper function to check location proximity"""
     try:
@@ -306,24 +421,34 @@ def check_wfh_eligibility(employee_id, check_date):
     """Check WFH eligibility for an employee"""
     try:
         check_date_obj = datetime.strptime(check_date, '%Y-%m-%d').date()
-        year = check_date_obj.year
-        month = check_date_obj.month
-
-        current_count = AttendanceRecord.objects.filter(
+        
+        # Check if there is an APPROVED WFH request for this date
+        has_approved_request = EmployeeRequest.objects.filter(
             employee_id=employee_id,
-            type='wfh',
-            date__year=year,
-            date__month=month
+            request_type='wfh',
+            start_date__lte=check_date_obj,
+            end_date__gte=check_date_obj,
+            status='approved'
+        ).exists()
+
+        # Count approved WFH requests for the current month (for dashboard stats)
+        current_month_requests = EmployeeRequest.objects.filter(
+            employee_id=employee_id,
+            request_type='wfh',
+            status='approved',
+            start_date__year=check_date_obj.year,
+            start_date__month=check_date_obj.month
         ).count()
 
-        max_limit = 4
         return {
-            'current_count': current_count,
-            'max_limit': max_limit,
-            'can_request': current_count < max_limit
+            'has_approved_request': has_approved_request,
+            'can_request': has_approved_request, # Only allow if approved
+            'current_count': current_month_requests,
+            'max_limit': 1 # Hardcoded limit as per frontend logic
         }
-    except:
-        return {'current_count': 0, 'max_limit': 2, 'can_request': False}
+    except Exception as e:
+        print(f"Error checking WFH eligibility: {e}")
+        return {'has_approved_request': False, 'can_request': False, 'current_count': 0, 'max_limit': 1}
 
 
 @api_view(['POST'])
@@ -1579,7 +1704,7 @@ def employee_performance_analysis(request, employee_id):
                 avg_check_out = f"{int(avg_out_sec // 3600):02d}:{int((avg_out_sec % 3600) // 60):02d}"
 
         # 4. Task Management Performance (Expanded)
-        tasks = Task.objects.filter(assigned_to=employee)
+        tasks = Task.objects.filter(assignees=employee).distinct()
         completed_tasks = tasks.filter(status='completed')
         avg_accuracy = completed_tasks.aggregate(avg_acc=Avg('accuracy'))['avg_acc'] or 0
 
@@ -1662,6 +1787,7 @@ def upcoming_birthdays(request):
                     'id': profile.employee.id,
                     'name': profile.employee.name,
                     'username': profile.employee.username,
+                    'department': profile.employee.department,
                     'date_of_birth': str(birth_date),
                     'age': age,
                     'days_until': days_until
@@ -1730,10 +1856,17 @@ def get_notifications(request):
         })
 
     # 2. Task assignments
-    pending_tasks = Task.objects.filter(
-        assigned_to_id=user_id,
-        status='todo'
-    ).order_by('-created_at')[:5]
+    try:
+        pending_tasks = Task.objects.filter(
+            Q(assignees=user_id),
+            status='todo'
+        ).distinct().order_by('-created_at')[:5]
+    except Exception:
+        pending_tasks = Task.objects.filter(
+            assignees=user_id,
+            status='todo'
+        ).distinct().order_by('-created_at')[:5]
+    
 
     for task in pending_tasks:
         notifications.append({
@@ -1922,7 +2055,10 @@ def active_tasks(request):
             try:
                 emp = Employee.objects.get(id=employee_id)
                 if emp.role.lower() != 'admin':
-                    query = query.filter(Q(assigned_to=emp) | Q(manager=emp)).distinct()
+                    try:
+                        query = query.filter(Q(assignees=emp) | Q(manager=emp)).distinct()
+                    except Exception:
+                        query = query.filter(Q(assignees=emp) | Q(manager=emp)).distinct()
             except Employee.DoesNotExist:
                 pass # Or return 0
 
@@ -1941,21 +2077,21 @@ def active_tasks(request):
 
 def _get_admin_task_manager_data():
     """Helper: Get all tasks for Admin Task Manager"""
-    tasks = Task.objects.select_related('assigned_to', 'created_by', 'manager').order_by('-created_at')
+    tasks = Task.objects.select_related('created_by', 'manager').prefetch_related('assignees').order_by('-created_at')
     return _serialize_tasks(tasks)
 
 def _get_employee_my_tasks_data(employee):
     """Helper: Get assigned tasks + overseen tasks for Employee My Tasks"""
     tasks = Task.objects.filter(
-        Q(assigned_to=employee) | Q(manager=employee)
-    ).distinct().select_related('assigned_to', 'created_by', 'manager').order_by('-created_at')
+        Q(assignees=employee) | Q(manager=employee)
+    ).distinct().select_related('created_by', 'manager').prefetch_related('assignees').order_by('-created_at')
     return _serialize_tasks(tasks)
 
 def _get_manager_employees_tasks_data(manager):
     """Helper: Get tasks for employees reporting to this manager + tasks explicitly managed by them"""
     tasks = Task.objects.filter(
-        Q(assigned_to__manager=manager) | Q(manager=manager)
-    ).distinct().select_related('assigned_to', 'created_by', 'manager').order_by('-created_at')
+        Q(assignees__manager=manager) | Q(manager=manager)
+    ).distinct().select_related('created_by', 'manager').prefetch_related('assignees').order_by('-created_at')
     return _serialize_tasks(tasks)
 
 def _serialize_tasks(tasks):
@@ -1972,14 +2108,21 @@ def _serialize_tasks(tasks):
                 'created_at': comment.created_at.isoformat()
             })
 
+        # Get all assignees
+        assignees_info = []
+        for assignee in task.assignees.all():
+            assignees_info.append({
+                'id': assignee.id,
+                'name': assignee.name
+            })
+
         data.append({
             'id': task.id,
             'title': task.title,
             'description': task.description,
             'status': task.status,
             'priority': task.priority,
-            'assigned_to': task.assigned_to.id,
-            'assigned_to_name': task.assigned_to.name,
+            'assignees': assignees_info,
             'manager_id': task.manager.id if task.manager else None,
             'manager_name': task.manager.name if task.manager else None,
             'created_by': task.created_by.id,
@@ -1993,14 +2136,14 @@ def _serialize_tasks(tasks):
 
 def _create_task_admin(data, creator):
     """Helper: Admin creates a task"""
-    required_fields = ['title', 'assigned_to']
+    required_fields = ['title'] # assignees handled below
     for field in required_fields:
         if not data.get(field):
             raise ValueError(f'{field} is required')
 
-    assigned_id = data.get('assigned_to')
-    assigned_employee = Employee.objects.get(id=assigned_id)
-
+    assigned_input = data.get('assignees') or data.get('assigned_to')
+    assigned_ids = assigned_input if isinstance(assigned_input, list) else [assigned_input] if assigned_input else []
+    
     manager_id = data.get('manager_id')
     manager_employee = None
     if manager_id and manager_id != 'none':
@@ -2011,11 +2154,12 @@ def _create_task_admin(data, creator):
         description=data.get('description', ''),
         status=data.get('status', 'todo'),
         priority=data.get('priority', 'medium'),
-        assigned_to=assigned_employee,
         manager=manager_employee,
         created_by=creator,
         due_date=data.get('due_date')
     )
+    
+    task.assignees.set(Employee.objects.filter(id__in=assigned_ids))
     return task
 
 @api_view(['GET', 'POST'])
@@ -2104,12 +2248,15 @@ def _update_task_admin(task, data, user=None):
     user_role = str(user.role).lower() if user else 'none'
     is_admin = user_role == 'admin'
     is_overseer = task.manager and user and task.manager.id == user.id
-    is_reporting_manager = task.assigned_to.manager and user and task.assigned_to.manager.id == user.id
+    
+    # Manager check: user manages at least one of the assignees
+    is_reporting_manager = False
+    if user:
+        is_reporting_manager = task.assignees.filter(manager=user).exists()
 
     if task.status == 'completed' and not (is_admin or is_overseer or is_reporting_manager):
-        # User requirement: "if any task is marked completed it can't be changed"
         # We allow Admins and the Overseer to bypass this for correction/reopening
-        raise ValueError(f"Cannot modify a completed task. Only Admins or Managers can reopen or change finished tasks. (Role: {user_role}, ID: {user.id if user else '?'})")
+        raise ValueError(f"Cannot modify a completed task.")
 
     if 'status' in data:
         task.status = data['status']
@@ -2121,13 +2268,11 @@ def _update_task_admin(task, data, user=None):
         task.description = data['description']
     if 'due_date' in data:
         task.due_date = data['due_date']
-    # Admin can also reassign task if needed (not in original code but logical for admin)
-    if 'assigned_to' in data:
-        try:
-            assigned_emp = Employee.objects.get(id=data['assigned_to'])
-            task.assigned_to = assigned_emp
-        except:
-            pass 
+        
+    if 'assignees' in data or 'assigned_to' in data:
+        assigned_input = data.get('assignees') or data.get('assigned_to')
+        assigned_ids = assigned_input if isinstance(assigned_input, list) else [assigned_input] if assigned_input else []
+        task.assignees.set(Employee.objects.filter(id__in=assigned_ids))
 
     if 'manager_id' in data:
         if data['manager_id'] == 'none':
@@ -2163,17 +2308,25 @@ def _update_task_employee(task, data, user=None):
     task.save()
     return True
 
-@api_view(['POST'])
+@api_view(['GET', 'POST'])
 @parser_classes([JSONParser])
 def task_detail_api(request, task_id):
-    """Update or delete a task (Separated Admin/Employee Logic)"""
+    """Update, delete or fetch a task (Separated Admin/Employee Logic)"""
     try:
-        task = Task.objects.select_related('assigned_to', 'manager', 'assigned_to__manager').get(id=task_id)
+        task = Task.objects.prefetch_related('assignees').select_related('manager').get(id=task_id)
     except Task.DoesNotExist:
         return Response({
             'success': False,
             'message': 'Task not found'
         }, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == 'GET':
+        # Serialize task using existing helper
+        task_data = _serialize_tasks([task])[0]
+        return Response({
+            'success': True,
+            'task': task_data
+        })
 
     data = request.data
     requesting_user_id = data.get('user_id') # Must be passed from frontend
@@ -2186,7 +2339,7 @@ def task_detail_api(request, task_id):
 
         # Check permissions and dispatch
         if request.method == 'POST':
-            # Check for DELETE method simulation (common in some frameworks/this app?)
+            # Check for DELETE method simulation
             if data.get('_method') == 'DELETE':
                 if requesting_user.role != 'admin': # Only Admin deletes
                     return Response({'success': False, 'message': 'Only Admin can delete tasks'}, status=status.HTTP_403_FORBIDDEN)
@@ -2196,6 +2349,8 @@ def task_detail_api(request, task_id):
 
             # Update Logic
             role = str(requesting_user.role).lower()
+            is_assignee = task.assignees.filter(id=requesting_user.id).exists()
+            is_manager_of_assignee = task.assignees.filter(manager=requesting_user).exists()
 
             if role == 'admin':
                 _update_task_admin(task, data, requesting_user)
@@ -2206,12 +2361,12 @@ def task_detail_api(request, task_id):
                 _update_task_admin(task, data, requesting_user)
                 return Response({'success': True, 'message': 'Task updated (Overseer)'})
 
-            elif task.assigned_to.manager and task.assigned_to.manager.id == requesting_user.id:
+            elif is_manager_of_assignee:
                 # Assignee's Reporting Manager can also perform full updates
                 _update_task_admin(task, data, requesting_user)
                 return Response({'success': True, 'message': 'Task updated (Manager)'})
 
-            elif task.assigned_to.id == requesting_user.id:
+            elif is_assignee:
                 _update_task_employee(task, data, requesting_user)
                 return Response({'success': True, 'message': 'Task updated (Employee)'})
 
@@ -2240,19 +2395,22 @@ def task_comment_api(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        task = Task.objects.select_related('assigned_to', 'manager', 'assigned_to__manager').get(id=task_id)
+        task = Task.objects.prefetch_related('assignees').select_related('manager').get(id=task_id)
         author = Employee.objects.get(id=author_id)
 
-        # Permission check: Admin, Overseer, Manager of the assigned employee, or the assigned employee themselves
+        # Updated permission checks for hybrid assignment
+        is_assignee = task.assignees.filter(id=author.id).exists()
+        is_manager_of_assignee = task.assignees.filter(manager=author).exists()
+
         can_comment = False
         role = str(author.role).lower()
         if role == 'admin':
             can_comment = True
         elif task.manager and task.manager.id == author.id:
             can_comment = True
-        elif task.assigned_to.id == author.id:
+        elif is_assignee:
             can_comment = True
-        elif task.assigned_to.manager and task.assigned_to.manager.id == author.id:
+        elif is_manager_of_assignee:
             can_comment = True
 
         if not can_comment:
@@ -2378,38 +2536,50 @@ def wfh_request_approve(request):
 
         request_obj.save()
 
-        # If approved, create or update AttendanceRecord to reflect in calendar
+        # If approved, handle based on request type
         if status_val == 'approved':
             # Determine the status to set based on request type
             req_type = request_obj.request_type
+            
+            # WFH requests should NOT auto-create attendance records.
+            # The employee must manually check-in using the WFH button.
             if req_type == 'wfh':
-                attendance_status = 'wfh'
-                attendance_type = 'wfh'
-            elif req_type == 'full_day':
-                attendance_status = 'leave'  # Full day leave shows as leave
-                attendance_type = 'office'
-            elif req_type == 'half_day':
-                attendance_status = 'half_day'
-                attendance_type = 'office'
+                # Do nothing here. The 'check_wfh_eligibility' will now return True,
+                # allowing the user to mark attendance themselves.
+                pass 
             else:
-                attendance_status = 'leave'
-                attendance_type = 'office'
+                # For leaves (full/half day), we generally DO want to auto-mark 
+                # because the employee isn't working.
+                if req_type == 'full_day':
+                    attendance_status = 'leave'
+                    attendance_type = 'office' # doesn't matter much
+                    is_half = False
+                elif req_type == 'half_day':
+                    attendance_status = 'half_day'
+                    attendance_type = 'office' 
+                    is_half = True
+                else:
+                    attendance_status = 'leave'
+                    attendance_type = 'office'
+                    is_half = False
 
-            # Create or update attendance record for each day in the request date range
-            from datetime import timedelta
-            current_date = request_obj.start_date
-            while current_date <= request_obj.end_date:
-                AttendanceRecord.objects.update_or_create(
-                    employee=request_obj.employee,
-                    date=current_date,
-                    defaults={
+                # Create or update attendance record for each day in the request date range
+                from datetime import timedelta
+                current_date = request_obj.start_date
+                while current_date <= request_obj.end_date:
+                    defaults = {
                         'type': attendance_type,
                         'status': attendance_status,
-                        'is_half_day': (req_type == 'half_day'),
-                        'notes': f'Approved {req_type} request',
+                        'is_half_day': is_half,
+                        'notes': f'Approved request ({req_type})',
                     }
-                )
-                current_date += timedelta(days=1)
+                    
+                    AttendanceRecord.objects.update_or_create(
+                        employee=request_obj.employee,
+                        date=current_date,
+                        defaults=defaults
+                    )
+                    current_date += timedelta(days=1)
 
         return Response({
             'success': True,

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Employee System - MySQL Powered</title>
+    <title>HanuAI-Attendance System</title>
 
     <!-- External Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
@@ -299,11 +299,6 @@
                         <div class="intelligence-hub-title-group">
                             <span class="intelligence-hub-icon">🧠</span>
                             <span class="intelligence-hub-title">INTELLIGENCE HUB</span>
-                        </div>
-                        <div class="info-tooltip">
-                            <span class="intelligence-hub-trend-badge down" id="hubTrendBadge">DOWN</span>
-                            <div class="tooltip-content">Trend shows if attendance is increasing or decreasing compared
-                                to the previous week.</div>
                         </div>
                     </div>
 
@@ -1304,12 +1299,15 @@
 
                 <div class="form-group">
                     <label class="form-label">Include</label>
-                    <div style="display: flex; gap: 20px; margin-top: 8px;">
-                        <label style="display: flex; align-items: center; gap: 8px;">
-                            <input type="checkbox" id="exportIncludePhotos" checked>
-                            Photos
-                        </label>
-                        <div class="form-group">
+                    <div class="export-options-grid">
+                        <div class="export-checkbox-wrapper">
+                            <label class="export-checkbox-label">
+                                <input type="checkbox" id="exportIncludePhotos" checked>
+                                Photos
+                            </label>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 0;">
                             <label class="form-label">Employee</label>
                             <select id="exportUserSelect" class="form-control">
                                 <option value="all">All Employees</option>
@@ -1317,7 +1315,7 @@
                             </select>
                         </div>
 
-                        <div class="form-group">
+                        <div class="form-group" style="margin-bottom: 0;">
                             <label class="form-label">Attendance Type</label>
                             <select id="exportTypeSelect" class="form-control">
                                 <option value="all">All</option>
@@ -1387,7 +1385,7 @@
 
     <!-- Birthday Calendar Modal -->
     <div id="birthdayCalendarModal" class="modal">
-        <div class="modal-content calendar-modal-content">
+        <div class="modal-content calendar-modal-content birthday-modal-content">
             <div id="birthdayCalendarContent">
                 <div class="text-center" style="padding: 40px;">
                     <div class="loading-spinner" style="margin: 0 auto 16px;"></div>
@@ -1535,6 +1533,18 @@
                     <!-- Populate via JS -->
                 </div>
 
+                <!-- Team Overview Section (New) -->
+                <div id="teamOverviewSection" class="hidden"
+                    style="margin-bottom: 24px; background: #f0f9ff; padding: 20px; border-radius: 20px; border: 1px solid #bae6fd;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                        <span style="font-size: 1.2rem;">👥</span>
+                        <h4 style="margin: 0; font-size: 1.1rem; color: #0369a1; font-weight: 700;">Team Progress</h4>
+                    </div>
+                    <div id="teamMembersList" style="display: flex; flex-direction: column; gap: 12px;">
+                        <!-- Populate via JS -->
+                    </div>
+                </div>
+
                 <div style="border-top: 1px solid #f1f5f9; padding-top: 24px;">
                     <h4 style="margin: 0 0 16px; font-size: 1.1rem; color: #1e293b;">Comments</h4>
                     <div id="taskCommentsList"
@@ -1553,59 +1563,166 @@
             </div>
         </div>
     </div>
-    <div id="addTaskModal" class="modal">
-        <div class="modal-content">
-            <h3>Add New Task</h3>
-
-            <div class="form-group">
-                <label class="form-label">Task Title</label>
-                <input type="text" id="taskTitle" class="form-control" placeholder="Enter task title">
+    <div id="addTaskModal" class="premium-modal-container">
+        <div class="premium-modal-backdrop" onclick="closeModal('addTaskModal')"></div>
+        <div class="premium-modal-content">
+            <div class="premium-modal-header">
+                <h3>Add New Task</h3>
+                <button class="btn-icon-sm" onclick="closeModal('addTaskModal')"
+                    style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">✕</button>
             </div>
 
-            <div class="form-group">
-                <label class="form-label">Assign To</label>
-                <select id="taskAssignee" class="form-control">
-                    <option value="">Select Employee...</option>
-                </select>
-            </div>
+            <div class="premium-modal-body">
+                <div class="premium-field-group">
+                    <label class="premium-label">Task Title</label>
+                    <input type="text" id="taskTitle" class="form-control" placeholder="What needs to be done?"
+                        style="height: 48px; font-size: 1rem; border-radius: 12px; border: 1px solid #e2e8f0;">
+                </div>
 
-            <div class="form-group">
-                <label class="form-label">Task Manager (Overseer) <small class="text-muted"
-                        style="font-weight:normal; margin-left:8px;">(Any employee can oversee this
-                        task)</small></label>
-                <select id="taskManager" class="form-control">
-                    <option value="none">Optional: No Overseer</option>
-                </select>
-            </div>
+                <div class="premium-grid">
+                    <div class="premium-field-group">
+                        <label class="premium-label">Priority Level</label>
+                        <select id="taskPriority" class="form-control" style="height: 48px; border-radius: 12px;">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                            <option value="urgent">Urgent</option>
+                        </select>
+                    </div>
+                    <div class="premium-field-group">
+                        <label class="premium-label">Completion Deadline</label>
+                        <input type="date" id="taskDueDate" class="form-control"
+                            style="height: 48px; border-radius: 12px;">
+                    </div>
+                </div>
 
-            <div class="form-group">
-                <label class="form-label">Description</label>
-                <textarea id="taskDescription" class="form-control" rows="3" placeholder="Task description"></textarea>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Priority</label>
-                    <select id="taskPriority" class="form-control">
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
-                        <option value="urgent">Urgent</option>
+                <div class="premium-field-group">
+                    <label class="premium-label">Assigned Manager (Overseer)</label>
+                    <select id="taskManager" class="form-control" style="height: 48px; border-radius: 12px;">
+                        <option value="none">Optional: No Overseer</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Due Date</label>
-                    <input type="date" id="taskDueDate" class="form-control">
+
+                <div class="premium-card-section">
+                    <div class="team-action-row" style="flex-wrap: wrap; margin-bottom: 12px;">
+                        <label class="premium-label" style="margin-bottom:8px; flex: 1 0 100%;">Assign To
+                            Team/Individuals</label>
+                        <div style="display: flex; gap: 8px; width: 100%;">
+                            <select id="teamSelector" class="form-control"
+                                style="flex: 1; height: 40px; padding: 0 12px; font-size: 0.9rem; border-radius: 10px;"
+                                onchange="applyTeamSelection()">
+                                <option value="">Select Team...</option>
+                            </select>
+                            <button class="btn btn-secondary"
+                                style="padding: 0 16px; height: 40px; font-size: 0.85rem; border-radius: 10px;"
+                                onclick="openEditTeamModal()" id="editTeamBtn" disabled>Edit Team</button>
+                            <button class="btn btn-secondary"
+                                style="padding: 0 16px; height: 40px; font-size: 0.85rem; border-radius: 10px;"
+                                onclick="openCreateTeamModal()">+ New Team</button>
+                        </div>
+                    </div>
+
+                    <div id="teamInfoBox"
+                        style="display:none; margin-bottom: 12px; padding: 12px; background: #ffffff; border-radius: 10px; border: 1px solid #e2e8f0;">
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                            <span class="badge badge-success" style="font-size:0.65rem; text-transform:uppercase;">Team
+                                Task</span>
+                            <span id="teamMemberCountLabel"
+                                style="font-size:0.75rem; color: #64748b; font-weight:600;"></span>
+                        </div>
+                        <div id="teamMemberNamesList" style="font-size:0.8rem; color: #1e293b; line-height:1.4;"></div>
+                    </div>
+
+                    <div class="multi-select-container">
+                        <div id="multiSelectDisplay" class="multi-select-display" onclick="toggleMultiSelect()"
+                            style="min-height: 48px; border-radius: 12px;">
+                            <span class="text-muted" style="font-size:0.9rem;">Select Employees...</span>
+                        </div>
+                        <div id="multiSelectDropdown" class="multi-select-dropdown" style="z-index: 100;">
+                            <div style="padding: 10px; border-bottom: 1px solid #f1f5f9;">
+                                <input type="text" id="multiSelectSearch" class="form-control"
+                                    placeholder="Search employees..." style="height: 32px; font-size: 0.85rem;"
+                                    onkeyup="filterMultiSelect(this.value)">
+                            </div>
+                            <div id="multiSelectOptionsList" style="max-height: 200px; overflow-y: auto;">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="taskAssigneeIds" value="[]">
+                </div>
+
+                <div class="premium-field-group" style="margin-top: 24px;">
+                    <label class="premium-label">Detailed Description</label>
+                    <textarea id="taskDescription" class="form-control" rows="4"
+                        placeholder="Briefly describe the task objectives..."
+                        style="border-radius: 12px; padding: 14px; font-size: 0.95rem;"></textarea>
                 </div>
             </div>
 
-
-            <div style="display:flex; gap:12px; justify-content:flex-end; margin-top: 20px;">
-                <button class="btn btn-secondary" onclick="closeModal('addTaskModal')">Cancel</button>
-                <button class="btn btn-primary" id="saveTaskBtn" onclick="saveNewTask()">
-                    <span id="saveTaskText">Save Task</span>
+            <div class="premium-modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('addTaskModal')"
+                    style="padding: 12px 24px; border-radius: 12px; font-weight: 500;">Cancel</button>
+                <button class="btn btn-primary" id="saveTaskBtn" onclick="saveNewTask()"
+                    style="padding: 12px 32px; border-radius: 12px; font-weight: 600;">
+                    <span id="saveTaskText">Create Task</span>
                     <span id="saveTaskSpinner" class="loading-spinner hidden"></span>
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create/Edit Team Modal -->
+    <div id="createTeamModal" class="premium-modal-container" style="z-index: 2100;">
+        <div class="premium-modal-backdrop" onclick="closeModal('createTeamModal')"></div>
+        <div class="premium-modal-content" style="max-width: 550px;">
+            <div class="premium-modal-header">
+                <h3 id="teamModalTitle">Create New Team</h3>
+                <button class="btn-icon-sm" onclick="closeModal('createTeamModal')"
+                    style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">✕</button>
+            </div>
+            <input type="hidden" id="editingTeamId" value="">
+
+            <div class="premium-modal-body">
+                <div class="premium-field-group">
+                    <label class="premium-label">Team Name</label>
+                    <input type="text" id="newTeamName" class="form-control" placeholder="e.g. Frontend Team"
+                        style="height: 48px; font-size: 1rem; border-radius: 12px; border: 1px solid #e2e8f0;">
+                </div>
+
+                <div class="premium-field-group">
+                    <label class="premium-label">Select Team Members</label>
+                    <div class="multi-select-container">
+                        <div id="teamMemberDisplay" class="multi-select-display" onclick="toggleTeamMemberSelect()"
+                            style="min-height: 48px; border-radius: 12px;">
+                            <span class="text-muted" style="font-size:0.9rem;">Select Members...</span>
+                        </div>
+                        <div id="teamMemberDropdown" class="multi-select-dropdown" style="z-index: 100;">
+                            <div style="padding: 10px; border-bottom: 1px solid #f1f5f9;">
+                                <input type="text" id="teamMemberSearch" class="form-control"
+                                    placeholder="Search employees..." style="height: 32px; font-size: 0.85rem;"
+                                    onkeyup="filterTeamMemberSelect(this.value)">
+                            </div>
+                            <div id="teamMemberOptionsList" style="max-height: 250px; overflow-y: auto;">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="newTeamMemberIds" value="[]">
+                </div>
+            </div>
+
+            <div class="premium-modal-footer">
+                <div style="display:flex; justify-content:space-between; align-items:center; width: 100%;">
+                    <button class="btn btn-danger hidden" id="deleteTeamBtn" onclick="deleteTeam()"
+                        style="padding: 10px 20px; border-radius: 12px; font-weight: 500;">Delete Team</button>
+                    <div style="display:flex; gap:12px; margin-left: auto;">
+                        <button class="btn btn-secondary" onclick="closeModal('createTeamModal')"
+                            style="padding: 10px 24px; border-radius: 12px; font-weight: 500;">Cancel</button>
+                        <button class="btn btn-primary" onclick="saveNewTeam()" id="saveTeamBtn"
+                            style="padding: 10px 32px; border-radius: 12px; font-weight: 600;">Save Team</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

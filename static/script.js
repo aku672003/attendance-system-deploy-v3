@@ -21,6 +21,7 @@ let trackingInterval = null;
 const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
 let selectedCalendarDates = [];
 let isMultiSelectMode = false;
+let currentPhotoLocation = null; // Store for overlay
 // API Configuration
 const apiBaseUrl = "/api";
 
@@ -101,6 +102,14 @@ function closeModal(id) {
     if (!el) return;
     el.classList.remove('active');
     document.body.style.overflow = '';
+
+    // Refresh dashboard stats when closing requests/calendar modals
+    // This ensures that if a request was made/approved, the dashboard counters update.
+    if (id === 'myRequestsModal' || id === 'requestsModal' || id === 'calendarModal') {
+        if (typeof loadWFHEligibility === 'function') {
+            loadWFHEligibility();
+        }
+    }
 }
 
 // Camera Permission Modal Functions
@@ -827,6 +836,9 @@ async function loadDashboardData() {
             console.error("Error updating location status:", e);
         }
 
+        // Check location permission and gate the Check In card
+        checkLocationPermission();
+
         // 2. Now run other checks, passing the location status
         try { await loadTodayAttendance(isUserInRange); } catch (e) { console.error(e); }
         try { await loadMonthlyStats(); } catch (e) { console.error(e); }
@@ -1050,12 +1062,12 @@ async function openBirthdayCalendar() {
                             </div>
                         </div>
                         <div style="display:flex; gap:12px; align-items:center;">
-                            <div class="btn-group-premium" style="display:flex; background: #f1f5f9; padding: 4px; border-radius: 12px; gap: 4px;">
-                                <button class="btn-premium-toggle" onclick="changeBirthdayMonth(-1)" title="Previous Month">←</button>
-                                <button class="btn-premium-toggle active" onclick="jumpToToday()">Today</button>
-                                <button class="btn-premium-toggle" onclick="changeBirthdayMonth(1)" title="Next Month">→</button>
+                            <div class="btn-group-premium" style="display:flex; background: #f1f5f9; padding: 4px; border-radius: 12px; gap: 4px; border: 1px solid #e2e8f0;">
+                                <button class="btn-premium-toggle" onclick="changeBirthdayMonth(-1)" style="width:36px; height:36px; display:flex; align-items:center; justify-content:center; border-radius:8px; font-weight:800;" title="Previous Month">←</button>
+                                <button class="btn-premium-toggle active" onclick="jumpToToday()" style="padding:0 16px; border-radius:8px; font-weight:700; font-size:0.85rem;">Today</button>
+                                <button class="btn-premium-toggle" onclick="changeBirthdayMonth(1)" style="width:36px; height:36px; display:flex; align-items:center; justify-content:center; border-radius:8px; font-weight:800;" title="Next Month">→</button>
                             </div>
-                            <button class="btn-premium-close" onclick="closeModal('birthdayCalendarModal')" style="background: #fef2f2; color: #ef4444; border: 1px solid #fee2e2; padding: 10px 20px; border-radius: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s;">Close</button>
+                            <button onclick="closeModal('birthdayCalendarModal')" style="background: white; border: 1px solid #fee2e2; color: #ef4444; width:40px; height:40px; border-radius:12px; font-size:1.5rem; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.05);">×</button>
                         </div>
                     </div>
 
@@ -1217,23 +1229,34 @@ function createPremiumListHTML(birthdays) {
         const zodiac = getZodiacSign(dateObj.getDate(), dateObj.getMonth() + 1);
         const daysLeft = getDaysLeft(dateObj);
 
+        // HSL-tailored premium avatar background
+        const colors = [
+            { bg: '#eff6ff', border: '#bfdbfe', text: '#2563eb' }, // Blue
+            { bg: '#fef2f2', border: '#fecaca', text: '#ef4444' }, // Red
+            { bg: '#f0fdf4', border: '#bbf7d0', text: '#16a34a' }, // Green
+            { bg: '#fdf4ff', border: '#f5d0fe', text: '#a21caf' }, // Purple
+            { bg: '#fff7ed', border: '#ffedd5', text: '#ea580c' }  // Orange
+        ];
+        const color = colors[b.name.length % colors.length];
+
         let timeLeftHtml = '';
-        if (daysLeft === 0) timeLeftHtml = '<span style="color:#10b981; font-weight:700;">Today</span>';
-        else if (daysLeft > 0) timeLeftHtml = `<span style="color:#64748b;">in ${daysLeft} days</span>`;
-        else timeLeftHtml = '<span style="color:#94a3b8;">passed</span>';
+        if (daysLeft === 0) timeLeftHtml = '<span style="color:#10b981; font-weight:700; font-size:0.75rem;">🎉 TODAY</span>';
+        else if (daysLeft > 0) timeLeftHtml = `<span style="color:#64748b; font-size:0.75rem;">in ${daysLeft} days</span>`;
+        else timeLeftHtml = '<span style="color:#94a3b8; font-size:0.75rem;">passed</span>';
 
         return `
-            <div class="premium-list-item" onclick="selectBirthday('${b.id}', '${b.name}', '${b.date_of_birth}', '${zodiac}', '${daysLeft}')" style="animation: slideInLeft 0.3s forwards; animation-delay: ${idx * 50}ms; opacity:0; transform:translateX(-10px);">
-                <div class="premium-avatar">${b.name.charAt(0)}</div>
+            <div class="premium-list-item" onclick="selectBirthday('${b.id}', '${b.name}', '${b.date_of_birth}', '${zodiac}', '${daysLeft}')" style="animation: slideInLeft 0.3s forwards; animation-delay: ${idx * 40}ms; opacity:0; transform:translateX(-10px); padding: 14px;">
+                <div class="premium-avatar" style="background: ${color.bg}; border-color: ${color.border}; color: ${color.text}; width:48px; height:48px; font-size:1.2rem;">${b.name.charAt(0)}</div>
                 <div class="premium-info" style="flex:1;">
-                    <h5 style="margin:0; font-size:1rem;">${b.name}</h5>
-                    <div class="premium-meta">
-                        <span>${timeLeftHtml}</span>
-                        <span>•</span>
-                        <span class="premium-badge">${zodiac}</span>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <h5 style="margin:0; font-size:1.05rem; font-weight:700; color:#1e293b;">${b.name}</h5>
+                        ${timeLeftHtml}
+                    </div>
+                    <div class="premium-meta" style="display:flex; gap:6px; flex-wrap:wrap;">
+                        <span class="premium-badge" style="background:rgba(139, 92, 246, 0.1); color:#7c3aed; font-size:0.65rem; padding:2px 6px;">${zodiac}</span>
+                        ${b.department ? `<span class="premium-badge" style="background:rgba(59, 130, 246, 0.1); color:#2563eb; font-size:0.65rem; padding:2px 6px;">${b.department}</span>` : ''}
                     </div>
                 </div>
-                <div style="color: #cbd5e1; font-size: 1.2rem;">›</div>
             </div>
         `;
     }).join('');
@@ -1305,28 +1328,44 @@ function selectBirthday(id, name, dateStr, zodiac, daysLeft) {
     const isToday = parseInt(daysLeft) === 0;
 
     detailContainer.innerHTML = `
-        <div style="animation: slideInRight 0.4s forwards; background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 24px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); margin-top: 10px;">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 20px;">
-                <div class="premium-avatar" style="width: 56px; height: 56px; font-size: 1.5rem; border-radius: 16px;">${name.charAt(0)}</div>
-                <button onclick="closeBirthdayDetail()" style="background:transparent; border:none; color:#94a3b8; cursor:pointer; font-size:1.2rem; transition: color 0.2s;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'">✕</button>
-            </div>
-            <h4 style="margin: 0 0 4px; font-size: 1.25rem; font-weight: 800; color: #1e293b;">${name}</h4>
-            <p style="margin: 0; color: #64748b; font-size: 0.9rem; font-weight: 500;">${fullDate}</p>
+        <div style="animation: slideScaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; background: white; border: 1px solid rgba(226, 232, 240, 0.6); border-radius: 24px; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.05); margin-top: 10px; position: relative; overflow: hidden;">
+            <div style="position: absolute; top:0; left:0; right:0; height:80px; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); z-index:0; opacity:0.5;"></div>
             
-            <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 12px;">
-                <div style="background: #f8fafc; padding: 12px 16px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between;">
-                    <span style="font-size: 0.8rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Zodiac</span>
-                    <span class="premium-badge" style="background: #fdf2f8; color: #db2777; border-radius: 8px; padding: 4px 12px;">${zodiac}</span>
+            <div style="position: relative; z-index:1;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 24px;">
+                    <div class="premium-avatar" style="width: 64px; height: 64px; font-size: 1.8rem; border-radius: 18px; background: white; border: 2px solid #3b82f6; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">${name.charAt(0)}</div>
+                    <button onclick="closeBirthdayDetail()" style="background:white; border: 1px solid #e2e8f0; color:#94a3b8; width:32px; height:32px; border-radius:10px; cursor:pointer; font-size:1.2rem; display:flex; align-items:center; justify-content:center; transition: all 0.2s;">×</button>
                 </div>
-                <div style="background: #f8fafc; padding: 12px 16px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between;">
-                    <span style="font-size: 0.8rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Status</span>
-                    <span style="font-size: 0.9rem; font-weight: 600; color: ${isToday ? '#10b981' : '#64748b'};">${isToday ? '🎉 Today!' : (parseInt(daysLeft) > 0 ? `In ${daysLeft} days` : 'Passed')}</span>
+                
+                <h4 style="margin: 0 0 4px; font-size: 1.4rem; font-weight: 800; color: #1e293b;">${name}</h4>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <p style="margin: 0; color: #64748b; font-size: 0.9rem; font-weight: 500;">${fullDate}</p>
+                    ${isToday ? '<span style="background:#dcfce7; color:#16a34a; font-size:0.7rem; font-weight:800; padding:2px 8px; border-radius:20px; text-transform:uppercase;">Birthday Today! 🎂</span>' : ''}
+                </div>
+                
+                <div style="margin-top: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div style="background: #f8fafc; padding: 16px; border-radius: 16px; border: 1px solid #f1f5f9;">
+                        <span style="display:block; font-size: 0.7rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom:8px; letter-spacing:0.05em;">Zodiac Sign</span>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="font-size:1.2rem;">✨</span>
+                            <span style="font-weight: 700; color: #1e293b; font-size: 0.95rem;">${zodiac}</span>
+                        </div>
+                    </div>
+                    <div style="background: #f8fafc; padding: 16px; border-radius: 16px; border: 1px solid #f1f5f9;">
+                        <span style="display:block; font-size: 0.7rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom:8px; letter-spacing:0.05em;">Schedule</span>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="font-size:1.2rem;">⏳</span>
+                            <span style="font-weight: 700; color: #1e293b; font-size: 0.95rem;">${isToday ? 'Celebration' : (parseInt(daysLeft) >= 0 ? `In ${daysLeft} days` : 'Passed')}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 24px;">
+                    <button class="btn-wish" onclick="confirmWish('${id}', '${name}')" ${currentUser?.id == id ? 'disabled' : ''} style="width:100%; height:48px; border-radius:14px; background: ${currentUser?.id == id ? '#cbd5e1' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'}; color:white; font-weight:700; border:none; cursor:${currentUser?.id == id ? 'default' : 'pointer'}; box-shadow:${currentUser?.id == id ? 'none' : '0 4px 12px rgba(37, 99, 235, 0.2)'}; transition:all 0.2s; display:flex; align-items:center; justify-content:center; gap:8px;">
+                        <span>✨</span> ${currentUser?.id == id ? 'Your Special Day!' : 'Send a Wish'}
+                    </button>
                 </div>
             </div>
-
-            <button class="btn-wish" onclick="confirmWish('${id}', '${name}')" ${currentUser.id == id ? 'disabled' : ''} style="margin-top: 24px; width: 100%; height: 50px; background: ${currentUser.id == id ? '#cbd5e1' : 'linear-gradient(135deg, #3b82f6, #2563eb)'}; color: white; border: none; border-radius: 16px; font-weight: 700; font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
-                <span>🎈</span> ${currentUser.id == id ? "It's You!" : "Send Wishes"}
-            </button>
         </div>
     `;
 
@@ -1932,14 +1971,56 @@ function renderTaskBoard() {
         }
 
         container.innerHTML = taskList.map((task, idx) => {
-            const avatar = task.assigned_to_name ? task.assigned_to_name.charAt(0).toUpperCase() : '?';
             const priorityClass = task.priority === 'High' ? 'priority-high' :
                 (task.priority === 'Medium' ? 'priority-medium' : 'priority-low');
 
+            // Due Date Logic
+            let dueClass = '';
+            let dueBadge = '';
+
+            if (task.due_date) {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const due = new Date(task.due_date);
+                due.setHours(0, 0, 0, 0);
+
+                const diffTime = due - today;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                if (diffDays < 0) {
+                    dueClass = 'task-card-overdue';
+                } else if (diffDays <= 2) {
+                    dueClass = 'task-card-urgent';
+                } else if (diffDays <= 7) {
+                    dueClass = 'task-card-warning';
+                } else {
+                    dueClass = 'task-card-safe';
+                }
+
+                if (diffDays === 1) {
+                    dueBadge = '<span class="due-tomorrow-badge">Due Tomorrow!</span>';
+                }
+            }
+
+            // Override for completed tasks: ALWAYS Green
+            if (task.status === 'completed') {
+                dueClass = 'task-card-safe';
+                dueBadge = '';
+            }
+
+            // Multi-Assignee Avatar Group
+            const assignees = task.assignees || [];
+            const avatarGroup = assignees.slice(0, 3).map((a, i) => `
+                <span class="premium-user-avatar" style="width:28px; height:28px; font-size:11px; background: linear-gradient(135deg, #f8fafc, #f1f5f9); border: 1px solid #e2e8f0; color: #475569; margin-left: ${i > 0 ? '-10px' : '0'}; z-index: ${5 - i};" title="${a.name}">${a.name.charAt(0).toUpperCase()}</span>
+            `).join('') + (assignees.length > 3 ? `<span class="premium-user-avatar" style="width:28px; height:28px; font-size:10px; background: #e2e8f0; border: 1px solid #cbd5e1; color: #475569; margin-left: -10px; z-index: 1;">+${assignees.length - 3}</span>` : '');
+
+            const assigneeNames = assignees.map(a => a.name).join(', ') || 'Unassigned';
+
             return `
-                <div class="premium-task-card" id="task-${task.id}" draggable="true" ondragstart="drag(event)" onclick="openTaskDetail(${task.id})" style="animation: slideInUp 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; animation-delay: ${idx * 50}ms; opacity:1; cursor:pointer;">
+                <div class="premium-task-card ${dueClass}" id="task-${task.id}" draggable="true" ondragstart="drag(event)" onclick="openTaskDetail(${task.id})" style="animation: slideInUp 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; animation-delay: ${idx * 50}ms; opacity:1; cursor:pointer;">
                     <div class="premium-card-header">
                         <span class="premium-priority-badge ${priorityClass}" style="border-radius: 6px; padding: 4px 10px;">${task.priority || 'Medium'}</span>
+                        ${dueBadge}
                         <div style="display:flex; gap:8px;">
                             ${typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin' ? `
                             <button class="btn-icon-sm" onclick="event.stopPropagation(); editTask(${task.id})" style="background:#f1f5f9; border:none; color:#64748b; cursor:pointer; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; transition:all 0.2s;" title="Edit">✎</button>
@@ -1952,9 +2033,9 @@ function renderTaskBoard() {
                     <p style="font-size:0.9rem; color:#64748b; margin: 0; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${task.description || ''}</p>
                     
                     <div class="premium-task-meta" style="margin-top: 4px; padding-top: 12px; border-top: 1px solid #f1f5f9;">
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <span class="premium-user-avatar" style="width:28px; height:28px; font-size:11px; background: linear-gradient(135deg, #f8fafc, #f1f5f9); border: 1px solid #e2e8f0; color: #475569;">${avatar}</span>
-                            <span style="font-size:0.85rem; color:#475569; font-weight: 500;">${task.assigned_to_name || 'Unassigned'}</span>
+                        <div style="display:flex; align-items:center; flex-grow: 1;">
+                            <div style="display:flex;">${avatarGroup}</div>
+                            <span style="font-size:0.85rem; color:#475569; font-weight: 500; margin-left: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px;">${assigneeNames}</span>
                         </div>
                         ${task.manager_name ? `
                         <div style="display:flex; align-items:center; gap:6px; margin-top: 4px;">
@@ -1997,6 +2078,7 @@ async function refreshMyTasks() {
         if (res && res.success && Array.isArray(res.tasks)) {
             myTasks = res.tasks;
             renderMyTaskBoard();
+            checkDueTomorrowReminders();
         }
     } catch (error) {
         console.error('Error loading my tasks:', error);
@@ -2027,10 +2109,45 @@ function renderMyTaskBoard() {
             const priorityClass = task.priority === 'High' ? 'priority-high' :
                 (task.priority === 'Medium' ? 'priority-medium' : 'priority-low');
 
+            // Due Date Logic
+            let dueClass = '';
+            let dueBadge = '';
+
+            if (task.due_date) {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const due = new Date(task.due_date);
+                due.setHours(0, 0, 0, 0);
+
+                const diffTime = due - today;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                if (diffDays < 0) {
+                    dueClass = 'task-card-overdue';
+                } else if (diffDays <= 2) {
+                    dueClass = 'task-card-urgent';
+                } else if (diffDays <= 7) {
+                    dueClass = 'task-card-warning';
+                } else {
+                    dueClass = 'task-card-safe';
+                }
+
+                if (diffDays === 1) {
+                    dueBadge = '<span class="due-tomorrow-badge">Due Tomorrow!</span>';
+                }
+            }
+
+            // Override for completed tasks: ALWAYS Green
+            if (task.status === 'completed') {
+                dueClass = 'task-card-safe';
+                dueBadge = '';
+            }
+
             return `
-                <div class="premium-task-card" id="mytask-${task.id}" onclick="openTaskDetail(${task.id})" style="animation: slideInUp 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; animation-delay: ${idx * 50}ms; opacity:1; cursor:pointer;">
+                <div class="premium-task-card ${dueClass}" id="mytask-${task.id}" onclick="openTaskDetail(${task.id})" style="animation: slideInUp 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; animation-delay: ${idx * 50}ms; opacity:1; cursor:pointer;">
                     <div class="premium-card-header" style="margin-bottom: 0;">
                         <span class="premium-priority-badge ${priorityClass}" style="border-radius: 6px; padding: 4px 10px;">${task.priority || 'Medium'}</span>
+                        ${dueBadge}
                         ${task.comments && task.comments.length > 0 ? `
                             <span style="font-size:0.75rem; color:#3b82f6; font-weight: 600;">💬 ${task.comments.length}</span>
                         ` : ''}
@@ -2099,15 +2216,21 @@ function addNewTask() {
     document.getElementById('taskDescription').value = '';
     document.getElementById('taskPriority').value = 'medium';
     document.getElementById('taskDueDate').value = '';
-    document.getElementById('taskAssignee').value = '';
+
+    // Multi-Select Reset
+    selectedEmployeeIds = [];
+    updateSelectedTags('multiSelectDisplay', [], window.allEmployeesSimple || [], 'taskAssigneeIds');
+
+    if (document.getElementById('teamSelector')) document.getElementById('teamSelector').value = '';
     if (document.getElementById('taskManager')) document.getElementById('taskManager').value = 'none';
 
     // Reset button text and state
     document.getElementById('saveTaskText').textContent = 'Save Task';
     window.currentEditingTaskId = null;
 
-    // Populate assignee dropdown
+    // Populate assignee dropdown & teams
     populateTaskAssigneeDropdown();
+    loadTeams();
 
     openModal('addTaskModal');
 }
@@ -2141,9 +2264,11 @@ async function editTask(taskId) {
 
     document.getElementById('taskDueDate').value = task.due_date || '';
 
-    // For assignee, we need to ensure the dropdown is populated first
+    // For assignee multi-select
     await populateTaskAssigneeDropdown();
-    document.getElementById('taskAssignee').value = task.assigned_to;
+    selectedEmployeeIds = task.assignees ? task.assignees.map(a => a.id) : [];
+    updateSelectedTags('multiSelectDisplay', selectedEmployeeIds, window.allEmployeesSimple || [], 'taskAssigneeIds');
+
     if (document.getElementById('taskManager')) {
         document.getElementById('taskManager').value = task.manager_id || 'none';
     }
@@ -2152,25 +2277,13 @@ async function editTask(taskId) {
 }
 
 async function populateTaskAssigneeDropdown() {
-    const select = document.getElementById('taskAssignee');
     try {
         const res = await apiCall('employees-simple', 'GET');
         if (res && res.success && Array.isArray(res.employees)) {
             window.allEmployeesSimple = res.employees; // Store for lookup
 
-            let options = '';
-            if (currentUser.role === 'employee') {
-                // For employees, only allow assigning to self
-                options = `<option value="${currentUser.id}" selected>${currentUser.name} (My Self)</option>`;
-                select.innerHTML = options;
-                select.disabled = true; // Lock the selection
-            } else {
-                // Admin/Manager: Show everyone
-                select.disabled = false;
-                options = '<option value="">Select Employee...</option>' +
-                    res.employees.map(emp => `<option value="${emp.id}">${emp.name} (${emp.role})</option>`).join('');
-                select.innerHTML = options;
-            }
+            // Populate Multi-Select Options
+            populateEmployeeListInDropdown('multiSelectOptionsList', false);
 
             const managerSelect = document.getElementById('taskManager');
             if (managerSelect) {
@@ -2205,10 +2318,14 @@ async function saveNewTask() {
     const description = document.getElementById('taskDescription').value.trim();
     const priority = document.getElementById('taskPriority').value;
     const dueDate = document.getElementById('taskDueDate').value;
-    const assigneeId = document.getElementById('taskAssignee').value;
 
     if (!title) {
         showNotification('Task title is required', 'error');
+        return;
+    }
+
+    if (!window.currentEditingTaskId && selectedEmployeeIds.length === 0) {
+        showNotification('Please select at least one employee', 'error');
         return;
     }
 
@@ -2221,24 +2338,25 @@ async function saveNewTask() {
     spinner.classList.remove('hidden');
 
     try {
-        const url = window.currentEditingTaskId ? `tasks/${window.currentEditingTaskId}` : 'tasks';
-        const method = 'POST'; // Backend uses POST for both creation (at /tasks) and update (at /tasks/<id>)
+        const url = window.currentEditingTaskId ? `tasks/${window.currentEditingTaskId}` : 'tasks/create';
+        const method = 'POST'; // Backend uses POST for both creation and update
 
         const payload = {
             title,
             description,
             priority,
             due_date: dueDate || null,
-            assigned_to: assigneeId || null,
+            assignees: selectedEmployeeIds,
             manager_id: document.getElementById('taskManager') ? document.getElementById('taskManager').value : null,
             user_id: typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null,
+            employee_id: typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null,
             created_by: typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null
         };
 
         const res = await apiCall(url, method, payload);
 
         if (res && res.success) {
-            showNotification(window.currentEditingTaskId ? 'Task updated successfully' : 'Task created successfully');
+            showNotification(window.currentEditingTaskId ? 'Task updated successfully' : 'Task(s) created successfully');
             closeModal('addTaskModal');
             window.currentEditingTaskId = null;
             await refreshTasks();
@@ -2259,7 +2377,7 @@ async function saveNewTask() {
 
 let currentSelectedTaskId = null;
 
-function openTaskDetail(taskId) {
+async function openTaskDetail(taskId) {
     const task = [...tasks, ...myTasks].find(t => t.id === taskId);
     if (!task) return;
 
@@ -2267,12 +2385,48 @@ function openTaskDetail(taskId) {
     document.getElementById('detailTaskTitle').textContent = task.title;
     document.getElementById('detailTaskDescription').textContent = task.description || 'No description provided.';
 
+    const assignees = task.assignees || [];
+    const assigneeNames = assignees.map(a => a.name).join(', ') || 'Unassigned';
+
     document.getElementById('detailTaskMeta').innerHTML = `
-        <span>👤 ${task.assigned_to_name}</span>
-        ${task.manager_name ? `<span>👁 Overseer: ${task.manager_name}</span>` : ''}
-        <span>🚩 ${task.priority}</span>
-        <span>📅 ${task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No date'}</span>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 1.1rem;">👥</span>
+                <span style="font-weight: 600; color: #1e293b;">${assigneeNames}</span>
+            </div>
+            <div style="display: flex; gap: 12px; font-size: 0.85rem; color: #64748b;">
+                ${task.manager_name ? `<span>👁 Overseer: ${task.manager_name}</span>` : ''}
+                <span>🚩 ${task.priority}</span>
+                <span>📅 ${task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No date'}</span>
+            </div>
+        </div>
     `;
+
+    // Handle Team Progress (Static list of assignees for shared task)
+    const teamSection = document.getElementById('teamOverviewSection');
+    const teamList = document.getElementById('teamMembersList');
+
+    if (assignees.length > 1) {
+        teamSection.classList.remove('hidden');
+        teamList.innerHTML = assignees.map(m => {
+            const isMe = typeof currentUser !== 'undefined' && currentUser && m.id === currentUser.id;
+            return `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: white; border-radius: 12px; border: 1px solid #e0f2fe;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="width: 32px; height: 32px; background: #e0f2fe; color: #0369a1; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8rem;">
+                            ${m.name.charAt(0)}
+                        </div>
+                        <span style="font-size: 0.95rem; font-weight: 500; color: #1e293b;">${m.name} ${isMe ? '<span style="color:#64748b; font-size:0.75rem;">(You)</span>' : ''}</span>
+                    </div>
+                    <span style="background: #eff6ff; color: #3b82f6; font-size: 0.75rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: uppercase;">
+                        Assignee
+                    </span>
+                </div>
+            `;
+        }).join('');
+    } else {
+        teamSection.classList.add('hidden');
+    }
 
     renderTaskComments(task.comments || []);
     document.getElementById('newTaskComment').value = '';
@@ -2707,6 +2861,7 @@ async function buildAttendanceCalendar(year, month) {
     // 2. Map requests (Leaves, WFH) - they should override 'absent' or empty slots
     allRequests.forEach(req => {
         if (!req.start_date) return;
+        if (req.status === 'rejected') return; // User requested: rejected requests should disappear
 
         // Use a safe date parser to avoid UTC shifts
         const parseDate = (s) => {
@@ -3312,6 +3467,30 @@ function selectType(type, e) {
 
 /* Entry point when user clicks "Check In" */
 async function startAttendanceFlow() {
+    // --- MANDATORY LOCATION GATE ---
+    // Before showing the attendance screen, ensure location is accessible.
+    if (!currentPhotoLocation) {
+        showNotification('Requesting location access...', 'info');
+        try {
+            const pos = await new Promise((res, rej) =>
+                navigator.geolocation.getCurrentPosition(res, rej, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                })
+            );
+            currentPhotoLocation = {
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                accuracy: pos.coords.accuracy
+            };
+        } catch (e) {
+            showNotification('Location access is required to mark attendance. Please enable GPS/Location and try again.', 'error');
+            return; // Block the flow entirely
+        }
+    }
+    // --------------------------------
+
     showScreen('attendanceScreen');
     if (typeof resetAttendanceFlow === 'function') resetAttendanceFlow();
 
@@ -3324,6 +3503,62 @@ async function startAttendanceFlow() {
     document.getElementById('cameraSection').classList.add('hidden');
 
     await refreshWFHAvailability();
+}
+
+// Check location permission and disable checkInCard if denied
+async function checkLocationPermission() {
+    const card = document.getElementById('checkInCard');
+    if (!card) return;
+
+    if (!navigator.geolocation) {
+        // Geolocation not supported
+        card.style.opacity = '0.5';
+        card.style.cursor = 'not-allowed';
+        card.title = 'Location not supported on this device';
+        card.onclick = (e) => {
+            e.preventDefault();
+            showNotification('Location is not supported on this device.', 'error');
+        };
+        return;
+    }
+
+    // Use Permissions API if available for a non-blocking check
+    if (navigator.permissions) {
+        try {
+            const result = await navigator.permissions.query({ name: 'geolocation' });
+            if (result.state === 'denied') {
+                _disableCheckInCard(card);
+            }
+            // Listen for changes (user grants/revokes mid-session)
+            result.onchange = () => {
+                if (result.state === 'denied') {
+                    _disableCheckInCard(card);
+                } else {
+                    _enableCheckInCard(card);
+                }
+            };
+        } catch (e) { /* Permissions API not available, skip */ }
+    }
+}
+
+function _disableCheckInCard(card) {
+    card.style.opacity = '0.5';
+    card.style.cursor = 'not-allowed';
+    card.title = 'Enable location access to mark attendance';
+    card.setAttribute('data-location-blocked', 'true');
+    // Replace onclick with a warning
+    card.onclick = (e) => {
+        e.preventDefault();
+        showNotification('Location access is required. Please enable GPS/Location in your browser settings.', 'error');
+    };
+}
+
+function _enableCheckInCard(card) {
+    card.style.opacity = '';
+    card.style.cursor = '';
+    card.title = '';
+    card.removeAttribute('data-location-blocked');
+    card.onclick = () => startAttendanceFlow();
 }
 
 /* ---------------- WFH availability: no more "stuck checking" ---------------- */
@@ -3394,39 +3629,32 @@ async function refreshWFHAvailability() {
         wfhStatus.style.color = 'var(--gray-600)';
     }
 
-    // ---------- 3) Check monthly WFH limit from server ----------
+    // ---------- 3) Check for APPROVED WFH request ----------
     try {
         const today = getCurrentDateTime().date;
         const r = await apiCall('wfh-eligibility', 'GET', { employee_id: currentUser.id, date: today });
 
-        // Expected shape: { current_count, max_limit, can_request }
-        if (r && typeof r.current_count === 'number' && typeof r.max_limit !== 'undefined') {
-            // CHANGED: Set max_limit to 1 per month
-            const maxLimit = 1; // Force 1 per month
-
-            if (r.current_count >= maxLimit || r.can_request === false) {
-                // limit reached → show request button
-                wfhStatus.textContent = `Limit reached (${r.current_count}/${maxLimit})`;
-                wfhStatus.style.color = 'var(--error-color)';
-                if (!wfhOption.classList.contains('disabled')) wfhOption.classList.add('disabled'); // keep it disabled
-                if (requestBtn) requestBtn.style.display = 'inline-flex';
-                return;
-            } else {
-                // still has quota
-                wfhStatus.textContent = `Available (${r.current_count}/${maxLimit})`;
-                wfhStatus.style.color = 'var(--success-color)';
-                if (requestBtn) requestBtn.style.display = 'none';
-                return;
-            }
+        // New logic: Only enable if there is an approved request
+        if (r && r.has_approved_request === true) {
+            // Authorized
+            wfhStatus.textContent = 'Approved for today';
+            wfhStatus.style.color = 'var(--success-color)';
+            wfhOption.classList.remove('disabled');
+            if (requestBtn) requestBtn.style.display = 'none';
+        } else {
+            // Not authorized
+            wfhStatus.textContent = 'Approval required';
+            wfhStatus.style.color = 'var(--warning-color)';
+            wfhOption.classList.add('disabled');
+            // Hide the request button here as requests should be made via the calendar/requests modal
+            if (requestBtn) requestBtn.style.display = 'none';
         }
 
-        // If server didn't return expected shape, fall back to available
-        wfhStatus.textContent = 'Available';
-        wfhStatus.style.color = 'var(--success-color)';
-    } catch {
-        // Server error → keep it available, don't hang
-        wfhStatus.textContent = 'Available (limit unknown)';
-        wfhStatus.style.color = 'var(--success-color)';
+    } catch (e) {
+        console.error("WFH check failed", e);
+        // Fallback: disable to be safe
+        wfhStatus.textContent = 'Status unknown';
+        wfhOption.classList.add('disabled');
     }
 }
 
@@ -3708,6 +3936,31 @@ async function startCamera() {
         }
     }
 
+    // Start fetching location for photo overlay (High Accuracy & Watch)
+    if (navigator.geolocation) {
+        // Clear any existing watch
+        if (window.geoWatchId) navigator.geolocation.clearWatch(window.geoWatchId);
+
+        window.geoWatchId = navigator.geolocation.watchPosition(
+            (pos) => {
+                currentPhotoLocation = {
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude,
+                    accuracy: pos.coords.accuracy
+                };
+            },
+            (err) => {
+                console.warn('Location watch failed', err);
+                // Don't nullify immediately if we had a fix, unless it's critical
+            },
+            {
+                enableHighAccuracy: true, // Request best possible results (GPS)
+                timeout: 10000,
+                maximumAge: 0
+            }
+        );
+    }
+
     try {
         // open stream only once
         if (!stream) {
@@ -3719,6 +3972,28 @@ async function startCamera() {
 
         // show live video, hide placeholder & previous photo
         video.style.display = 'block';
+
+        // Show accuracy toast/warning if needed
+        const accElement = document.getElementById('cameraAccuracy') || document.createElement('div');
+        accElement.id = 'cameraAccuracy';
+        accElement.style = 'position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.5); color:white; padding:5px; border-radius:4px; font-size:12px; z-index:10;';
+        accElement.innerText = 'Waiting for GPS...';
+
+        const camContainer = document.querySelector('.camera-box') || video.parentElement;
+        if (camContainer && !document.getElementById('cameraAccuracy')) {
+            camContainer.style.position = 'relative'; // Ensure positioning context
+            camContainer.appendChild(accElement);
+        }
+
+        // Poll for accuracy updates to show user
+        window.accInterval = setInterval(() => {
+            const el = document.getElementById('cameraAccuracy');
+            if (el && currentPhotoLocation) {
+                const acc = Math.round(currentPhotoLocation.accuracy);
+                el.innerText = `GPS Accuracy: ±${acc}m`;
+                el.style.backgroundColor = acc > 200 ? 'rgba(255,0,0,0.6)' : 'rgba(0,128,0,0.6)';
+            }
+        }, 1000);
         placeholder.style.display = 'none';
         img.style.display = 'none';
 
@@ -3745,6 +4020,10 @@ async function startCamera() {
         }
     }
 }
+
+// Helper: Lon/Lat to Tile numbers
+function lon2tile(lon, zoom) { return (Math.floor((lon + 180) / 360 * Math.pow(2, zoom))); }
+function lat2tile(lat, zoom) { return (Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom))); }
 
 async function capturePhoto() {
     const video = document.getElementById('video');
@@ -3775,6 +4054,167 @@ async function capturePhoto() {
     ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0, width, height);
     ctx.restore();
+
+    // --- OVERLAY LOGIC (GPS Map Camera Style) ---
+    // 1. Prepare Data
+    const now = new Date();
+    const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
+    const dateStr = now.toLocaleDateString('en-GB'); // DD/MM/YYYY
+    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    // Timezone Offset
+    const offset = -now.getTimezoneOffset();
+    const offsetSign = offset >= 0 ? '+' : '-';
+    const offsetHours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
+    const offsetMins = String(Math.abs(offset) % 60).padStart(2, '0');
+    const fullDateStr = `${dayName}, ${dateStr} ${timeStr} GMT ${offsetSign}${offsetHours}:${offsetMins}`;
+
+    let lat = 0, lng = 0;
+    let shortAddress = "Location Not Found";
+    let fullAddress = "Address unavailable";
+    let accuracy = 0;
+
+    if (currentPhotoLocation) {
+        lat = currentPhotoLocation.lat;
+        lng = currentPhotoLocation.lng;
+        accuracy = currentPhotoLocation.accuracy;
+
+        try {
+            // Using OSM Nominatim for reverse geocoding
+            const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+            const req = await fetch(url, { signal: controller.signal });
+            clearTimeout(timeoutId);
+
+            if (req.ok) {
+                const data = await req.json();
+                const addr = data.address || {};
+                const city = addr.city || addr.town || addr.village || addr.county || "";
+                const state = addr.state || "";
+                const country = addr.country || "";
+                shortAddress = [city, state, country].filter(Boolean).join(", ");
+                fullAddress = data.display_name || "";
+            }
+        } catch (e) {
+            shortAddress = `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
+        }
+    }
+
+    // 2. Draw Layout
+    const overlayHeight = height * 0.28;
+    const overlayY = height - overlayHeight;
+
+    // Semi-transparent black background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(0, overlayY, width, overlayHeight);
+
+    // Padding
+    const p = 15;
+
+    // -- Left: Real Map View --
+    const mapSize = overlayHeight - (p * 2);
+    const mapX = p;
+    const mapY = overlayY + p;
+
+    // Try to draw real OSM tile
+    let mapDrawn = false;
+    if (lat !== 0 && lng !== 0) {
+        try {
+            const zoom = 15;
+            const xtile = lon2tile(lng, zoom);
+            const ytile = lat2tile(lat, zoom);
+            const tileUrl = `https://tile.openstreetmap.org/${zoom}/${xtile}/${ytile}.png`;
+
+            const mapImg = new Image();
+            mapImg.crossOrigin = "Anonymous"; // Crucial for toDataURL
+            mapImg.src = tileUrl;
+
+            await new Promise((resolve) => {
+                mapImg.onload = () => {
+                    // Draw tile: this isn't perfectly centered but gives "exact map view" of the area
+                    ctx.drawImage(mapImg, mapX, mapY, mapSize, mapSize);
+
+                    // Draw Red Pin centered on the map box (approximate for the tile)
+                    const pinX = mapX + mapSize / 2;
+                    const pinY = mapY + mapSize / 2 - 5;
+                    ctx.fillStyle = '#ea4335';
+                    ctx.beginPath();
+                    ctx.arc(pinX, pinY, 5, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // "OpenStreetMap" label
+                    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                    ctx.fillRect(mapX, mapY + mapSize - 12, mapSize, 12);
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '8px sans-serif';
+                    ctx.fillText('OSM', mapX + 2, mapY + mapSize - 3);
+
+                    mapDrawn = true;
+                    resolve();
+                };
+                mapImg.onerror = resolve; // Fallback if fails
+            });
+        } catch (e) {
+            console.warn("Map tile load failed", e);
+        }
+    }
+
+    if (!mapDrawn) {
+        // Fallback: Grey Box if map fails or no location
+        ctx.fillStyle = '#e0e0e0';
+        ctx.fillRect(mapX, mapY, mapSize, mapSize);
+        ctx.strokeStyle = '#bdbdbd';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(mapX, mapY); ctx.lineTo(mapX + mapSize, mapY + mapSize);
+        ctx.moveTo(mapX + mapSize, mapY); ctx.lineTo(mapX, mapY + mapSize);
+        ctx.stroke();
+        ctx.fillStyle = '#5f6368';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.fillText('Map Unavail.', mapX + 4, mapY + mapSize - 4);
+    }
+
+    // Map Border
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(mapX, mapY, mapSize, mapSize);
+
+
+    // -- Right: Text Block --
+    const textX = mapX + mapSize + p;
+    const textYStart = mapY + 5;
+    const maxWidth = width - textX - p;
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#ffffff';
+
+    // Line 1: Short Address
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillText(shortAddress || "Location Unknown", textX, textYStart, maxWidth);
+
+    // Line 2: Full Address
+    ctx.font = '12px sans-serif';
+    ctx.fillText(fullAddress.substring(0, 65) + (fullAddress.length > 65 ? '...' : ''), textX, textYStart + 22, maxWidth);
+
+    // Line 3: Lat / Long / Accuracy
+    ctx.font = '12px sans-serif';
+    ctx.fillText(`Lat ${lat.toFixed(6)}° Long ${lng.toFixed(6)}° (±${Math.round(accuracy)}m)`, textX, textYStart + 42, maxWidth);
+
+    // Line 4: Date/Time
+    ctx.font = '12px sans-serif';
+    ctx.fillText(fullDateStr, textX, textYStart + 60, maxWidth);
+
+    // GPS Map Camera Label
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.font = '10px sans-serif';
+    const brandedText = "GPS Map Camera";
+    const brandWidth = ctx.measureText(brandedText).width;
+    ctx.fillText(brandedText, width - brandWidth - p, overlayY + p);
+    // -----------------------
+
 
     // Save the captured image for attendance API
     capturedPhotoData = canvas.toDataURL('image/jpeg');
@@ -3965,14 +4405,34 @@ async function markAttendance() {
     try {
         const now = getCurrentDateTime();
 
-        // Optional location for Office/Client
-        let loc = null;
-        if ((selectedType === 'office' || selectedType === 'client') && navigator.geolocation) {
+        // MANDATORY LOCATION CHECK (WFH / Office / Client)
+        // We use the high-accuracy location fetched during camera preview
+        if (!currentPhotoLocation) {
+            // Try to force one last fetch if missing (fallback)
             try {
-                const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { timeout: 10000 }));
-                loc = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-            } catch { }
+                const pos = await new Promise((res, rej) =>
+                    navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 5000 })
+                );
+                currentPhotoLocation = {
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude,
+                    accuracy: pos.coords.accuracy
+                };
+            } catch (e) {
+                showNotification('Location access is mandatory. Please enable GPS and try again.', 'error');
+                return; // Stop submission
+            }
         }
+
+        // Accuracy Check (e.g., must be better than 1000m to be useful, ideally <100m)
+        // User complained about accuracy, so we enforce a reasonable limit.
+        // 200m is a safe upper bound for "being at the office/home" vs "in the neighborhood".
+        if (currentPhotoLocation.accuracy > 200) {
+            showNotification(`Location accuracy is too low (±${Math.round(currentPhotoLocation.accuracy)}m). Please wait for a better GPS signal.`, 'error');
+            return;
+        }
+
+        const loc = { latitude: currentPhotoLocation.lat, longitude: currentPhotoLocation.lng };
 
         const payload = {
             employee_id: currentUser.id,
@@ -5813,6 +6273,8 @@ async function confirmExport() {
     const btn = document.getElementById('confirmExportBtn');
     const btnText = document.getElementById('exportBtnText');
     const spinner = document.getElementById('exportSpinner');
+    const typeSelect = document.getElementById('exportTypeSelect');
+    const selectedType = typeSelect ? typeSelect.value : 'all';
 
     btn.disabled = true;
     btnText.classList.add('hidden');
@@ -5820,10 +6282,16 @@ async function confirmExport() {
     errorDiv.style.display = 'none';
 
     try {
-        const res = await apiCall('attendance-records', 'GET', {
+        const params = {
             start_date: fromDate,
             end_date: toDate
-        });
+        };
+
+        if (selectedType && selectedType !== 'all') {
+            params.type = selectedType;
+        }
+
+        const res = await apiCall('attendance-records', 'GET', params);
 
         if (!res || !res.success || !Array.isArray(res.records)) {
             throw new Error('Failed to fetch attendance records');
@@ -5831,7 +6299,7 @@ async function confirmExport() {
 
         const records = res.records;
         if (!records.length) {
-            throw new Error('No records found');
+            throw new Error('No records found for selected criteria');
         }
 
         /* ---------------- BUILD REGISTER ---------------- */
@@ -5851,11 +6319,16 @@ async function confirmExport() {
             }
 
             const status = String(r.status || '').toLowerCase();
+            let code = 'A';
 
-            employeeMap[r.employee_id].attendance[r.date] =
-                status === 'present' ? 'P' :
-                    status === 'half_day' ? 'HD' :
-                        'A';
+            if (status === 'present') code = 'P';
+            else if (status === 'half_day') code = 'HD';
+            else if (status === 'wfh') code = 'WFH';
+            else if (status === 'client') code = 'CL';
+            else if (status === 'leave') code = 'Leave';
+            else if (status === 'absent') code = 'A';
+
+            employeeMap[r.employee_id].attendance[r.date] = code;
 
         });
 
@@ -5883,6 +6356,10 @@ async function confirmExport() {
 
         /* ---------- ROWS ---------- */
 
+        // If filtering by type, default missing days to '-' instead of 'A' (Absent)
+        // Because if I filter for WFH, a non-WFH day is not necessarily absent from work, just absent from list.
+        const defaultStatus = (selectedType && selectedType !== 'all') ? '-' : 'A';
+
         Object.values(employeeMap).forEach(emp => {
             const rowData = {
                 employee: emp.employee,
@@ -5892,35 +6369,41 @@ async function confirmExport() {
             };
 
             dateRange.forEach(d => {
-                rowData[d] = emp.attendance[d] || 'A';
+                let cellValue = emp.attendance[d];
+
+                // If no record found OR if record is 'A' (Absent), check for weekend override
+                if (!cellValue || cellValue === 'A') {
+                    const dateObj = new Date(d);
+                    const day = dateObj.getDay(); // 0=Sun, 6=Sat
+
+                    // Mark weekends with full name if no record OR if 'A'
+                    if (day === 0) {
+                        cellValue = 'Sunday';
+                    } else if (day === 6) {
+                        cellValue = 'Saturday';
+                    } else if (!cellValue) {
+                        cellValue = defaultStatus;
+                    }
+                }
+
+                rowData[d] = cellValue;
             });
 
             const row = ws.addRow(rowData);
 
-            // 🎨 Apply attendance cell styling
+            // Center align all data cells
             dateRange.forEach((d, idx) => {
-                const colIndex = 5 + idx; // first 4 columns are fixed
+                const colIndex = 5 + idx;
                 const cell = row.getCell(colIndex);
-                const status = cell.value;
-
-                if (ATTENDANCE_CELL_STYLES[status]) {
-                    const style = ATTENDANCE_CELL_STYLES[status];
-                    cell.fill = style.fill;
-                    cell.font = style.font;
-                    cell.alignment = { vertical: 'middle', horizontal: 'center' };
-                }
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
             });
         });
 
 
         /* ---------- FORMATTING ---------- */
 
-        ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        ws.getRow(1).fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FF2563EB' }
-        };
+        // Only Bold Headers, NO Background Color
+        ws.getRow(1).font = { bold: true };
 
         ws.views = [{ state: 'frozen', xSplit: 4, ySplit: 1 }];
         ws.autoFilter = {
@@ -7816,4 +8299,310 @@ function renderEmployeePerformanceModal(data) {
     `;
 
     document.body.appendChild(modal);
+}
+
+function checkDueTomorrowReminders() {
+    if (!myTasks || !myTasks.length) return;
+
+    // Check if we already notified this session to avoid spam
+    if (sessionStorage.getItem('due_reminders_shown')) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const urgentTasks = myTasks.filter(t => {
+        if (!t.due_date || t.status === 'completed') return false;
+        const due = new Date(t.due_date);
+        due.setHours(0, 0, 0, 0);
+        const diffTime = due - today;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return diffDays === 1;
+    });
+
+    if (urgentTasks.length > 0) {
+        const msg = urgentTasks.length === 1 ?
+            `"${urgentTasks[0].title}" is due tomorrow!` :
+            `You have ${urgentTasks.length} tasks due tomorrow.`;
+
+        showNotification(msg, 'warning');
+        sessionStorage.setItem('due_reminders_shown', 'true');
+    }
+}
+
+/* Multi-Select & Teams Logic */
+let selectedEmployeeIds = [];
+let selectedTeamMemberIds = [];
+
+function toggleMultiSelect() {
+    const dropdown = document.getElementById('multiSelectDropdown');
+    dropdown.classList.toggle('show');
+}
+
+function toggleTeamMemberSelect() {
+    const dropdown = document.getElementById('teamMemberDropdown');
+    dropdown.classList.toggle('show');
+}
+
+// Close dropdowns on outside click
+window.onclick = function (event) {
+    if (!event.target.closest('.multi-select-container')) {
+        const dropdowns = document.getElementsByClassName('multi-select-dropdown');
+        for (let i = 0; i < dropdowns.length; i++) {
+            dropdowns[i].classList.remove('show');
+        }
+    }
+}
+
+function filterMultiSelect(val) {
+    const query = val.toLowerCase();
+    const options = document.querySelectorAll('#multiSelectOptionsList .multi-select-item');
+    options.forEach(opt => {
+        const text = opt.innerText.toLowerCase();
+        opt.style.display = text.includes(query) ? 'flex' : 'none';
+    });
+}
+
+function filterTeamMemberSelect(val) {
+    const query = val.toLowerCase();
+    const options = document.querySelectorAll('#teamMemberOptionsList .multi-select-item');
+    options.forEach(opt => {
+        const text = opt.innerText.toLowerCase();
+        opt.style.display = text.includes(query) ? 'flex' : 'none';
+    });
+}
+
+function updateSelectedTags(containerId, ids, allEmployees, hiddenInputId, displayLabelId) {
+    const display = document.getElementById(containerId);
+    if (!ids.length) {
+        display.innerHTML = '<span class="text-muted" style="font-size:0.9rem;">Select Employees...</span>';
+    } else {
+        display.innerHTML = ids.map(id => {
+            const emp = allEmployees.find(e => e.id == id);
+            return `
+                <div class="selected-tag">
+                    ${emp ? emp.name : id}
+                    <span class="tag-remove" onclick="event.stopPropagation(); removeEmployeeTag('${containerId}', ${id})">×</span>
+                </div>
+            `;
+        }).join('');
+    }
+    document.getElementById(hiddenInputId).value = JSON.stringify(ids);
+
+    // Update checkboxes in dropdown
+    updateCheckboxesInDropdown(containerId === 'multiSelectDisplay' ? 'multiSelectOptionsList' : 'teamMemberOptionsList', ids);
+}
+
+function updateCheckboxesInDropdown(listId, ids) {
+    const checkboxes = document.querySelectorAll(`#${listId} input[type="checkbox"]`);
+    checkboxes.forEach(cb => {
+        cb.checked = ids.includes(parseInt(cb.value));
+    });
+}
+
+function removeEmployeeTag(containerId, id) {
+    if (containerId === 'multiSelectDisplay') {
+        selectedEmployeeIds = selectedEmployeeIds.filter(x => x != id);
+        updateSelectedTags('multiSelectDisplay', selectedEmployeeIds, window.allEmployeesSimple || [], 'taskAssigneeIds');
+    } else {
+        selectedTeamMemberIds = selectedTeamMemberIds.filter(x => x != id);
+        updateSelectedTags('teamMemberDisplay', selectedTeamMemberIds, window.allEmployeesSimple || [], 'newTeamMemberIds');
+    }
+}
+
+function selectEmployee(id, isTeamMember = false) {
+    id = parseInt(id);
+    if (isTeamMember) {
+        if (selectedTeamMemberIds.includes(id)) {
+            selectedTeamMemberIds = selectedTeamMemberIds.filter(x => x != id);
+        } else {
+            selectedTeamMemberIds.push(id);
+        }
+        updateSelectedTags('teamMemberDisplay', selectedTeamMemberIds, window.allEmployeesSimple || [], 'newTeamMemberIds');
+    } else {
+        if (selectedEmployeeIds.includes(id)) {
+            selectedEmployeeIds = selectedEmployeeIds.filter(x => x != id);
+        } else {
+            selectedEmployeeIds.push(id);
+        }
+        updateSelectedTags('multiSelectDisplay', selectedEmployeeIds, window.allEmployeesSimple || [], 'taskAssigneeIds');
+    }
+}
+
+async function loadTeams() {
+    const select = document.getElementById('teamSelector');
+    if (!select) return;
+
+    try {
+        const res = await apiCall('get-teams', 'GET', { manager_id: currentUser.id });
+        if (res && res.success && Array.isArray(res.teams)) {
+            window.allTeams = res.teams;
+            select.innerHTML = '<option value="">Select Team...</option>' +
+                res.teams.map(t => `<option value="${t.id}">${t.name} (${t.members.length} members)</option>`).join('');
+        }
+    } catch (e) {
+        console.error('Error loading teams:', e);
+    }
+}
+
+function applyTeamSelection() {
+    const teamId = document.getElementById('teamSelector').value;
+    const infoBox = document.getElementById('teamInfoBox');
+    const editBtn = document.getElementById('editTeamBtn');
+
+    if (!teamId) {
+        if (infoBox) infoBox.style.display = 'none';
+        if (editBtn) editBtn.disabled = true;
+        return;
+    }
+
+    if (!window.allTeams) return;
+
+    const team = window.allTeams.find(t => t.id == teamId);
+    if (team) {
+        if (editBtn) editBtn.disabled = false;
+
+        // Show Info Box
+        if (infoBox) {
+            infoBox.style.display = 'block';
+            document.getElementById('teamMemberCountLabel').innerText = `${team.members.length} Members`;
+            document.getElementById('teamMemberNamesList').innerText = team.members.map(m => m.name).join(', ');
+        }
+
+        // Add all team members to selection (don't duplicate)
+        if (team.members) {
+            team.members.forEach(member => {
+                if (!selectedEmployeeIds.includes(member.id)) {
+                    selectedEmployeeIds.push(member.id);
+                }
+            });
+            updateSelectedTags('multiSelectDisplay', selectedEmployeeIds, window.allEmployeesSimple || [], 'taskAssigneeIds');
+        }
+    }
+}
+
+function openEditTeamModal() {
+    const teamId = document.getElementById('teamSelector').value;
+    if (!teamId || !window.allTeams) return;
+
+    const team = window.allTeams.find(t => t.id == teamId);
+    if (!team) return;
+
+    // Set Header and hidden ID
+    document.getElementById('teamModalTitle').innerText = 'Edit Team';
+    document.getElementById('editingTeamId').value = team.id;
+    document.getElementById('newTeamName').value = team.name;
+
+    // Show delete button
+    const deleteBtn = document.getElementById('deleteTeamBtn');
+    if (deleteBtn) deleteBtn.classList.remove('hidden');
+
+    // Set members
+    selectedTeamMemberIds = team.members.map(m => m.id);
+    updateSelectedTags('teamMemberDisplay', selectedTeamMemberIds, window.allEmployeesSimple || [], 'newTeamMemberIds');
+
+    // Update Button Text
+    const saveBtn = document.getElementById('saveTeamBtn');
+    if (saveBtn) saveBtn.innerText = 'Update Team';
+
+    populateEmployeeListInDropdown('teamMemberOptionsList', true);
+    openModal('createTeamModal');
+}
+
+function openCreateTeamModal() {
+    document.getElementById('teamModalTitle').innerText = 'Create New Team';
+    document.getElementById('editingTeamId').value = '';
+
+    // Hide delete button
+    const deleteBtn = document.getElementById('deleteTeamBtn');
+    if (deleteBtn) deleteBtn.classList.add('hidden');
+
+    // Update Button Text
+    const saveBtn = document.getElementById('saveTeamBtn');
+    if (saveBtn) saveBtn.innerText = 'Create Team';
+
+    selectedTeamMemberIds = [];
+    document.getElementById('newTeamName').value = '';
+    updateSelectedTags('teamMemberDisplay', [], window.allEmployeesSimple || [], 'newTeamMemberIds');
+    populateEmployeeListInDropdown('teamMemberOptionsList', true);
+    openModal('createTeamModal');
+}
+
+async function saveNewTeam() {
+    const name = document.getElementById('newTeamName').value.trim();
+    const editingId = document.getElementById('editingTeamId').value;
+
+    if (!name) {
+        showNotification('Please enter a team name', 'error');
+        return;
+    }
+
+    if (selectedTeamMemberIds.length === 0) {
+        showNotification('Please select at least one member', 'error');
+        return;
+    }
+
+    try {
+        const endpoint = editingId ? 'update-team' : 'create-team';
+        const payload = {
+            name: name,
+            manager_id: currentUser.id,
+            members: selectedTeamMemberIds
+        };
+        if (editingId) payload.team_id = editingId;
+
+        const res = await apiCall(endpoint, 'POST', payload);
+
+        if (res && res.success) {
+            showNotification(editingId ? 'Team updated successfully' : 'Team created successfully');
+            closeModal('createTeamModal');
+            await loadTeams();
+
+            // If updated, refresh the current modal info
+            if (editingId) applyTeamSelection();
+        } else {
+            showNotification(res.message || 'Failed to save team', 'error');
+        }
+    } catch (e) {
+        console.error('Error saving team:', e);
+        showNotification('Error saving team', 'error');
+    }
+}
+
+async function deleteTeam() {
+    const teamId = document.getElementById('editingTeamId').value;
+    if (!teamId) return;
+
+    if (!confirm('Are you sure you want to delete this team?')) return;
+
+    try {
+        const res = await apiCall('delete-team', 'POST', { team_id: teamId });
+        if (res && res.success) {
+            showNotification('Team deleted successfully');
+            closeModal('createTeamModal');
+            // Reset task modal selection
+            document.getElementById('teamSelector').value = '';
+            applyTeamSelection();
+            await loadTeams();
+        } else {
+            showNotification(res.message || 'Failed to delete team', 'error');
+        }
+    } catch (e) {
+        console.error('Error deleting team:', e);
+        showNotification('Error deleting team', 'error');
+    }
+}
+
+function populateEmployeeListInDropdown(listId, isTeamMember = false) {
+    const list = document.getElementById(listId);
+    if (!list || !window.allEmployeesSimple) return;
+
+    list.innerHTML = window.allEmployeesSimple.map(emp => `
+        <div class="multi-select-item" onclick="selectEmployee(${emp.id}, ${isTeamMember})">
+            <input type="checkbox" value="${emp.id}" onclick="event.stopPropagation(); selectEmployee(${emp.id}, ${isTeamMember})">
+            <span>${emp.name} (${emp.role})</span>
+        </div>
+    `).join('');
+
+    // Update checkboxes based on current selection
+    updateCheckboxesInDropdown(listId, isTeamMember ? selectedTeamMemberIds : selectedEmployeeIds);
 }

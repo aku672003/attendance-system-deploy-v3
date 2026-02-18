@@ -53,8 +53,15 @@ urlpatterns = [
     # Task Management
     path('employees-simple', views.employees_simple_list, name='employees_simple_list'),
     path('tasks', views.tasks_api, name='tasks_api'),
+    path('tasks/create', views.create_task, name='create_task'), # Explicit create route
     path('tasks/<int:task_id>', views.task_detail_api, name='task_detail_api'),
     path('task-comment', views.task_comment_api, name='task_comment_api'),
+    
+    # Team Management
+    path('create-team', views.create_team, name='create_team'),
+    path('update-team', views.update_team, name='update_team'),
+    path('delete-team', views.delete_team, name='delete_team'),
+    path('get-teams', views.get_teams, name='get_teams'),
 
     # Request Management
     path('wfh-request-reject', views.wfh_request_reject, name='wfh_request_reject'),
