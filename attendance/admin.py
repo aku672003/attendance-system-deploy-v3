@@ -2,8 +2,9 @@ from django.contrib import admin
 from django import forms
 from django.contrib.auth.hashers import make_password
 from .models import (
-    Employee, EmployeeProfile, OfficeLocation, DepartmentOfficeAccess,
-    AttendanceRecord, EmployeeDocument, Task, EmployeeRequest
+    Employee, EmployeeProfile, OfficeLocation, DepartmentOfficeAccess, 
+    AttendanceRecord, EmployeeRequest, EmployeeDocument, Task, 
+    BirthdayWish, TaskComment, Team
 )
 
 
@@ -72,7 +73,32 @@ class EmployeeDocumentAdmin(admin.ModelAdmin):
 
 @admin.register(Task)
 class TaskAdmin(admin.ModelAdmin):
-    list_display = ['title', 'status', 'priority', 'assigned_to', 'due_date']
+    list_display = ['id', 'title', 'status', 'priority', 'due_date']
     list_filter = ['status', 'priority', 'due_date']
-    search_fields = ['title', 'description', 'assigned_to__username']
+    search_fields = ['title', 'description']
     date_hierarchy = 'created_at'
+    filter_horizontal = ('assignees',)
+
+    def get_assignees(self, obj):
+        try:
+            return ", ".join([a.username for a in obj.assignees.all()])
+        except Exception:
+            return "---"
+    get_assignees.short_description = 'Assignees'
+
+
+@admin.register(BirthdayWish)
+class BirthdayWishAdmin(admin.ModelAdmin):
+    list_display = ['receiver', 'sender', 'created_at']
+    list_filter = ['created_at']
+
+
+@admin.register(TaskComment)
+class TaskCommentAdmin(admin.ModelAdmin):
+    list_display = ['task', 'author', 'created_at']
+
+
+@admin.register(Team)
+class TeamAdmin(admin.ModelAdmin):
+    list_display = ('name', 'manager', 'created_at')
+    filter_horizontal = ('members',)

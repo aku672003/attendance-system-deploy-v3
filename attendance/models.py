@@ -287,25 +287,25 @@ class Task(models.Model):
     description = models.TextField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='todo')
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='medium')
-    assigned_to = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='assigned_tasks')
+
     manager = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='supervised_tasks')
     created_by = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='created_tasks')
     due_date = models.DateField(null=True, blank=True)
     accuracy = models.IntegerField(null=True, blank=True) # Task accuracy score (0-100)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
+    assignees = models.ManyToManyField(Employee, related_name='assigned_tasks')
+    
     class Meta:
         db_table = 'tasks'
         indexes = [
             models.Index(fields=['status']),
-            models.Index(fields=['assigned_to']),
             models.Index(fields=['created_by']),
             models.Index(fields=['due_date']),
         ]
 
     def __str__(self):
-        return f"{self.title} - {self.assigned_to.name}"
+        return f"{self.title} (Team Task)"
 
 
 class TaskComment(models.Model):
@@ -339,3 +339,17 @@ class BirthdayWish(models.Model):
 
     def __str__(self):
         return f"Wish from {self.sender.name} to {self.receiver.name}"
+
+
+class Team(models.Model):
+    name = models.CharField(max_length=100)
+    manager = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='managed_teams')
+    members = models.ManyToManyField(Employee, related_name='teams')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'teams'
+        unique_together = [['name', 'manager']]
+
+    def __str__(self):
+        return f"{self.name} (Manager: {self.manager.username})"
