@@ -78,65 +78,118 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
 }
 
 .login-card {
-    background: var(--white);
-    border-radius: 16px;
-    padding: 40px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 24px;
+    padding: 48px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
     width: 100%;
-    max-width: 400px;
+    max-width: 440px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    position: relative;
+    z-index: 1;
+    transform: translateY(0);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.login-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.6);
 }
 
 .login-title {
-    font-size: 28px;
-    font-weight: 700;
-    color: var(--gray-900);
+    font-size: 32px;
+    font-weight: 800;
+    color: #1e1b4b;
     margin-bottom: 8px;
     text-align: center;
+    letter-spacing: -0.02em;
 }
 
 .login-subtitle {
-    color: var(--gray-500);
+    color: #64748b;
     text-align: center;
-    margin-bottom: 32px;
+    margin-bottom: 40px;
+    font-weight: 500;
+    font-size: 15px;
 }
 
-/* Forms */
+/* Forms & Inputs Refinement */
 .form-group {
-    margin-bottom: 20px;
+    margin-bottom: 24px;
 }
 
 .form-label {
     display: block;
-    margin-bottom: 8px;
-    font-weight: 600;
-    color: var(--gray-700);
-    font-size: 14px;
+    margin-bottom: 10px;
+    font-weight: 700;
+    color: #334155;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .form-control {
-    width: 90%;
-    padding: 12px 16px;
-    border: 2px solid var(--gray-200);
-    border-radius: 8px;
+    width: 100%;
+    padding: 14px 18px;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
     font-size: 16px;
-    transition: all 0.2s ease;
-    background: var(--white);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: #f8fafc;
+    color: #1e293b;
+    box-sizing: border-box;
+    /* Crucial for responsiveness */
 }
 
 .form-control:focus {
     outline: none;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    border-color: #4f46e5;
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
+}
+
+.form-control::placeholder {
+    color: #94a3b8;
+}
+
+/* Password Toggle Enhancements */
+.password-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.toggle-password-btn {
+    position: absolute;
+    right: 14px;
+    background: none;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    font-size: 18px;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+    z-index: 2;
+}
+
+.toggle-password-btn:hover {
+    color: #4f46e5;
 }
 
 .form-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 16px;
+    gap: 20px;
 }
 
 /* Buttons */
@@ -162,15 +215,16 @@ body {
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
     color: var(--white);
     border: none;
+    box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
 }
 
 .btn-primary:hover:not(:disabled) {
-    background: linear-gradient(135deg, var(--primary-dark) 0%, #1e3a8a 100%);
-    transform: translateY(-1px);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+    background: linear-gradient(135deg, #4338ca 0%, #6d28d9 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3);
 }
 
 .btn-secondary {
@@ -195,6 +249,34 @@ body {
 
 .btn-full-width {
     width: 100%;
+}
+
+/* Links in Login/Signup */
+.signup-link,
+.login-link {
+    margin-top: 32px;
+    text-align: center;
+    font-size: 14px;
+    color: #64748b;
+}
+
+.signup-link p,
+.login-link p {
+    margin-bottom: 8px;
+}
+
+.signup-link a,
+.login-link a {
+    color: #4f46e5;
+    text-decoration: none;
+    font-weight: 700;
+    transition: all 0.2s;
+}
+
+.signup-link a:hover,
+.login-link a:hover {
+    color: #7c3aed;
+    text-decoration: underline;
 }
 
 /* Header */
@@ -1339,6 +1421,17 @@ body {
 }
 
 @media (max-width: 768px) {
+
+    /* Login Screen Mobile Fixes */
+    .login-container {
+        padding: 16px;
+    }
+
+    .login-card {
+        padding: 32px 24px !important;
+        border-radius: 20px !important;
+    }
+
     .container {
         padding: 12px;
     }
@@ -7042,4 +7135,104 @@ body.birthday-mode-active .status-badge {
 .btn-wish:hover {
     transform: scale(1.1);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* ========== Stats Card (Employee Performance Modal) Mobile Responsiveness ========== */
+
+/* Fix fixed-width predictive modal on all screens */
+.predictive-modal {
+    max-width: 95vw;
+}
+
+@media (max-width: 768px) {
+
+    /* 1. Modal wrapper - fill the screen */
+    #employeePerformanceModal .modal-content.predictive-modal {
+        width: 95vw !important;
+        max-width: 95vw !important;
+        border-radius: 16px !important;
+    }
+
+    /* 2. Collapse the 2-column body grid to a single column */
+    .stats-modal-body {
+        grid-template-columns: 1fr !important;
+        padding: 16px !important;
+        gap: 16px !important;
+    }
+
+    /* 3. Header: tighten padding */
+    #employeePerformanceModal .predictive-header {
+        padding: 16px !important;
+    }
+
+    /* 4. Header top row: let name + close button stay on one line */
+    #employeePerformanceModal .predictive-header>div {
+        gap: 10px !important;
+    }
+
+    /* 5. Employee name font size */
+    #employeePerformanceModal h2 {
+        font-size: 16px !important;
+    }
+
+    /* 6. Department / email subtitle */
+    #employeePerformanceModal .predictive-header p {
+        font-size: 11px !important;
+    }
+
+    /* 7. Filter controls row - wrap onto multiple lines */
+    #employeePerformanceModal .predictive-header div[style*="align-items: center; gap: 8px"] {
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+    }
+
+    /* 8. Shrink selects in header */
+    #employeePerformanceModal select {
+        font-size: 12px !important;
+        padding: 5px 8px !important;
+    }
+
+    /* 9. Date range badge - smaller and full-width feel */
+    #employeePerformanceModal .predictive-header span[style*="font-size: 11px"] {
+        font-size: 10px !important;
+        margin-left: 0 !important;
+        padding: 3px 8px !important;
+    }
+
+    /* 10. Avatar icon in header */
+    #employeePerformanceModal div[style*="width: 48px; height: 48px"] {
+        width: 38px !important;
+        height: 38px !important;
+        font-size: 16px !important;
+    }
+
+    /* 11. Glass cards - tighten inner padding */
+    #employeePerformanceModal .glass-card {
+        padding: 16px !important;
+    }
+
+    /* 12. The 2-col sub-grids inside Attendance Habits and Task Performance */
+    #employeePerformanceModal div[style*="grid-template-columns: 1fr 1fr"] {
+        grid-template-columns: 1fr 1fr !important;
+        /* keep side-by-side on mobile, just tighter */
+        gap: 8px !important;
+    }
+
+    /* 13. SVG donut - scale down */
+    #employeePerformanceModal svg[width="140"] {
+        width: 110px !important;
+        height: 110px !important;
+    }
+
+    /* 14. Work efficiency stats row */
+    #employeePerformanceModal div[style*="display: flex; justify-content: space-between; align-items: center; padding: 12px"] {
+        gap: 4px !important;
+        padding: 10px !important;
+    }
+
+    /* 15. Close analysis button */
+    #employeePerformanceModal button[style*="padding: 14px 40px"] {
+        width: 100% !important;
+        padding: 12px 20px !important;
+    }
 }
