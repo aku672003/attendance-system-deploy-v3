@@ -59,6 +59,30 @@ class Employee(models.Model):
     def __str__(self):
         return self.username
 
+    def get_current_assignment(self):
+        """Check for active temporary tags and return current department and role"""
+        from django.utils import timezone
+        today = timezone.localtime(timezone.now()).date()
+        
+        active_tag = TemporaryTag.objects.filter(
+            employee=self,
+            start_date__lte=today,
+            end_date__gte=today
+        ).first()
+        
+        if active_tag:
+            return {
+                'department': active_tag.department,
+                'role': active_tag.role,
+                'is_temporary': True
+            }
+            
+        return {
+            'department': self.department,
+            'role': self.role,
+            'is_temporary': False
+        }
+
 
 class EmployeeProfile(models.Model):
     MARITAL_STATUS_CHOICES = [
@@ -178,6 +202,12 @@ class AttendanceRecord(models.Model):
     check_out_location = models.JSONField(null=True, blank=True)
     check_in_photo = models.TextField(null=True, blank=True)  # Base64 or file path
     check_out_photo = models.TextField(null=True, blank=True)  # Base64 or file path
+    lunch_start_time = models.TimeField(null=True, blank=True)
+    lunch_end_time = models.TimeField(null=True, blank=True)
+    lunch_start_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    lunch_start_lon = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    lunch_end_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    lunch_end_lon = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     total_hours = models.DecimalField(max_digits=4, decimal_places=2, default=0.00)
     is_half_day = models.BooleanField(default=False)
     notes = models.TextField(null=True, blank=True)
@@ -353,3 +383,21 @@ class Team(models.Model):
 
     def __str__(self):
         return f"{self.name} (Manager: {self.manager.username})"
+
+
+class TemporaryTag(models.Model):
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='temporary_tags')
+    department = models.CharField(max_length=20, choices=Employee.DEPARTMENT_CHOICES)
+    role = models.CharField(max_length=20, choices=Employee.ROLE_CHOICES)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'temporary_tags'
+        indexes = [
+            models.Index(fields=['employee', 'start_date', 'end_date']),
+        ]
+
+    def __str__(self):
+        return f"Temp Tag: {self.employee.username} ({self.department}/{self.role})"

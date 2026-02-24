@@ -1002,6 +1002,42 @@ body {
     cursor: default;
 }
 
+/* Calendar Navigation Controls */
+.calendar-nav-controls {
+    display: flex;
+    gap: 8px;
+    margin-left: 12px;
+}
+
+.btn-calendar-nav {
+    background: var(--gray-100);
+    border: 1px solid var(--gray-200);
+    color: var(--gray-700);
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    padding: 0;
+    line-height: 1;
+}
+
+.btn-calendar-nav:hover {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.btn-calendar-nav:active {
+    transform: translateY(0);
+}
+
 /* Legend Container - Ultra Compact */
 .calendar-items-legend {
     display: flex;
@@ -5469,6 +5505,7 @@ input:checked+.slider:before {
     border-radius: 8px;
     padding: 10px;
     position: absolute;
+
     z-index: 1000;
     bottom: 150%;
     left: 50%;
@@ -5478,7 +5515,8 @@ input:checked+.slider:before {
     font-size: 12px;
     font-weight: 500;
     line-height: 1.4;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+        0 4px 6px -2px rgba(0, 0, 0, 0.05);
     pointer-events: none;
 }
 
@@ -6141,4 +6179,867 @@ input:checked+.slider:before {
     .premium-grid {
         grid-template-columns: 1fr;
     }
+}
+
+/* Lunch Break Active State */
+.active-lunch {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    border-color: #d97706;
+}
+
+.active-lunch .action-card-title,
+.active-lunch .action-card-description,
+.active-lunch .action-card-icon {
+    color: white;
+}
+
+/* Custom Map Markers */
+.custom-emoji-marker {
+    background-color: transparent;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.custom-emoji-marker:hover {
+    transform: scale(1.1) translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    z-index: 1000 !important;
+}
+
+.custom-emoji-marker div {
+    font-size: 24px;
+    line-height: 1;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.1));
+}
+
+/* Map Modal */
+.map-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 2000;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(5px);
+}
+
+.map-modal.active {
+    display: flex;
+}
+
+.map-modal-content {
+    width: 90%;
+    height: 85%;
+    background: white;
+    border-radius: 16px;
+    padding: 16px;
+    position: relative;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    animation: modalSlideUp 0.3s ease-out;
+}
+
+.close-map-btn {
+    position: absolute;
+    top: -15px;
+    right: -15px;
+    width: 40px;
+    height: 40px;
+    background: white;
+    border-radius: 50%;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    z-index: 2001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--gray-700);
+    transition: all 0.2s;
+}
+
+.close-map-btn:hover {
+    transform: scale(1.1);
+    color: var(--error-color);
+}
+
+@keyframes modalSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Profile Completion Alert */
+.profile-alert-card {
+    background: linear-gradient(135deg, #fffbeb 0%, #fff7ed 100%);
+    border: 1px solid #fed7aa;
+    border-left: 5px solid #f59e0b;
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    animation: slideDown 0.5s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.profile-alert-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.profile-alert-content {
+    flex-grow: 1;
+}
+
+.profile-alert-title {
+    font-weight: 700;
+    color: #9a3412;
+    margin-bottom: 4px;
+    display: block;
+}
+
+.profile-alert-text {
+    font-size: 14px;
+    color: #c2410c;
+}
+
+.profile-alert-action {
+    flex-shrink: 0;
+}
+
+.btn-alert {
+    background: #f59e0b;
+    color: white;
+    padding: 8px 16px;
+    font-size: 13px;
+    min-height: auto;
+}
+
+.btn-alert:hover {
+    background: #d97706;
+}
+
+/* ==========================================================================
+   BIRTHDAY CELEBRATION MODE
+   ========================================================================== */
+
+/* ==========================================================================
+   BIRTHDAY CELEBRATION MODE (VISIBILITY FIXES & REFINED REDESIGN)
+   ========================================================================== */
+
+/* Theme Variables for Birthday Mode (Refined for Contrast) */
+:root {
+    --female-birthday-grad: linear-gradient(-45deg, #4c0000, #2d004d, #800000, #1a0033, #4c0000);
+    --male-birthday-grad: linear-gradient(-45deg, #001a33, #000c1a, #002b4d, #001226, #001a33);
+    /* Lighter glass for better legibility */
+    --glass-bg: rgba(255, 255, 255, 0.15);
+    --glass-border: rgba(255, 255, 255, 0.2);
+    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* Single Background Watermark Redesign */
+html.birthday-mode-female {
+    background: var(--female-birthday-grad) !important;
+    background-size: 400% 400% !important;
+    animation: premiumBirthdayFlow 20s ease-in-out infinite alternate !important;
+    background-attachment: fixed !important;
+    overflow-x: hidden;
+}
+
+html.birthday-mode-male {
+    background: var(--male-birthday-grad) !important;
+    background-size: 400% 400% !important;
+    animation: premiumBirthdayFlow 20s ease-in-out infinite alternate !important;
+    background-attachment: fixed !important;
+    overflow-x: hidden;
+}
+
+body.birthday-mode-female,
+body.birthday-mode-male {
+    background: transparent !important;
+    position: relative;
+    min-height: 100vh;
+}
+
+/* Large Single Fixed Watermark (Centered & Prominent) */
+body.birthday-mode-active::before {
+    content: "HAPPY BIRTHDAY";
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 8vw;
+    /* Reduced from 15vw to fit perfectly */
+    max-width: 90vw;
+    text-align: center;
+    font-weight: 950;
+    font-family: 'Inter', sans-serif;
+    color: rgba(255, 255, 255, 0.12) !important;
+    text-shadow: 0 0 30px rgba(0, 0, 0, 0.2);
+    pointer-events: none;
+    z-index: -1;
+    white-space: nowrap;
+    letter-spacing: -0.05em;
+    user-select: none;
+    text-transform: uppercase;
+}
+
+@keyframes premiumBirthdayFlow {
+    0% {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+/* Glassmorphic Cards */
+body.birthday-mode-active .card,
+body.birthday-mode-active .stat-card,
+body.birthday-mode-active .action-card,
+body.birthday-mode-active .header,
+body.birthday-mode-active .office-card {
+    background: rgba(255, 255, 255, 0.18) !important;
+    /* Slightly more opaque glass */
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.25) !important;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4) !important;
+    position: relative;
+    overflow: hidden;
+    color: #ffffff !important;
+    z-index: 10 !important;
+}
+
+/* Ensure Status Overview content is visible */
+body.birthday-mode-active .status-metric *,
+body.birthday-mode-active .metric-value,
+body.birthday-mode-active .status-title {
+    color: #ffffff !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+body.birthday-mode-active .progress-ring-bg {
+    stroke: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Remove Card-Level Watermarks */
+body.birthday-mode-active .card::after,
+body.birthday-mode-active .stat-card::after,
+body.birthday-mode-active .header::after {
+    display: none !important;
+}
+
+/* Text & Contrast Corrections */
+body.birthday-mode-active .header-title,
+body.birthday-mode-active .user-welcome,
+body.birthday-mode-active .stat-card-title,
+body.birthday-mode-active .action-card-title,
+body.birthday-mode-active .action-card-description {
+    color: #ffffff !important;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5) !important;
+    font-weight: 700 !important;
+}
+
+body.birthday-mode-active .metric-value,
+body.birthday-mode-active .status-count {
+    color: #ffffff !important;
+    text-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+}
+
+body.birthday-mode-active .status-label,
+body.birthday-mode-active .metric-label {
+    color: rgba(255, 255, 255, 0.9) !important;
+    font-weight: 700;
+}
+
+/* High-Contrast Profile Alert */
+body.birthday-mode-active .profile-alert {
+    background: rgba(45, 0, 77, 0.8) !important;
+    /* Deep contrast bg */
+    border: 2px solid #ff9d00 !important;
+    box-shadow: 0 0 20px rgba(255, 157, 0, 0.3) !important;
+}
+
+body.birthday-mode-active .profile-alert-title,
+body.birthday-mode-active .profile-alert-text {
+    color: #ffffff !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+body.birthday-mode-active .notification-bar {
+    background: rgba(30, 0, 60, 0.85) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+body.birthday-mode-active .notification-title {
+    color: #ffffff !important;
+}
+
+/* Status & Location Visibility Fixes */
+body.birthday-mode-active .location-status.in-range,
+body.birthday-mode-active .location-status.out-of-range,
+body.birthday-mode-active .location-status.checking {
+    background: rgba(255, 255, 255, 0.2) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+body.birthday-mode-active .status-badge {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+#temporaryTagsList td {
+    vertical-align: middle;
+}
+
+#temporaryTagsList .btn-subtle:hover {
+    background: rgba(239, 68, 68, 0.1);
+}
+
+/* ==========================================================================
+   BIRTHDAY SOCIAL FEATURES (PETALS & GRAFFITI)
+   ========================================================================== */
+
+/* Flower Petals Rain (Premium Neutral) */
+.petal {
+    position: fixed;
+    top: -50px;
+    width: 25px;
+    height: 15px;
+    background: #ffffff;
+    border-radius: 150% 0 150% 0;
+    pointer-events: none;
+    z-index: 10001;
+    animation: fall linear forwards, sway ease-in-out infinite alternate;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+@keyframes fall {
+    to {
+        transform: translateY(110vh) rotate(720deg);
+    }
+}
+
+@keyframes sway {
+    0% {
+        margin-left: -20px;
+    }
+
+    100% {
+        margin-left: 20px;
+    }
+}
+
+/* Birthday Graffiti Overlay (Scoped for Gender) */
+.birthday-graffiti-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000000;
+    /* Priority layering */
+    background: transparent !important;
+    backdrop-filter: none !important;
+    pointer-events: none;
+    opacity: 0;
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    text-align: center;
+    padding: 2vw;
+    overflow: hidden;
+}
+
+/* Feminine Overlay Variant - High Contrast */
+.birthday-graffiti-overlay.feminine {
+    background: #1a0510;
+    /* Solid dark purple */
+}
+
+.birthday-graffiti-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.birthday-graffiti-overlay.shake {
+    animation: cameraShake 0.2s cubic-bezier(.36, .07, .19, .97) both;
+}
+
+@keyframes cameraShake {
+
+    10%,
+    90% {
+        transform: translate3d(-2px, 0, 0);
+    }
+
+    30%,
+    50%,
+    70% {
+        transform: translate3d(-6px, 0, 0);
+    }
+
+    40%,
+    60% {
+        transform: translate3d(6px, 0, 0);
+    }
+}
+
+.graffiti-text {
+    font-family: 'Pacifico', cursive;
+    color: var(--sticker-main, #f5f1e3);
+    /* Dynamic Color */
+    position: relative;
+    user-select: none;
+    margin: 5vh auto;
+    display: flex;
+    flex-direction: column;
+    /* Stack name and wish */
+    align-items: center;
+    width: fit-content;
+    max-width: 95vw;
+    z-index: 20;
+    text-align: center;
+}
+
+.graffiti-line {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    white-space: nowrap;
+    width: fit-content;
+    filter:
+        drop-shadow(4px 4px 0px #fff) drop-shadow(10px 10px 15px rgba(0, 0, 0, 0.7));
+    -webkit-text-stroke: 2px #fff;
+    text-shadow:
+        1px 1px 0px var(--sticker-shadow, #8b0000),
+        2px 2px 0px var(--sticker-shadow, #8b0000),
+        3px 3px 0px var(--sticker-shadow, #8b0000),
+        4px 4px 0px var(--sticker-shadow, #8b0000),
+        5px 5px 0px var(--sticker-shadow, #8b0000);
+}
+
+.name-line {
+    font-size: clamp(1.2rem, 3.5vw, 3rem);
+    /* Smaller for fit */
+    margin-bottom: 5px;
+    opacity: 0.9;
+}
+
+.wish-line {
+    font-size: clamp(1.5rem, 4.5vw, 5rem);
+    /* Scaled down significantly for long names/messages */
+}
+
+.birthday-graffiti-overlay.active .graffiti-text {
+    animation: stickerFloat 3s ease-in-out infinite alternate;
+}
+
+@keyframes stickerFloat {
+    0% {
+        transform: translateY(0) rotate(-1deg);
+    }
+
+    100% {
+        transform: translateY(-15px) rotate(1deg);
+    }
+}
+
+/* Nabla 3D Sliding Reveal */
+.graffiti-text span {
+    display: inline-block;
+    opacity: 0;
+    transform: perspective(1000px) translate3d(0, 40px, 100px);
+    transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s ease-out;
+}
+
+.graffiti-text span.typed {
+    opacity: 1;
+    transform: perspective(1000px) translate3d(0, 0, 0);
+}
+
+/* Premium 3D "Glossy Masterpiece" Cake */
+.premium-cake {
+    position: relative;
+    width: 260px;
+    height: 180px;
+    transform-style: preserve-3d;
+    filter: drop-shadow(0 0 30px rgba(255, 0, 255, 0.15));
+}
+
+.cake-tier {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 50% / 15%;
+    box-shadow:
+        inset 0 -15px 40px rgba(0, 0, 0, 0.4),
+        0 10px 30px rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.tier-bottom {
+    bottom: 0;
+    width: 260px;
+    height: 90px;
+    background:
+        radial-gradient(ellipse at center, rgba(255, 255, 255, 0.1) 0%, transparent 70%),
+        linear-gradient(to bottom, #8338ec, #3a0ca3);
+    z-index: 1;
+}
+
+.tier-top {
+    bottom: 45px;
+    width: 190px;
+    height: 75px;
+    background:
+        radial-gradient(ellipse at center, rgba(255, 255, 255, 0.15) 0%, transparent 60%),
+        linear-gradient(to bottom, #ff006e, #c9184a);
+    z-index: 2;
+}
+
+/* High-Gloss Subsurface Decoration */
+.cake-decoration {
+    position: absolute;
+    top: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 45px;
+    background:
+        radial-gradient(circle at 30% 30%, #fff 2%, transparent 30%),
+        radial-gradient(circle at center, #ffd60a 0%, #ff9f1c 100%);
+    border-radius: 50%;
+    box-shadow:
+        0 8px 20px rgba(0, 0, 0, 0.5),
+        inset 0 -5px 10px rgba(0, 0, 0, 0.2);
+    z-index: 3;
+}
+
+/* realistic logic for flickering candles */
+.candles-premium {
+    position: absolute;
+    top: -75px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 35px;
+    z-index: 10;
+}
+
+.premium-candle {
+    position: relative;
+    width: 14px;
+    height: 70px;
+}
+
+.candle-stick {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to right, #f8f9fa, #e9ecef 30%, #f8f9fa 50%, #dee2e6 70%, #f8f9fa);
+    border-radius: 4px;
+    border: 0.5px solid rgba(0, 0, 0, 0.05);
+}
+
+.candle-flame {
+    position: absolute;
+    top: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 16px;
+    height: 28px;
+    background: radial-gradient(circle at 50% 100%, #fff 10%, #ffea00 40%, #ff9100 80%, transparent);
+    border-radius: 50% 50% 35% 35%;
+    filter: blur(1px);
+    animation: flicker flameFlicker 0.1s infinite alternate;
+    box-shadow: 0 0 20px rgba(255, 165, 0, 0.8);
+}
+
+@keyframes flameFlicker {
+    from {
+        transform: translateX(-50%) scale(1) rotate(-1deg);
+        opacity: 0.9;
+    }
+
+    to {
+        transform: translateX(-50%) scale(1.1) rotate(1deg);
+        opacity: 1;
+    }
+}
+
+/* Feminine Text Variant (Prismatic Pastel) */
+.feminine .graffiti-text {
+    background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #feada6 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 5px 20px rgba(255, 182, 193, 0.4);
+}
+
+@keyframes bubbleBounce {
+
+    0%,
+    100% {
+        transform: translateY(0) scale(1);
+    }
+
+    50% {
+        transform: translateY(-10px) scale(1.05);
+    }
+}
+
+@keyframes bloomPulse {
+
+    0%,
+    100% {
+        filter: brightness(1) drop-shadow(0 0 5px rgba(255, 192, 203, 0.5));
+    }
+
+    50% {
+        filter: brightness(1.2) drop-shadow(0 0 15px rgba(255, 105, 180, 0.8));
+    }
+}
+
+/* Cyber Glitch Effect */
+@keyframes glitch {
+    0% {
+        transform: translate(0);
+        text-shadow: 0 0 10px #00fff2;
+    }
+
+    2% {
+        transform: translate(-8px, 3px);
+        text-shadow: 3px 0 #ff00ff, -3px 0 #00fff2;
+    }
+
+    4% {
+        transform: translate(8px, -3px);
+        text-shadow: -3px 0 #ff00ff, 3px 0 #00fff2;
+    }
+
+    6% {
+        transform: translate(0);
+    }
+
+    100% {
+        transform: translate(0);
+    }
+}
+
+@keyframes cyberPulse {
+
+    0%,
+    100% {
+        opacity: 1;
+        filter: brightness(1);
+    }
+
+    50% {
+        opacity: 0.8;
+        filter: brightness(1.4) contrast(1.4);
+    }
+}
+
+@keyframes rainbowFlow {
+    to {
+        background-position: 200% center;
+    }
+}
+
+@keyframes graffitiPop {
+    0% {
+        transform: scale(0.3);
+        opacity: 0;
+        filter: blur(30px);
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+        filter: blur(0);
+    }
+}
+
+/* Cake Cutting Animation (Enhanced splitting) */
+.cake-container {
+    margin-top: 20px;
+    position: relative;
+    width: 400px;
+    height: 300px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transform: scale(0.6);
+    transition: all 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.birthday-graffiti-overlay.active .cake-container {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.cake-body {
+    font-size: 180px;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.4));
+}
+
+.cake-half {
+    position: relative;
+    transition: all 0.8s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.cake-half.left {
+    clip-path: inset(0 50% 0 0);
+    margin-right: -180px;
+}
+
+.cake-half.right {
+    clip-path: inset(0 0 0 50%);
+}
+
+.cake-half.left.cut {
+    transform: translate(-120px, 20px) rotate(-15deg);
+    opacity: 0;
+}
+
+.cake-half.right.cut {
+    transform: translate(120px, 20px) rotate(15deg);
+    opacity: 0;
+}
+
+.knife {
+    position: absolute;
+    top: -150px;
+    left: 50%;
+    transform: translateX(-50%) rotate(-45deg);
+    opacity: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: none;
+}
+
+.knife.animate {
+    animation: premiumCut 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.knife-blade {
+    width: 14px;
+    height: 100px;
+    background: linear-gradient(90deg, #adb5bd, #f8f9fa 40%, #dee2e6 60%, #adb5bd);
+    clip-path: polygon(0 0, 100% 0, 100% 85%, 50% 100%, 0 85%);
+    border-radius: 4px 4px 0 0;
+    box-shadow: inset -2px 0 5px rgba(255, 255, 255, 0.5);
+}
+
+.knife-handle {
+    width: 20px;
+    height: 60px;
+    background: linear-gradient(to right, #463f3a, #8a5a44 50%, #463f3a);
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes premiumCut {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -150px) rotate(-45deg);
+    }
+
+    30% {
+        opacity: 1;
+        transform: translate(-50%, -50px) rotate(-20deg);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translate(-50%, 40px) rotate(0deg);
+    }
+}
+
+.sparkle {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 11;
+    box-shadow: 0 0 10px currentColor;
+}
+
+/* Wish Button Style (Rainbow Iridescent) */
+.btn-wish {
+    background: linear-gradient(135deg, #ff0080, #7928ca, #0070f3, #00dfd8);
+    background-size: 300% 300%;
+    animation: rainbowShift 5s ease infinite;
+    color: white;
+    border: none;
+    padding: 8px 18px;
+    border-radius: 25px;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    margin-left: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+@keyframes rainbowShift {
+    0% {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+.btn-wish:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
 }

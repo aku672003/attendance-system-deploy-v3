@@ -51,7 +51,7 @@ class DepartmentOfficeAccessAdmin(admin.ModelAdmin):
 
 @admin.register(AttendanceRecord)
 class AttendanceRecordAdmin(admin.ModelAdmin):
-    list_display = ['id', 'employee', 'date', 'type', 'status', 'check_in_time', 'check_out_time']
+    list_display = ['id', 'employee', 'date', 'type', 'status', 'check_in_time', 'check_out_time', 'lunch_start_time', 'lunch_end_time', 'lunch_start_lat', 'lunch_start_lon', 'lunch_end_lat', 'lunch_end_lon']
     list_filter = ['type', 'status', 'date']
     search_fields = ['employee__username', 'employee__name']
     date_hierarchy = 'date'

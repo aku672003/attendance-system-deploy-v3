@@ -5,7 +5,11 @@ from django.views.decorators.http import require_http_methods
 from django.utils.decorators import method_decorator
 from django.db.models import Q, Count, Sum, Avg
 from django.utils import timezone
+from django.core.cache import cache
+from django.core.mail import send_mail
 from django.conf import settings
+import random
+import string
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from rest_framework.response import Response
@@ -19,7 +23,8 @@ import tempfile
 from datetime import datetime, date, time, timedelta
 from .models import (
     Employee, EmployeeProfile, OfficeLocation, DepartmentOfficeAccess,
-    AttendanceRecord, EmployeeRequest, EmployeeDocument, Task, BirthdayWish, TaskComment, Team
+    AttendanceRecord, EmployeeRequest, EmployeeDocument, Task, BirthdayWish, TaskComment, Team,
+    TemporaryTag
 )
 from django.contrib.auth.hashers import make_password, check_password
 
@@ -37,6 +42,89 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
     return R * c
+
+
+@api_view(['POST'])
+@parser_classes([JSONParser])
+def send_otp(request):
+    """
+    Send a 6-digit OTP to the user's email for password reset.
+    """
+    email = request.data.get('email', '').strip()
+    if not email:
+        return Response({'success': False, 'message': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        employee = Employee.objects.get(email__iexact=email, is_active=True)
+    except Employee.DoesNotExist:
+        return Response({'success': False, 'message': 'Account not found with this email'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Generate 6-digit OTP
+    otp = ''.join(random.choices(string.digits, k=6))
+    
+    # Store OTP in cache for 5 minutes
+    cache_key = f"otp_{email}"
+    cache.set(cache_key, otp, timeout=300)
+
+    # Send email
+    subject = 'Password Reset OTP - HanuAI Attendance System'
+    message = f'Your OTP for password reset is: {otp}. It is valid for 5 minutes.'
+    from_email = settings.DEFAULT_FROM_EMAIL
+    recipient_list = [email]
+
+    try:
+        send_mail(subject, message, from_email, recipient_list, fail_silently=False)
+        return Response({
+            'success': True, 
+            'message': 'OTP sent to your email',
+            'debug_info': {
+                'recipient': email,
+                'from': from_email,
+                'backend': settings.EMAIL_BACKEND
+            }
+        })
+    except Exception as e:
+        print(f"Error sending email: {e}")
+        return Response({'success': False, 'message': 'Failed to send OTP. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@parser_classes([JSONParser])
+def reset_password(request):
+    """
+    Verify OTP and reset user password.
+    """
+    email = request.data.get('email')
+    otp = request.data.get('otp')
+    new_password = request.data.get('new_password')
+
+    if not email or not otp or not new_password:
+        return Response({'success': False, 'message': 'Email, OTP, and new password are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Verify OTP from cache
+    cache_key = f"otp_{email}"
+    cached_otp = cache.get(cache_key)
+
+    if not cached_otp:
+        return Response({'success': False, 'message': 'OTP expired or not found'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if cached_otp != otp:
+        return Response({'success': False, 'message': 'Invalid OTP'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        employee = Employee.objects.get(email=email, is_active=True)
+        employee.password = make_password(new_password)
+        employee.save()
+        
+        # Clear OTP from cache
+        cache.delete(cache_key)
+        
+        return Response({'success': True, 'message': 'Password reset successful'})
+    except Employee.DoesNotExist:
+        return Response({'success': False, 'message': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        print(f"Password reset error: {e}")
+        return Response({'success': False, 'message': 'Failed to reset password'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
@@ -60,15 +148,20 @@ def login(request):
         # Check password (support both hashed and plain 'password' for compatibility)
         if check_password(password, employee.password) or password == 'password':
             print("DEBUG LOGIN: Success")
+            profile = EmployeeProfile.objects.filter(employee=employee).first()
+            assignment = employee.get_current_assignment()
             user_data = {
                 'id': employee.id,
                 'username': employee.username,
                 'name': employee.name,
                 'email': employee.email,
                 'phone': employee.phone,
-                'department': employee.department,
+                'department': assignment['department'],
                 'primary_office': employee.primary_office,
-                'role': employee.role,
+                'role': assignment['role'],
+                'is_temporary': assignment['is_temporary'],
+                'gender': profile.gender if profile else None,
+                'date_of_birth': str(profile.date_of_birth) if profile and profile.date_of_birth else None,
             }
             return Response({
                 'success': True,
@@ -246,6 +339,22 @@ def mark_attendance(request):
     now_local = timezone.localtime(timezone.now())
     att_date = now_local.date()
     
+    # 0. Restriction check: 9 AM - 6 PM for non-Surveyors
+    try:
+        employee = Employee.objects.get(id=employee_id)
+        assignment = employee.get_current_assignment()
+        is_admin = employee.role == 'admin'
+        
+        if assignment['department'] != 'Surveyors' and not is_admin:
+            current_hour = now_local.hour
+            if current_hour < 9 or current_hour >= 18:
+                return Response({
+                    'success': False,
+                    'message': 'Non-surveyors can only check in between 9:00 AM and 6:00 PM.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+    except Employee.DoesNotExist:
+        return Response({'success': False, 'message': 'Employee not found'}, status=404)
+
     # 1. Check if they already have a SUCCESSFUL check-in TODAY
     # We look for a record that HAS a check-in time and matches TODAY's date
     today_record = AttendanceRecord.objects.filter(
@@ -283,6 +392,90 @@ def mark_attendance(request):
                 office_id=data.get('office_id')
             )
         return Response({'success': True, 'message': 'Checked in successfully'})
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=500)
+
+@api_view(['GET'])
+def get_server_time(request):
+    """Return the current server time in IST for frontend synchronization"""
+    now_local = timezone.localtime(timezone.now())
+    return Response({
+        'success': True,
+        'timestamp': now_local.timestamp() * 1000, # Milliseconds
+        'formatted': now_local.strftime('%Y-%m-%d %H:%M:%S'),
+        'timezone': 'Asia/Kolkata'
+    })
+
+@api_view(['POST'])
+@parser_classes([JSONParser])
+def start_lunch(request):
+    data = request.data
+    employee_id = data.get('employee_id')
+    lat = data.get('latitude')
+    lon = data.get('longitude')
+    now_local = timezone.localtime(timezone.now())
+    att_date = now_local.date()
+
+    try:
+        employee = Employee.objects.get(id=employee_id)
+        assignment = employee.get_current_assignment()
+        
+        # Restriction check: 9 AM - 6 PM for non-Surveyors
+        if assignment['department'] != 'Surveyors' and employee.role != 'admin':
+            current_hour = now_local.hour
+            if current_hour < 9 or current_hour >= 18:
+                return Response({
+                    'success': False,
+                    'message': 'Lunch actions are only allowed during office hours (9:00 AM - 6:00 PM).'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        record = AttendanceRecord.objects.get(employee_id=employee_id, date=att_date)
+        
+        if record.status == 'absent':
+            return Response({'success': False, 'message': 'Cannot start lunch while marked absent. Please check in first.'}, status=400)
+            
+        if record.lunch_start_time:
+             return Response({'success': False, 'message': 'Lunch already started'}, status=400)
+        
+        record.lunch_start_time = now_local.time()
+        if lat and lon:
+            record.lunch_start_lat = lat
+            record.lunch_start_lon = lon
+        record.save()
+        return Response({'success': True, 'message': 'Lunch break started'})
+    except (Employee.DoesNotExist, AttendanceRecord.DoesNotExist):
+        return Response({'success': False, 'message': 'No attendance record found for today'}, status=404)
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=500)
+
+@api_view(['POST'])
+@parser_classes([JSONParser])
+def end_lunch(request):
+    data = request.data
+    employee_id = data.get('employee_id')
+    lat = data.get('latitude')
+    lon = data.get('longitude')
+    now_local = timezone.localtime(timezone.now())
+    att_date = now_local.date()
+
+    try:
+        record = AttendanceRecord.objects.get(employee_id=employee_id, date=att_date)
+        if record.status == 'absent':
+             return Response({'success': False, 'message': 'Record is marked absent'}, status=400)
+             
+        if not record.lunch_start_time:
+             return Response({'success': False, 'message': 'Lunch not started yet'}, status=400)
+        if record.lunch_end_time:
+             return Response({'success': False, 'message': 'Lunch already ended'}, status=400)
+        
+        record.lunch_end_time = now_local.time()
+        if lat and lon:
+            record.lunch_end_lat = lat
+            record.lunch_end_lon = lon
+        record.save()
+        return Response({'success': True, 'message': 'Lunch break ended'})
+    except AttendanceRecord.DoesNotExist:
+        return Response({'success': False, 'message': 'No attendance record found for today'}, status=404)
     except Exception as e:
         return Response({'success': False, 'message': str(e)}, status=500)
 
@@ -519,7 +712,14 @@ def today_attendance(request):
                 'office_address': record.office.address if record.office else None,
                 'check_in_location': record.check_in_location,
                 'check_out_location': record.check_out_location,
+                'lunch_start_lat': float(record.lunch_start_lat) if record.lunch_start_lat else None,
+                'lunch_start_lon': float(record.lunch_start_lon) if record.lunch_start_lon else None,
+                'lunch_end_lat': float(record.lunch_end_lat) if record.lunch_end_lat else None,
+                'lunch_end_lon': float(record.lunch_end_lon) if record.lunch_end_lon else None,
+                'lunch_start_time': str(record.lunch_start_time) if record.lunch_start_time else None,
+                'lunch_end_time': str(record.lunch_end_time) if record.lunch_end_time else None,
                 'total_hours': float(record.total_hours),
+                'gender': getattr(record.employee.profile, 'gender', 'other') if hasattr(record.employee, 'profile') else 'other',
             }
             return Response({
                 'success': True,
@@ -547,6 +747,10 @@ def attendance_records(request):
     days_limit = request.GET.get('days_limit')
     days_offset = int(request.GET.get('days_offset', 0))
 
+    user_id = request.GET.get('user_id')
+    user = Employee.objects.filter(id=user_id).first() if user_id else None
+    is_manager = user and user.role == 'manager'
+
     # Auto-mark absentees for today after 12:00pm
     now = timezone.localtime(timezone.now())
     today = now.date()
@@ -555,6 +759,10 @@ def attendance_records(request):
 
     try:
         records_qs = AttendanceRecord.objects.select_related('employee', 'office').all()
+
+        if is_manager:
+            from django.db.models import Q
+            records_qs = records_qs.filter(Q(employee__manager=user) | Q(employee=user))
 
         if employee_id:
             records_qs = records_qs.filter(employee_id=employee_id)
@@ -601,7 +809,18 @@ def attendance_records(request):
                 'photo_url': record.check_out_photo or record.check_in_photo or None,
                 'total_hours': float(record.total_hours),
                 'is_half_day': record.is_half_day,
+                'lunch_start_time': str(record.lunch_start_time) if record.lunch_start_time else None,
+                'lunch_end_time': str(record.lunch_end_time) if record.lunch_end_time else None,
+                'lunch_duration': None
             })
+            
+            if record.lunch_start_time and record.lunch_end_time:
+                from datetime import datetime
+                # Using dummy date for time comparison
+                start = datetime.combine(record.date, record.lunch_start_time)
+                end = datetime.combine(record.date, record.lunch_end_time)
+                duration = (end - start).total_seconds() / 3600 # in hours
+                records_data[-1]['lunch_duration'] = round(duration, 2)
 
         return Response({
             'success': True,
@@ -913,10 +1132,75 @@ def employee_profile(request):
 
 
 @api_view(['GET'])
+def check_profile_completeness(request):
+    """Check if employee profile has all required fields and documents"""
+    employee_id = request.GET.get('employee_id')
+    if not employee_id:
+        return Response({'success': False, 'message': 'Employee ID is required'}, status=400)
+
+    try:
+        employee = Employee.objects.get(id=employee_id)
+        profile, _ = EmployeeProfile.objects.get_or_create(employee=employee)
+
+        required_fields = [
+            ('emergency_contact_name', 'Emergency Contact Name'),
+            ('emergency_contact_phone', 'Emergency Contact Phone'),
+            ('bank_account_number', 'Bank Account Number'),
+            ('bank_ifsc', 'Bank IFSC'),
+            ('bank_bank_name', 'Bank Name'),
+            ('pan_number', 'PAN Number'),
+            ('aadhar_number', 'Aadhar Number'),
+            ('home_address', 'Home Address'),
+            ('personal_email', 'Personal Email'),
+            ('gender', 'Gender'),
+            ('date_of_birth', 'Date of Birth'),
+        ]
+
+        missing_fields = []
+        for field_name, display_name in required_fields:
+            val = getattr(profile, field_name)
+            if not val or str(val).strip() == '':
+                missing_fields.append(display_name)
+
+        # Check documents
+        required_docs = ['aadhar', 'pan']
+        uploaded_doc_types = EmployeeDocument.objects.filter(employee=employee).values_list('doc_type', flat=True)
+        
+        missing_docs = []
+        if 'aadhar' not in uploaded_doc_types:
+            missing_docs.append('Aadhar Card')
+        if 'pan' not in uploaded_doc_types:
+            missing_docs.append('PAN Card')
+
+        is_complete = len(missing_fields) == 0 and len(missing_docs) == 0
+
+        return Response({
+            'success': True,
+            'is_complete': is_complete,
+            'missing_fields': missing_fields,
+            'missing_docs': missing_docs,
+            'message': 'Profile complete' if is_complete else 'Profile incomplete'
+        })
+
+    except Employee.DoesNotExist:
+        return Response({'success': False, 'message': 'Employee not found'}, status=404)
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=500)
+
+
+@api_view(['GET'])
 def admin_profiles_list(request):
     """List all employee profiles (admin)"""
+    user_id = request.GET.get('user_id')
+    user = Employee.objects.filter(id=user_id).first() if user_id else None
+    is_manager = user and user.role == 'manager'
+
     try:
-        employees = Employee.objects.filter(is_active=True).select_related('profile')\
+        employees_qs = Employee.objects.filter(is_active=True)
+        if is_manager:
+            employees_qs = employees_qs.filter(manager=user)
+
+        employees = employees_qs.select_related('profile')\
             .annotate(docs_count=Count('documents'))\
             .order_by('id')
         profiles_data = []
@@ -954,19 +1238,36 @@ def admin_profiles_list(request):
 @api_view(['GET'])
 def admin_users(request):
     """Get all users (admin)"""
+    user_id = request.GET.get('user_id')
+    user = Employee.objects.filter(id=user_id).first() if user_id else None
+    is_manager = user and user.role == 'manager'
+
     try:
-        users = Employee.objects.all().order_by('-id')
-        users_data = [{
-            'id': u.id,
-            'username': u.username,
-            'name': u.name,
-            'email': u.email,
-            'phone': u.phone,
-            'department': u.department,
-            'role': u.role,
-            'manager_name': u.manager.name if u.manager else None,
-            'is_active': u.is_active,
-        } for u in users]
+        users = Employee.objects.all().order_by('-id').prefetch_related('profile')
+        if is_manager:
+            users = users.filter(manager=user)
+        
+        users_data = []
+        for u in users:
+            dob = None
+            gender = None
+            if hasattr(u, 'profile') and u.profile:
+                dob = str(u.profile.date_of_birth) if u.profile.date_of_birth else None
+                gender = u.profile.gender
+            
+            users_data.append({
+                'id': u.id,
+                'username': u.username,
+                'name': u.name,
+                'email': u.email,
+                'phone': u.phone,
+                'department': u.department,
+                'role': u.role,
+                'manager_name': u.manager.name if u.manager else None,
+                'is_active': u.is_active,
+                'date_of_birth': dob,
+                'gender': gender
+            })
 
         return Response({
             'success': True,
@@ -1468,40 +1769,46 @@ def admin_user_docs_zip(request, employee_id):
 @api_view(['GET'])
 def admin_summary(request):
     """Get admin dashboard summary"""
+    user_id = request.GET.get('user_id')
+    user = Employee.objects.filter(id=user_id).first() if user_id else None
+    is_manager = user and user.role == 'manager'
+
     try:
         today = date.today()
 
+        employees_qs = Employee.objects.filter(is_active=True)
+        records_qs = AttendanceRecord.objects.filter(date=today)
+        
+        if is_manager:
+            employees_qs = employees_qs.filter(manager=user)
+            records_qs = records_qs.filter(employee__manager=user)
+
         # Total employees
-        total_employees = Employee.objects.filter(is_active=True).count()
+        total_employees = employees_qs.count()
 
         # Present today
-        present_today = AttendanceRecord.objects.filter(
-            date=today,
+        present_today = records_qs.filter(
             status__in=['present', 'half_day']
         ).count()
 
         # Surveyors present today
-        surveyors_present = AttendanceRecord.objects.filter(
-            date=today,
+        surveyors_present = records_qs.filter(
             status__in=['present', 'half_day'],
             employee__department='Surveyors'
         ).count()
 
         # Absentees today
-        absentees_today = AttendanceRecord.objects.filter(
-            date=today,
+        absentees_today = records_qs.filter(
             status='absent'
         ).count()
 
         # On leave today
-        on_leave_today = AttendanceRecord.objects.filter(
-            date=today,
+        on_leave_today = records_qs.filter(
             status='leave'
         ).count()
 
         # WFH today
-        wfh_today = AttendanceRecord.objects.filter(
-            date=today,
+        wfh_today = records_qs.filter(
             type='wfh'
         ).count()
 
@@ -1633,13 +1940,52 @@ def employee_performance_analysis(request, employee_id):
     try:
         employee = Employee.objects.get(id=employee_id)
         today = date.today()
-        tomorrow = today + timedelta(days=1)
+        
+        # Filtering Logic
+        view_type = request.GET.get('view_type', 'period') # period, month, week
+        month_param = request.GET.get('month')
+        year_param = request.GET.get('year')
+        week_param = request.GET.get('week')
+        
+        is_monthly_view = False
+        is_weekly_view = False
+        
+        if view_type == 'month':
+            try:
+                view_month = int(month_param) if month_param else today.month
+                view_year = int(year_param) if year_param else today.year
+                week_idx = request.GET.get('week_idx') # Optional: 1, 2, 3, 4, 5
+                
+                start_date = date(view_year, view_month, 1)
+                if view_month == 12:
+                    last_day = (date(view_year + 1, 1, 1) - timedelta(days=1)).day
+                else:
+                    last_day = (date(view_year, view_month + 1, 1) - timedelta(days=1)).day
+                
+                end_date = date(view_year, view_month, last_day)
 
-        # 30-Day Attendance History
-        last_30_days = today - timedelta(days=30)
+                if week_idx and week_idx != 'all':
+                    w = int(week_idx)
+                    s_day = (w - 1) * 7 + 1
+                    e_day = min(w * 7, last_day)
+                    
+                    if s_day <= last_day:
+                        start_date = date(view_year, view_month, s_day)
+                        end_date = date(view_year, view_month, e_day)
+                
+                is_monthly_view = True
+            except (ValueError, TypeError):
+                start_date = today - timedelta(days=30)
+                end_date = today
+        else:
+            # Default: period (Last 30 Days)
+            start_date = today - timedelta(days=30)
+            end_date = today
+
+        # Attendance History for filtered period
         records = AttendanceRecord.objects.filter(
             employee=employee,
-            date__gte=last_30_days
+            date__range=[start_date, end_date]
         ).order_by('-date')
 
         history = [{
@@ -1649,20 +1995,60 @@ def employee_performance_analysis(request, employee_id):
             'hours': float(r.total_hours)
         } for r in records]
 
-        # Performance Metrics
-        stats = AttendanceRecord.objects.filter(employee=employee, date__gte=last_30_days).aggregate(
+        # 2. Performance Metrics
+        
+        # Calculate Mon-Fri Avg
+        weekday_records = records.filter(
+            date__week_day__in=[2, 3, 4, 5, 6] # Mon-Fri (1=Sun, 2=Mon... 7=Sat)
+        ).aggregate(
+            sum_hours=Sum('total_hours'),
+            count=Count('id', filter=Q(status__in=['present', 'half_day', 'wfh', 'client']))
+        )
+        weekday_avg = float(weekday_records['sum_hours'] or 0) / (weekday_records['count'] or 1)
+
+        # Calculate Sat Avg
+        saturday_records = records.filter(
+            date__week_day=7 # Sat
+        ).aggregate(
+            sum_hours=Sum('total_hours'),
+            count=Count('id', filter=Q(status__in=['present', 'half_day', 'wfh', 'client']))
+        )
+        saturday_avg = float(saturday_records['sum_hours'] or 0) / (saturday_records['count'] or 1)
+
+        # Calculate Lunch Avg
+        lunch_records = records.filter(
+            lunch_start_time__isnull=False,
+            lunch_end_time__isnull=False
+        )
+        total_lunch_minutes = 0
+        lunch_count = 0
+        for r in lunch_records:
+            # Combine with dummy date to calculate delta
+            t1 = datetime.combine(date.today(), r.lunch_start_time)
+            t2 = datetime.combine(date.today(), r.lunch_end_time)
+            if t2 > t1:
+                total_lunch_minutes += (t2 - t1).total_seconds() / 60
+                lunch_count += 1
+        avg_lunch_min = total_lunch_minutes / (lunch_count or 1)
+
+        summary_stats = records.aggregate(
             total_present=Count('id', filter=Q(status__in=['present', 'half_day', 'wfh', 'client'])),
             sum_hours=Sum('total_hours'),
             wfh_count=Count('id', filter=Q(type='wfh')),
             office_count=Count('id', filter=Q(type='office'))
         )
 
-        # Calculate Averages
-        total_hours_sum = float(stats['sum_hours'] or 0)
-        daily_workday_avg = total_hours_sum / 20 
-        weekly_avg_hours = total_hours_sum / 4   
+        total_hours_sum = float(summary_stats['sum_hours'] or 0)
+        
+        # Handle weekly average calculation
+        if is_monthly_view:
+            weekly_avg_hours = total_hours_sum / 4.33
+        elif is_weekly_view:
+            weekly_avg_hours = total_hours_sum # Total for the week is the weekly average
+        else:
+            weekly_avg_hours = total_hours_sum / 4   
 
-        # Forecast for tomorrow
+        # Forecast for tomorrow (always uses global patterns)
         tomorrow = date.today() + timedelta(days=1)
         tomorrow_dow = (tomorrow.weekday() + 1) % 7 + 1 
         habit_records = list(AttendanceRecord.objects.filter(
@@ -1676,18 +2062,13 @@ def employee_performance_analysis(request, employee_id):
         else:
             prediction_score = 85.0
 
-        # 5. Attendance Habits (Average Check-in/out)
-        attendance_with_time = AttendanceRecord.objects.filter(
-            employee=employee, 
-            date__gte=last_30_days,
-            check_in_time__isnull=False
-        )
+        # Attendance Habits (Averages for filtered period)
+        attendance_with_time = records.filter(check_in_time__isnull=False)
         
         avg_check_in = None
         avg_check_out = None
         
         if attendance_with_time.exists():
-            # Calculate average seconds from midnight
             in_seconds = []
             out_seconds = []
             for r in attendance_with_time:
@@ -1702,16 +2083,16 @@ def employee_performance_analysis(request, employee_id):
             if out_seconds:
                 avg_out_sec = sum(out_seconds) / len(out_seconds)
                 avg_check_out = f"{int(avg_out_sec // 3600):02d}:{int((avg_out_sec % 3600) // 60):02d}"
-
-        # 4. Task Management Performance (Expanded)
-        tasks = Task.objects.filter(assignees=employee).distinct()
-        completed_tasks = tasks.filter(status='completed')
+        
+        # Task Management Performance (for filtered period)
+        tasks_base = Task.objects.filter(assignees=employee, created_at__date__range=[start_date, end_date]).distinct()
+        completed_tasks = tasks_base.filter(status='completed')
         avg_accuracy = completed_tasks.aggregate(avg_acc=Avg('accuracy'))['avg_acc'] or 0
 
         task_stats = {
-            'total': tasks.count(),
-            'todo': tasks.filter(status='todo').count(),
-            'in_progress': tasks.filter(status='in_progress').count(),
+            'total': tasks_base.count(),
+            'todo': tasks_base.filter(status='todo').count(),
+            'in_progress': tasks_base.filter(status='in_progress').count(),
             'completed': completed_tasks.count(),
             'avg_accuracy': round(float(avg_accuracy), 1)
         }
@@ -1722,11 +2103,21 @@ def employee_performance_analysis(request, employee_id):
             'department': employee.department,
             'email': employee.email,
             'history': history,
+            'filter': {
+                'start_date': str(start_date),
+                'end_date': str(end_date),
+                'month': start_date.month if is_monthly_view else None,
+                'year': start_date.year if is_monthly_view else None,
+                'week_idx': request.GET.get('week_idx', 'all'),
+                'view_type': view_type
+            },
             'metrics': {
-                'total_present_30d': stats['total_present'] or 0,
-                'avg_hours_present': round(total_hours_sum / (stats['total_present'] or 1), 1),
-                'daily_workday_avg': round(daily_workday_avg, 1),
-                'wfh_ratio': round((stats['wfh_count'] / (stats['total_present'] or 1)) * 100, 1) if stats['total_present'] else 0,
+                'total_present': summary_stats['total_present'] or 0,
+                'avg_hours_present': round(total_hours_sum / (summary_stats['total_present'] or 1), 1),
+                'weekday_avg': round(weekday_avg, 1),
+                'saturday_avg': round(saturday_avg, 1),
+                'avg_lunch_min': round(avg_lunch_min, 0),
+                'wfh_ratio': round((summary_stats['wfh_count'] / (summary_stats['total_present'] or 1)) * 100, 1) if summary_stats['total_present'] else 0,
                 'weekly_avg_hours': round(weekly_avg_hours, 1),
                 'avg_check_in': avg_check_in,
                 'avg_check_out': avg_check_out
@@ -1960,6 +2351,10 @@ def send_birthday_wish(request):
 @api_view(['GET'])
 def pending_requests(request):
     """Get pending or history (approved/rejected) WFH and leave requests"""
+    user_id = request.GET.get('user_id')
+    user = Employee.objects.filter(id=user_id).first() if user_id else None
+    is_manager = user and user.role == 'manager'
+
     try:
         status_param = request.GET.get('status', 'pending')
         
@@ -1973,6 +2368,9 @@ def pending_requests(request):
             requests_obj = EmployeeRequest.objects.filter(
                 status='pending'
             ).select_related('employee').order_by('start_date')
+
+        if is_manager:
+            requests_obj = requests_obj.filter(employee__manager=user)
 
         requests_data = []
         for req in requests_obj:
@@ -2054,7 +2452,9 @@ def active_tasks(request):
         if employee_id:
             try:
                 emp = Employee.objects.get(id=employee_id)
-                if emp.role.lower() != 'admin':
+                if emp.role.lower() == 'manager':
+                    query = query.filter(Q(assignees__manager=emp) | Q(manager=emp) | Q(created_by=emp) | Q(assignees=emp)).distinct()
+                elif emp.role.lower() != 'admin':
                     try:
                         query = query.filter(Q(assignees=emp) | Q(manager=emp)).distinct()
                     except Exception:
@@ -2844,3 +3244,70 @@ def intelligence_hub_search(request):
             'success': False,
             'message': f'Failed to search personnel: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET', 'POST', 'DELETE'])
+@parser_classes([JSONParser])
+def temporary_tags_api(request):
+    """API for managing temporary tags"""
+    print(f"DEBUG: temporary_tags_api method={request.method}")
+    if request.method == 'GET':
+        employee_id = request.query_params.get('employee_id')
+        tags = TemporaryTag.objects.all().select_related('employee')
+        if employee_id:
+            tags = tags.filter(employee_id=employee_id)
+        
+        tags_data = [{
+            'id': tag.id,
+            'employee_id': tag.employee.id,
+            'employee_username': tag.employee.username,
+            'employee_name': tag.employee.name,
+            'department': tag.department,
+            'role': tag.role,
+            'start_date': str(tag.start_date),
+            'end_date': str(tag.end_date),
+            'created_at': tag.created_at.isoformat(),
+        } for tag in tags.order_by('-created_at')]
+        
+        return Response({'success': True, 'tags': tags_data})
+
+    elif request.method == 'POST':
+        data = request.data
+        print(f"DEBUG: temporary_tags_api POST data={data}")
+        try:
+            employee_id = data.get('employee_id')
+            department = data.get('department')
+            role = data.get('role')
+            start_date = data.get('start_date')
+            end_date = data.get('end_date')
+            
+            print(f"DEBUG: Creating tag for employee_id={employee_id}, dept={department}, role={role}, range={start_date} to {end_date}")
+            
+            employee = Employee.objects.get(id=employee_id)
+            tag = TemporaryTag.objects.create(
+                employee=employee,
+                department=data.get('department'),
+                role=data.get('role'),
+                start_date=data.get('start_date'),
+                end_date=data.get('end_date')
+            )
+            return Response({
+                'success': True,
+                'message': 'Temporary tag created successfully',
+                'tag_id': tag.id
+            })
+        except Employee.DoesNotExist:
+            return Response({'success': False, 'message': 'Employee not found'}, status=404)
+        except Exception as e:
+            return Response({'success': False, 'message': str(e)}, status=400)
+
+    elif request.method == 'DELETE':
+        tag_id = request.query_params.get('id') or request.data.get('id')
+        try:
+            tag = TemporaryTag.objects.get(id=tag_id)
+            tag.delete()
+            return Response({'success': True, 'message': 'Temporary tag deleted successfully'})
+        except TemporaryTag.DoesNotExist:
+            return Response({'success': False, 'message': 'Tag not found'}, status=404)
+        except Exception as e:
+            return Response({'success': False, 'message': str(e)}, status=400)
