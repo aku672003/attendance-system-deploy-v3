@@ -16,6 +16,9 @@ urlpatterns = [
     # Attendance
     path('mark-attendance', views.mark_attendance, name='mark_attendance'),
     path('check-out', views.check_out, name='check_out'),
+    path('lunch-break/start', views.start_lunch, name='start_lunch'),
+    path('lunch-break/end', views.end_lunch, name='end_lunch'),
+    path('server-time', views.get_server_time, name='get_server_time'),
     path('today-attendance', views.today_attendance, name='today_attendance'),
     path('attendance-records', views.attendance_records, name='attendance_records'),
     path('monthly-stats', views.monthly_stats, name='monthly_stats'),
@@ -28,6 +31,7 @@ urlpatterns = [
     
     # Profile
     path('employee-profile', views.employee_profile, name='employee_profile'),  # GET and POST
+    path('check-profile-completeness', views.check_profile_completeness, name='check_profile_completeness'),
     path('admin-profiles', views.admin_profiles_list, name='admin_profiles_list'),
     path('admin-profile/<int:employee_id>', views.employee_profile, name='admin_profile_detail'),
     
@@ -79,4 +83,9 @@ urlpatterns = [
     path('intelligence-hub-trends', views.intelligence_hub_trends, name='intelligence_hub_trends'),
     path('intelligence-hub-search', views.intelligence_hub_search, name='intelligence_hub_search'),
     path('employee-performance-analysis/<int:employee_id>', views.employee_performance_analysis, name='employee_performance_analysis'),
+    path('temporary-tags', views.temporary_tags_api, name='temporary_tags_api'),
+
+    # Forgot Password
+    path('send-otp', views.send_otp, name='send_otp'),
+    path('reset-password', views.reset_password, name='reset_password'),
 ]

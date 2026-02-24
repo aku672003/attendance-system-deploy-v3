@@ -18,15 +18,28 @@ let attendanceDaysOffset = 0;
 let attendanceHasMore = false;
 let faceapiLoaded = false;
 let trackingInterval = null;
-const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+const MODEL_URL = 'https://cdn.jsdelivr.net/gh/vladmandic/face-api/model/';
 let selectedCalendarDates = [];
 let isMultiSelectMode = false;
+let currentCalendarMonth = 0; // Set in init
+let currentCalendarYear = 0; // Set in init
 let currentPhotoLocation = null; // Store for overlay
+let serverTimeOffset = 0; // Milliseconds between server and local time
+
+/**
+ * Returns a new Date object reflecting the current Indian Standard Time (IST),
+ * calculated using the server time offset to prevent device clock manipulation.
+ */
+function getCurrentISTDate() {
+    const syncedNow = new Date(Date.now() + serverTimeOffset);
+    const utc = syncedNow.getTime() + (syncedNow.getTimezoneOffset() * 60000);
+    return new Date(utc + (3600000 * 5.5));
+}
 // API Configuration
 const apiBaseUrl = "/api";
 
 // Initialize Application
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', async function () {
     console.log('MySQL Attendance System Initializing...');
     refreshPrimaryOfficeSelects();
     // Check for stored user session
@@ -35,6 +48,12 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             currentUser = JSON.parse(storedUser);
             showScreen('dashboardScreen');
+            await syncServerTime(); // Wait for sync before loading data
+
+            const istNow = getCurrentISTDate();
+            currentCalendarMonth = istNow.getMonth();
+            currentCalendarYear = istNow.getFullYear();
+
             loadDashboardData();
             updateDashboardVisibility();
         } catch (e) {
@@ -69,7 +88,7 @@ document.addEventListener('click', e => {
 });
 
 async function loadFaceDetectionModels() {
-    console.log('Loading face detection models...');
+    console.log('Loading face detection models from:', MODEL_URL);
     try {
         await Promise.all([
             faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
@@ -96,6 +115,28 @@ function openModal(id) {
     el.classList.add('active');
     document.body.style.overflow = 'hidden';
 }
+
+async function syncServerTime() {
+    try {
+        const start = Date.now();
+        const response = await fetch(`${apiBaseUrl}/server-time`);
+        const result = await response.json();
+        const end = Date.now();
+
+        if (result.success) {
+            // Adjust for network latency (rough estimate: half-round-trip)
+            const latency = (end - start) / 2;
+            const serverTime = result.timestamp + latency;
+            serverTimeOffset = serverTime - end;
+            console.log(`Server time synced. Offset: ${serverTimeOffset}ms`);
+        }
+    } catch (e) {
+        console.error("Failed to sync server time:", e);
+    }
+}
+
+// Re-sync server time every 5 minutes to keep the offset accurate
+setInterval(syncServerTime, 5 * 60 * 1000);
 
 function closeModal(id) {
     const el = document.getElementById(id);
@@ -261,7 +302,7 @@ function resetAttendanceFlow() {
 
 function showScreen(screenId) {
     // Prevent non-admins from opening adminScreen
-    if (screenId === 'adminScreen' && (!currentUser || currentUser.role !== 'admin')) {
+    if (screenId === 'adminScreen' && (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'manager'))) {
         showNotification('Admins only.', 'warning');
         screenId = 'dashboardScreen';
         return;
@@ -270,11 +311,33 @@ function showScreen(screenId) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(screenId).classList.add('active');
 
+    // Only keep override on records screen if it was explicitly set before showing
+    // If we're entering dashboard, always clear. If we're entering records naturally, clear.
+    if (screenId !== 'recordsScreen' || (screenId === 'recordsScreen' && !window._keepOverrideFilter)) {
+        if (typeof overrideRecordsEmployeeId !== 'undefined') {
+            overrideRecordsEmployeeId = null;
+            overrideRecordsEmployeeName = null;
+            const recordsTitle = document.querySelector('#recordsScreen .header-title');
+            if (recordsTitle) recordsTitle.textContent = 'Attendance Records';
+        }
+    }
+    // reset lock flag
+    window._keepOverrideFilter = false;
+
+
     if (screenId === 'recordsScreen') {
         loadAttendanceRecords();
     } else if (screenId === 'attendanceScreen') {
         // avoid reference error if you removed resetAttendanceFlow
         if (typeof resetAttendanceFlow === 'function') resetAttendanceFlow();
+    } else if (screenId === 'dashboardScreen') {
+        // Ensure adminStatsGrid is moved back to the dashboard if it was moved to adminScreen
+        const statsGrid = document.getElementById('adminStatsGrid');
+        const dashboardStatsGrid = document.getElementById('employeeStatsGrid');
+        if (statsGrid && dashboardStatsGrid && statsGrid.parentNode !== dashboardStatsGrid.parentNode) {
+            dashboardStatsGrid.parentNode.insertBefore(statsGrid, dashboardStatsGrid);
+            statsGrid.style.marginBottom = ''; // reset inline style
+        }
     }
 }
 
@@ -425,7 +488,8 @@ function formatTime(date) {
 }
 
 function getCurrentDateTime() {
-    const now = new Date();
+    // Always use synchronized server IST — never the device clock
+    const now = getCurrentISTDate();
     return {
         date: formatDate(now),
         time: formatTime(now)
@@ -567,6 +631,14 @@ async function handleLogin(event) {
             currentUser = result.user;
             localStorage.setItem('attendanceUser', JSON.stringify(currentUser));
 
+            // Sync server time FIRST — must happen before any time-sensitive operations
+            await syncServerTime();
+
+            // Set calendar to synchronized IST date
+            const istNow = getCurrentISTDate();
+            currentCalendarMonth = istNow.getMonth();
+            currentCalendarYear = istNow.getFullYear();
+
             showNotification('Login successful!');
             showScreen('dashboardScreen');
 
@@ -590,6 +662,88 @@ async function handleLogin(event) {
         loginBtn.disabled = false;
         loginBtnText.classList.remove('hidden');
         loginSpinner.classList.add('hidden');
+    }
+}
+
+async function handleForgotPasswordSubmit(event) {
+    event.preventDefault();
+    const email = document.getElementById('forgotEmail').value;
+    const btn = document.getElementById('forgotBtn');
+    const btnText = document.getElementById('forgotBtnText');
+    const spinner = document.getElementById('forgotSpinner');
+
+    if (!email) {
+        showNotification('Please enter your email', 'error');
+        return;
+    }
+
+    btn.disabled = true;
+    btnText.classList.add('hidden');
+    spinner.classList.remove('hidden');
+
+    try {
+        const result = await apiCall('send-otp', 'POST', { email });
+        if (result.success) {
+            showNotification(result.message || 'OTP sent to your email');
+            document.getElementById('forgotStep1').classList.add('hidden');
+            document.getElementById('forgotStep2').classList.remove('hidden');
+            document.getElementById('forgotStepSubtitle').textContent = 'Enter the 6-digit OTP sent to ' + email;
+        } else {
+            showNotification(result.message || 'Failed to send OTP', 'error');
+        }
+    } catch (err) {
+        showNotification('An error occurred. Please try again.', 'error');
+    } finally {
+        btn.disabled = false;
+        btnText.classList.remove('hidden');
+        spinner.classList.add('hidden');
+    }
+}
+
+async function handleResetPasswordSubmit(event) {
+    event.preventDefault();
+    const email = document.getElementById('forgotEmail').value;
+    const otp = document.getElementById('resetOtp').value;
+    const newPassword = document.getElementById('resetNewPassword').value;
+    const btn = document.getElementById('resetBtn');
+    const btnText = document.getElementById('resetBtnText');
+    const spinner = document.getElementById('resetSpinner');
+
+    if (!otp || !newPassword) {
+        showNotification('OTP and new password are required', 'error');
+        return;
+    }
+
+    btn.disabled = true;
+    btnText.classList.add('hidden');
+    spinner.classList.remove('hidden');
+
+    try {
+        const result = await apiCall('reset-password', 'POST', {
+            email,
+            otp,
+            new_password: newPassword
+        });
+
+        if (result.success) {
+            showNotification('Password reset successfully! Please login with your new password.');
+            showScreen('loginScreen');
+            // Reset form for next time
+            document.getElementById('forgotEmail').value = '';
+            document.getElementById('resetOtp').value = '';
+            document.getElementById('resetNewPassword').value = '';
+            document.getElementById('forgotStep1').classList.remove('hidden');
+            document.getElementById('forgotStep2').classList.add('hidden');
+            document.getElementById('forgotStepSubtitle').textContent = 'Enter your registered email to receive an OTP';
+        } else {
+            showNotification(result.message || 'Reset failed', 'error');
+        }
+    } catch (err) {
+        showNotification('An error occurred. Please try again.', 'error');
+    } finally {
+        btn.disabled = false;
+        btnText.classList.remove('hidden');
+        spinner.classList.add('hidden');
     }
 }
 
@@ -656,6 +810,8 @@ function logout() {
 
 // Dashboard Functions
 // Notification System
+let displayedWishIds = new Set(); // To prevent re-triggering animation for same wish
+
 async function loadNotifications() {
     if (!currentUser) return;
     try {
@@ -664,6 +820,19 @@ async function loadNotifications() {
         if (res && res.success) {
             displayNotifications(res.notifications);
             updateNotificationBadge(res.unread_count);
+
+            // SOCIAL TRIGGER: Check for unread wishes and trigger animation
+            const gender = (currentUser && currentUser.gender) ? currentUser.gender.toLowerCase() : 'other';
+            const unreadWishes = res.notifications.filter(n => n.type === 'wish' && !displayedWishIds.has(n.id));
+
+            if (unreadWishes.length > 0) {
+                unreadWishes.forEach((wish, index) => {
+                    displayedWishIds.add(wish.id);
+                    setTimeout(() => {
+                        showBirthdayWishFX(wish.message, gender);
+                    }, index * 4500);
+                });
+            }
         }
     } catch (e) {
         console.error('Failed to load notifications', e);
@@ -710,7 +879,7 @@ async function handleNotificationClick(type, id) {
     } else if (type === 'birthday') {
         openBirthdayCalendar();
     } else if (type === 'task') {
-        if (currentUser.role === 'admin') {
+        if (currentUser.role === 'admin' || currentUser.role === 'manager') {
             openTaskManager();
         } else {
             openMyTasks();
@@ -826,6 +995,24 @@ async function loadDashboardData() {
         document.getElementById('adminCard').classList.add('hidden');
         document.getElementById('exportCard').classList.add('hidden');
         document.getElementById('adminExportNote')?.classList.add('hidden');
+        document.getElementById('myStatsCard')?.classList.remove('hidden');
+
+        if (currentUser.role === 'manager') {
+            document.getElementById('manageEmployeesCard')?.classList.remove('hidden');
+        } else {
+            document.getElementById('manageEmployeesCard')?.classList.add('hidden');
+        }
+
+        // Initialize Intelligence Hub Visibility
+        const intelligenceHubCard = document.getElementById('intelligenceHubCard');
+        if (intelligenceHubCard) {
+            intelligenceHubCard.classList.remove('hidden');
+
+            // Explicitly show all buttons for admin
+            document.getElementById('btnViewAnalysis') && (document.getElementById('btnViewAnalysis').style.display = '');
+            document.getElementById('btnSearchPersonnel') && (document.getElementById('btnSearchPersonnel').style.display = '');
+            document.getElementById('btnMyStats') && (document.getElementById('btnMyStats').style.display = '');
+        }
 
         // 1. Run location check first and get its status
         let isUserInRange = false;
@@ -843,13 +1030,100 @@ async function loadDashboardData() {
         try { await loadTodayAttendance(isUserInRange); } catch (e) { console.error(e); }
         try { await loadMonthlyStats(); } catch (e) { console.error(e); }
         try { await loadWFHEligibility(); } catch (e) { console.error(e); }
+        try { await loadIntelligenceHubData(); } catch (e) { console.error(e); }
+
+        // Check profile completeness for non-admin users
+        if (currentUser.role !== 'admin') {
+            try { await checkProfileCompleteness(); } catch (e) { console.error(e); }
+        }
     }
+
+    // Initialize Intelligence Hub Visibility - Admin only
+    const intelligenceHubCard = document.getElementById('intelligenceHubCard');
+    if (intelligenceHubCard) {
+        if (currentUser.role === 'admin') {
+            intelligenceHubCard.classList.remove('hidden');
+        } else {
+            intelligenceHubCard.classList.add('hidden');
+        }
+
+        // Handle button visibility based on role
+        const btnViewAnalysis = document.getElementById('btnViewAnalysis');
+        const btnSearchPersonnel = document.getElementById('btnSearchPersonnel');
+        const btnMyStats = document.getElementById('btnMyStats');
+
+        if (currentUser.role !== 'admin' && currentUser.role !== 'manager') {
+            if (btnViewAnalysis) btnViewAnalysis.style.display = 'none';
+            if (btnSearchPersonnel) btnSearchPersonnel.style.display = 'none';
+        } else {
+            if (btnViewAnalysis) btnViewAnalysis.style.display = '';
+            if (btnSearchPersonnel) btnSearchPersonnel.style.display = '';
+        }
+
+        if (btnMyStats) btnMyStats.style.display = '';
+    }
+
+    // Check if it is the user's Birthday!
+    try {
+        await checkBirthday();
+    } catch (e) {
+        console.error("Critical error in birthday check:", e);
+    }
+}
+
+async function checkProfileCompleteness() {
+    if (!currentUser) return;
+
+    try {
+        const res = await apiCall('check-profile-completeness', 'GET', { employee_id: currentUser.id });
+        if (res && res.success) {
+            if (!res.is_complete) {
+                showProfileCompletionAlert(res.missing_fields, res.missing_docs);
+            } else {
+                const container = document.getElementById('profileCompletionAlert');
+                if (container) {
+                    container.classList.add('hidden');
+                    container.innerHTML = '';
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Error checking profile completeness:', e);
+    }
+}
+
+function showProfileCompletionAlert(missingFields, missingDocs) {
+    const container = document.getElementById('profileCompletionAlert');
+    if (!container) return;
+
+    let message = '';
+    if (missingFields.length > 0 && missingDocs.length > 0) {
+        message = `Please fill mandatory fields (${missingFields.slice(0, 5).join(', ')}${missingFields.length > 5 ? '...' : ''}) and upload ${missingDocs.join(' & ')}.`;
+    } else if (missingFields.length > 0) {
+        message = `Please fill missing fields: ${missingFields.slice(0, 6).join(', ')}${missingFields.length > 6 ? '...' : ''}.`;
+    } else if (missingDocs.length > 0) {
+        message = `Please upload missing documents: ${missingDocs.join(' & ')}.`;
+    }
+
+    container.innerHTML = `
+        <div class="profile-alert-card">
+            <div class="profile-alert-icon">⚠️</div>
+            <div class="profile-alert-content">
+                <span class="profile-alert-title">Profile Incomplete</span>
+                <span class="profile-alert-text">${message}</span>
+            </div>
+            <div class="profile-alert-action">
+                <button class="btn btn-alert" onclick="openProfile()">Complete Now</button>
+            </div>
+        </div>
+    `;
+    container.classList.remove('hidden');
 }
 
 // Admin Dashboard Functions
 async function loadAdminSummary() {
     try {
-        const res = await apiCall('admin-summary', 'GET');
+        const res = await apiCall('admin-summary', 'GET', { user_id: currentUser.id });
         if (res && res.success) {
             document.getElementById('totalEmployees').textContent = res.total_employees || 0;
             document.getElementById('presentToday').textContent = `${res.present_today || 0} present today`;
@@ -864,7 +1138,7 @@ async function loadAdminSummary() {
 
 async function loadPendingRequests() {
     try {
-        const res = await apiCall('pending-requests', 'GET');
+        const res = await apiCall('pending-requests', 'GET', { user_id: currentUser.id });
         if (res && res.success) {
             document.getElementById('pendingRequests').textContent = res.count || 0;
         }
@@ -875,7 +1149,7 @@ async function loadPendingRequests() {
 
 async function loadActiveTasks() {
     try {
-        const res = await apiCall('active-tasks', 'GET');
+        const res = await apiCall('active-tasks', 'GET', { employee_id: currentUser.id });
         if (res && res.success) {
             document.getElementById('activeTasks').textContent = res.count || 0;
         }
@@ -887,7 +1161,7 @@ async function loadActiveTasks() {
 // Admin Card Click Handlers
 async function showEmployeeSummary() {
     try {
-        const res = await apiCall('admin-summary', 'GET');
+        const res = await apiCall('admin-summary', 'GET', { user_id: currentUser.id });
         if (res && res.success) {
             const summary = res;
 
@@ -1031,7 +1305,7 @@ async function openBirthdayCalendar() {
         if (res && res.success) {
             const birthdays = res.birthdays || [];
             const total = birthdays.length;
-            const currentDate = new Date();
+            const currentDate = getCurrentISTDate();
             const upcoming = birthdays.filter(b => {
                 const bDate = new Date(b.date_of_birth);
                 // Compare only month and day for "upcoming" in the viewed month
@@ -1307,7 +1581,7 @@ function createPremiumGlobalListHTML(birthdays) {
 function jumpToBirthday(dateStr) {
     const date = new Date(dateStr);
     window.currentBirthdayMonth = date.getMonth();
-    window.currentBirthdayYear = new Date().getFullYear(); // Assume current year view
+    window.currentBirthdayYear = getCurrentISTDate().getFullYear(); // Assume current year view
     openBirthdayCalendar();
 }
 
@@ -1403,14 +1677,22 @@ async function confirmWish(id, name) {
             btn.disabled = true;
         }
 
+        const wisherName = currentUser ? currentUser.name || currentUser.username : "Someone";
+        const wishMessage = `${wisherName} wishes you a very Happy Birthday`;
+
         const result = await apiCall('send-wish', 'POST', {
             sender_id: currentUser.id,
             receiver_id: id,
-            message: "Wishing you a very Happy Birthday! 🎂"
+            message: wishMessage
         });
 
         if (result.success) {
             showNotification(`Best wishes sent to ${name}! 🎉`, 'success');
+
+            // Show FX for wisher as immediate feedback
+            const wisherName = currentUser ? currentUser.name || currentUser.username : "Someone";
+            showBirthdayWishFX(`${wisherName} wishes you a very Happy Birthday`, 'male'); // Use generic gender for feedback
+
             if (btn) {
                 btn.innerHTML = '<span>✅</span> Wishes Sent';
                 btn.style.background = '#4ade80';
@@ -1585,9 +1867,10 @@ function createBirthdayCalendarHTML(calendarInfo, year, month) {
     for (let day = 1; day <= daysInMonth; day++) {
         const dayData = calendarData[day];
         const dateObj = new Date(year, month, day);
-        const isToday = new Date().getDate() === day &&
-            new Date().getMonth() === month &&
-            new Date().getFullYear() === year;
+        const now = getCurrentISTDate();
+        const isToday = now.getDate() === day &&
+            now.getMonth() === month &&
+            now.getFullYear() === year;
 
         const isSunday = dateObj.getDay() === 0;
 
@@ -1684,7 +1967,7 @@ async function openRequestsModal() {
     openModal('requestsModal');
 
     try {
-        const res = await apiCall('pending-requests', 'GET');
+        const res = await apiCall('pending-requests', 'GET', { user_id: currentUser.id });
         if (res && res.success && Array.isArray(res.requests)) {
             const requests = res.requests;
             window.currentRequests = requests; // Store for filtering
@@ -1854,7 +2137,7 @@ async function switchRequestMode(mode) {
     document.getElementById('requestsListContainer').innerHTML = '<div class="text-center" style="padding: 40px;"><div class="loading-spinner" style="margin: 0 auto 16px;"></div><p>Fetching ' + mode + ' data...</p></div>';
 
     try {
-        const res = await apiCall('pending-requests' + (mode === 'history' ? '?status=history' : ''), 'GET');
+        const res = await apiCall('pending-requests' + (mode === 'history' ? '?status=history' : ''), 'GET', { user_id: currentUser.id });
         if (res && res.success && Array.isArray(res.requests)) {
             window.currentRequests = res.requests;
 
@@ -1919,7 +2202,7 @@ async function openTaskManager() {
     // Hide Add Task button for non-admins
     const addTaskBtn = document.querySelector('#taskManagerModal .modal-actions .btn-primary');
     if (addTaskBtn) {
-        if (typeof currentUser !== 'undefined' && currentUser && currentUser.role !== 'admin') {
+        if (typeof currentUser !== 'undefined' && currentUser && currentUser.role !== 'admin' && currentUser.role !== 'manager') {
             addTaskBtn.style.display = 'none';
         } else {
             addTaskBtn.style.display = 'inline-block';
@@ -2022,7 +2305,7 @@ function renderTaskBoard() {
                         <span class="premium-priority-badge ${priorityClass}" style="border-radius: 6px; padding: 4px 10px;">${task.priority || 'Medium'}</span>
                         ${dueBadge}
                         <div style="display:flex; gap:8px;">
-                            ${typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin' ? `
+                            ${typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager') ? `
                             <button class="btn-icon-sm" onclick="event.stopPropagation(); editTask(${task.id})" style="background:#f1f5f9; border:none; color:#64748b; cursor:pointer; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; transition:all 0.2s;" title="Edit">✎</button>
                             <button class="btn-icon-sm" onclick="event.stopPropagation(); deleteTask(${task.id})" style="background:#fef2f2; border:none; color:#ef4444; cursor:pointer; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; transition:all 0.2s;" title="Delete">🗑</button>
                             ` : ''}
@@ -2182,27 +2465,31 @@ function updateDashboardVisibility() {
 
     const taskManagerCard = document.getElementById('taskManagerCard');
     const myTasksCard = document.getElementById('myTasksCard');
+    const myStatsCard = document.getElementById('myStatsCard');
+    const hubMyStatsBtn = document.getElementById('hubMyStatsBtn');
     const adminStatsGrid = document.getElementById('adminStatsGrid');
     const employeeStatsGrid = document.getElementById('employeeStatsGrid');
 
-    if (currentUser.role === 'admin' || currentUser.role === 'manager') {
-        // Show Task Manager (Admin/Manager), Hide My Tasks (Employee - unless manager wants both)
+    if (currentUser.role === 'admin') {
+        // Show Task Manager (Admin), Hide My Tasks
         if (taskManagerCard) taskManagerCard.classList.remove('hidden');
-        if (myTasksCard) {
-            // Managers might still want "My Tasks" for a focused view of their own work
-            if (currentUser.role === 'manager') myTasksCard.classList.remove('hidden');
-            else myTasksCard.classList.add('hidden');
-        }
+        if (myTasksCard) myTasksCard.classList.add('hidden');
 
-        // Ensure Admin Stats Grid is visible for Admin/Manager
+        // Admin doesn't need personal "My Stats" on their main dashboard
+        if (myStatsCard) myStatsCard.classList.add('hidden');
+        if (hubMyStatsBtn) hubMyStatsBtn.classList.add('hidden');
+
+        // Ensure Admin Stats Grid is visible for Admin
         if (adminStatsGrid) adminStatsGrid.classList.remove('hidden');
         if (employeeStatsGrid) employeeStatsGrid.classList.add('hidden');
     } else {
-        // Hide Task Manager (Admin), Show My Tasks (Employee)
+        // Hide Task Manager (Admin), Show My Tasks (Employee/Manager)
         if (taskManagerCard) taskManagerCard.classList.add('hidden');
         if (myTasksCard) myTasksCard.classList.remove('hidden');
+        if (myStatsCard) myStatsCard.classList.remove('hidden');
+        if (hubMyStatsBtn) hubMyStatsBtn.classList.remove('hidden');
 
-        // Ensure Employee Stats Grid is visible
+        // Ensure Employee Stats Grid is visible for Employee/Manager
         if (adminStatsGrid) adminStatsGrid.classList.add('hidden');
         if (employeeStatsGrid) employeeStatsGrid.classList.remove('hidden');
     }
@@ -2595,9 +2882,9 @@ async function loadStatusOverview() {
     if (histView) histView.classList.add('hidden');
 
     // 1. Set Date
-    const today = new Date();
+    const today = getCurrentISTDate();
     const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    const dateStr = today.toLocaleDateString('en-US', dateOptions);
+    const dateStr = today.toLocaleDateString('en-IN', { ...dateOptions, timeZone: 'Asia/Kolkata' });
     const modalDate = document.getElementById('modalDate');
     if (modalDate) modalDate.textContent = dateStr;
 
@@ -2808,9 +3095,28 @@ async function openAttendanceCalendar() {
         return;
     }
 
-    const now = new Date();
-    await buildAttendanceCalendar(now.getFullYear(), now.getMonth());
+    const now = getCurrentISTDate();
+    currentCalendarMonth = now.getMonth();
+    currentCalendarYear = now.getFullYear();
+    await buildAttendanceCalendar(currentCalendarYear, currentCalendarMonth);
     openModal('calendarModal');
+}
+
+async function changeCalendarMonth(offset) {
+    let newMonth = currentCalendarMonth + offset;
+    let newYear = currentCalendarYear;
+
+    if (newMonth > 11) {
+        newMonth = 0;
+        newYear++;
+    } else if (newMonth < 0) {
+        newMonth = 11;
+        newYear--;
+    }
+
+    currentCalendarMonth = newMonth;
+    currentCalendarYear = newYear;
+    await buildAttendanceCalendar(currentCalendarYear, currentCalendarMonth);
 }
 
 async function buildAttendanceCalendar(year, month) {
@@ -2915,7 +3221,7 @@ async function buildAttendanceCalendar(year, month) {
     }
 
     // Actual days
-    const todayDate = new Date();
+    const todayDate = getCurrentISTDate();
     todayDate.setHours(0, 0, 0, 0);
 
     for (let day = 1; day <= daysInMonth; day++) {
@@ -3043,6 +3349,73 @@ function openMultiRequestModal() {
     openModal('requestActionModal');
 }
 
+
+/* Lunch Break Logic */
+async function handleLunchBreak() {
+    if (!currentUser) return;
+
+    const titleEl = document.getElementById('lunchBreakTitle');
+    const isStarting = titleEl.textContent.includes('Start');
+    const endpoint = isStarting ? 'lunch-break/start' : 'lunch-break/end';
+    const action = isStarting ? 'start' : 'end';
+
+    // Geofence Check
+    if (currentAttendanceRecord && currentAttendanceRecord.type === 'office' && !isUserGeoInRange) {
+        showNotification('You must be within the office geofence to mark lunch break.', 'error');
+        return;
+    }
+
+    const icon = isStarting ? '🍴' : '🏠';
+    const message = `Are you sure you want to ${action} your lunch break?`;
+    const title = isStarting ? 'Start Lunch' : 'End Lunch';
+
+    if (!(await showConfirm(message, title, icon))) return;
+
+    // Get Location
+    if (!navigator.geolocation) {
+        showNotification('Geolocation is not supported by your browser', 'error');
+        return;
+    }
+
+    const getLocation = () => {
+        return new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            });
+        });
+    };
+
+    try {
+        let position = null;
+        try {
+            position = await getLocation();
+        } catch (geoError) {
+            console.warn('Geolocation failed:', geoError);
+            // Proceed without location or block based on policy? 
+            // Assuming we want to allow but maybe warn, or just send without location
+        }
+
+        const payload = {
+            employee_id: currentUser.id,
+            latitude: position ? position.coords.latitude : null,
+            longitude: position ? position.coords.longitude : null
+        };
+
+        const res = await apiCall(endpoint, 'POST', payload);
+        if (res.success) {
+            showNotification(res.message, 'success');
+            await loadTodayAttendance();
+        } else {
+            showNotification(res.message, 'error');
+        }
+    } catch (e) {
+        console.error('Error handling lunch break:', e);
+        showNotification('Failed to process request', 'error');
+    }
+}
+
 async function loadTodayAttendance(isUserInRange = false) {
     // Sync initial state
     isUserGeoInRange = isUserInRange;
@@ -3063,18 +3436,265 @@ async function loadTodayAttendance(isUserInRange = false) {
             if (record.check_out_time) {
                 statusElement.textContent = 'Completed';
                 statusElement.className = 'stat-card-value success';
-                timingElement.textContent = `${record.check_in_time} - ${record.check_out_time} `;
+                // Helper to format time (HH:MM AM/PM)
+                const formatTime = (timeStr) => {
+                    if (!timeStr) return '';
+                    const [h, m] = timeStr.split(':');
+                    const date = new Date();
+                    date.setHours(parseInt(h), parseInt(m));
+                    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                };
+
+                const checkInFormatted = formatTime(record.check_in_time);
+                const checkOutFormatted = formatTime(record.check_out_time);
+
+                let html = `<div style="display:flex; flex-direction:column; gap:4px;">
+                                <div><span style="opacity:0.8; font-size:0.9em;">Shift:</span> <span style="font-weight:600;">${checkInFormatted} - ${checkOutFormatted}</span></div>`;
+
+                // Add Lunch Duration
+                if (record.lunch_start_time && record.lunch_end_time) {
+                    const start = new Date(`1970-01-01T${record.lunch_start_time}`);
+                    const end = new Date(`1970-01-01T${record.lunch_end_time}`);
+                    const diffMs = end - start;
+                    const diffMins = Math.round(diffMs / 60000);
+                    const hours = Math.floor(diffMins / 60);
+                    const mins = diffMins % 60;
+                    const durationStr = hours > 0 ? `${hours}hr ${mins}m` : `${mins}m`;
+                    html += `<div><span style="opacity:0.8; font-size:0.9em;">Lunch:</span> <span style="font-weight:600;">${durationStr}</span></div>`;
+                }
+                html += `</div>`;
+                timingElement.innerHTML = html;
+
                 checkInCard.classList.add('hidden');
                 checkOutCard.classList.add('hidden');
             } else {
                 statusElement.textContent = 'Checked In';
                 statusElement.className = 'stat-card-value success';
-                timingElement.textContent = `Since ${record.check_in_time} `;
+
+                // Helper to format time (HH:MM AM/PM)
+                const formatTime = (timeStr) => {
+                    if (!timeStr) return '';
+                    // Handle "HH:MM:SS.micros" or just "HH:MM:SS"
+                    const [h, m] = timeStr.split(':');
+                    const date = new Date();
+                    date.setHours(parseInt(h), parseInt(m));
+                    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                };
+
+                const checkInFormatted = formatTime(record.check_in_time);
+                let html = `<div style="display:flex; flex-direction:column; gap:4px;">
+                                <div><span style="opacity:0.8; font-size:0.9em;">Check-in:</span> <span style="font-weight:600;">${checkInFormatted}</span></div>`;
+
+                // Add Lunch Status/Duration
+                if (record.lunch_start_time) {
+                    if (record.lunch_end_time) {
+                        // Completed long
+                        const start = new Date(`1970-01-01T${record.lunch_start_time}`);
+                        const end = new Date(`1970-01-01T${record.lunch_end_time}`);
+                        const diffMs = end - start;
+                        const diffMins = Math.round(diffMs / 60000);
+                        const hours = Math.floor(diffMins / 60);
+                        const mins = diffMins % 60;
+                        const durationStr = hours > 0 ? `${hours}hr ${mins}m` : `${mins}m`;
+
+                        html += `<div><span style="opacity:0.8; font-size:0.9em;">Lunch:</span> <span style="font-weight:600;">${durationStr}</span></div>`;
+                    } else {
+                        // Ongoing
+                        const lunchStartFormatted = formatTime(record.lunch_start_time);
+                        html += `<div style="color:#d97706; font-weight:600; display:flex; align-items:center; gap:4px; margin-top:4px;">
+                                    <span>🍽️ On Lunch</span>
+                                    <span style="font-size:0.85em; opacity:0.9; font-weight:normal;" id="lunchTimer">(since ${lunchStartFormatted})</span>
+                                 </div>`;
+
+                        // Start live timer
+                        if (window.lunchTimerInterval) clearInterval(window.lunchTimerInterval);
+
+                        const start = getCurrentISTDate();
+                        const [h, m, s] = record.lunch_start_time.split(':');
+                        // Handle potential microseconds/seconds variation
+                        const seconds = s ? s.split('.')[0] : '00';
+
+                        // We need to construct a date object for today with the start time
+                        // Assuming lunch started today (as this is today's attendance)
+                        const startTime = getCurrentISTDate();
+                        startTime.setHours(parseInt(h), parseInt(m), parseInt(seconds), 0);
+
+                        const updateTimer = () => {
+                            const now = getCurrentISTDate();
+                            const diff = now - startTime;
+                            if (diff < 0) return; // Should not happen ideally
+
+                            const diffSecs = Math.floor(diff / 1000);
+                            const hours = Math.floor(diffSecs / 3600);
+                            const mins = Math.floor((diffSecs % 3600) / 60);
+                            const secs = diffSecs % 60;
+
+                            const pad = (n) => n.toString().padStart(2, '0');
+                            const timerStr = hours > 0
+                                ? `${hours}:${pad(mins)}:${pad(secs)}`
+                                : `${mins}:${pad(secs)}`;
+
+                            const timerEl = document.getElementById('lunchTimer');
+                            if (timerEl) {
+                                timerEl.textContent = `(${timerStr})`;
+                                timerEl.style.color = '#d97706';
+                                timerEl.style.fontWeight = '700';
+                            }
+                        };
+
+                        updateTimer(); // Initial call
+                        window.lunchTimerInterval = setInterval(updateTimer, 1000);
+                    }
+                }
+                // Add Mini Map Container
+                html += `<div id="statusMiniMap" onclick="openMapModal()" style="height: 180px; width: 100%; margin-top: 12px; border-radius: 8px; z-index: 1; cursor: pointer; position: relative;">
+                            <div style="position: absolute; bottom: 8px; right: 8px; background: rgba(255,255,255,0.9); padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 1000;">View Full Map ⤢</div>
+                         </div>`;
+                html += `</div>`;
+                timingElement.innerHTML = html;
+
+                // Save record globally for modal access
+                window.currentAttendanceRecord = record;
+
+                // Initialize Mini Map
+                setTimeout(() => {
+                    if (window.statusMap) {
+                        window.statusMap.off();
+                        window.statusMap.remove();
+                        window.statusMap = null;
+                    }
+
+                    const mapEl = document.getElementById('statusMiniMap');
+                    if (mapEl && typeof L !== 'undefined') {
+                        const map = L.map('statusMiniMap', {
+                            zoomControl: false,
+                            attributionControl: false,
+                            dragging: false,
+                            scrollWheelZoom: false,
+                            doubleClickZoom: false,
+                            boxZoom: false
+                        });
+                        window.statusMap = map;
+
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            maxZoom: 19,
+                        }).addTo(map);
+
+                        const markers = [];
+
+                        const createEmojiIcon = (emoji) => {
+                            // Determine marker image based on gender
+                            const gender = (record.gender || 'other').toLowerCase();
+                            let markerImage = '/static/images/marker-user.jpeg'; // Default
+
+                            if (gender === 'male') {
+                                markerImage = '/static/images/marker-user.png';
+                            } else if (gender === 'female') {
+                                markerImage = '/static/images/marker-female.png';
+                            }
+
+                            return L.divIcon({
+                                className: 'custom-emoji-marker',
+                                html: `<img src="${markerImage}" style="width: 100%; height: 100%; object-fit: contain;">`,
+                                iconSize: [40, 40],
+                                iconAnchor: [20, 20],
+                                popupAnchor: [0, -28]
+                            });
+                        };
+
+                        // 1. Check-In Location (Standing Human)
+                        if (record.check_in_location) {
+                            try {
+                                const loc = typeof record.check_in_location === 'string' ? JSON.parse(record.check_in_location) : record.check_in_location;
+                                const lat = loc.latitude || loc.lat;
+                                const lon = loc.longitude || loc.lon || loc.lng;
+                                if (lat && lon) {
+                                    const timeStr = record.check_in_time ? new Date(`1970-01-01T${record.check_in_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                                    const marker = L.marker([lat, lon], { icon: createEmojiIcon('🧍') }).addTo(map).bindPopup(`Check In: ${timeStr}`);
+                                    markers.push(marker);
+                                }
+                            } catch (e) { console.error('Error parsing check-in location', e); }
+                        }
+
+                        // 2. Lunch Start (Walking Human)
+                        if (record.lunch_start_lat && record.lunch_start_lon) {
+                            const timeStr = record.lunch_start_time ? new Date(`1970-01-01T${record.lunch_start_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                            const marker = L.marker([record.lunch_start_lat, record.lunch_start_lon], { icon: createEmojiIcon('🚶') }).addTo(map).bindPopup(`Lunch Start: ${timeStr}`);
+                            markers.push(marker);
+                        }
+
+                        // 3. Lunch End (Running Human)
+                        if (record.lunch_end_lat && record.lunch_end_lon) {
+                            const timeStr = record.lunch_end_time ? new Date(`1970-01-01T${record.lunch_end_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                            const marker = L.marker([record.lunch_end_lat, record.lunch_end_lon], { icon: createEmojiIcon('🏃') }).addTo(map).bindPopup(`Lunch End: ${timeStr}`);
+                            markers.push(marker);
+                        }
+
+                        // 4. Check Out (Waving Human)
+                        if (record.check_out_location) {
+                            try {
+                                const loc = typeof record.check_out_location === 'string' ? JSON.parse(record.check_out_location) : record.check_out_location;
+                                const lat = loc.latitude || loc.lat;
+                                const lon = loc.longitude || loc.lon || loc.lng;
+                                if (lat && lon) {
+                                    const timeStr = record.check_out_time ? new Date(`1970-01-01T${record.check_out_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                                    const marker = L.marker([lat, lon], { icon: createEmojiIcon('👋') }).addTo(map).bindPopup(`Check Out: ${timeStr}`);
+                                    markers.push(marker);
+                                }
+                            } catch (e) { console.error('Error parsing check-out location', e); }
+                        }
+
+                        if (markers.length > 0) {
+                            const group = new L.featureGroup(markers);
+                            map.fitBounds(group.getBounds(), { padding: [20, 20] });
+                        } else {
+                            map.setView([20.5937, 78.9629], 4);
+                        }
+                    }
+                }, 100);
+
                 checkInCard.classList.add('hidden');
                 checkOutCard.classList.remove('hidden');
 
                 // Update UI state based on current location status
                 updateCheckOutButtonState();
+
+                // Lunch Break Logic
+                const lunchBreakCard = document.getElementById('lunchBreakCard');
+                const lunchBreakTitle = document.getElementById('lunchBreakTitle');
+                const lunchBreakDesc = document.getElementById('lunchBreakDesc');
+
+                if (lunchBreakCard) {
+                    if (record.status === 'present' || record.status === 'half_day') {
+                        lunchBreakCard.classList.remove('hidden');
+
+                        // Geofence Check for UI
+                        const isOffice = record.type === 'office';
+                        const canInteract = !isOffice || (isOffice && isUserGeoInRange);
+
+                        if (record.lunch_start_time && record.lunch_start_time !== 'None' && (!record.lunch_end_time || record.lunch_end_time === 'None')) {
+                            lunchBreakTitle.textContent = 'End Lunch';
+                            lunchBreakDesc.textContent = isOffice && !isUserGeoInRange ? 'Enter geofence to end lunch' : 'Complete your lunch break';
+                            lunchBreakCard.classList.add('active-lunch');
+                            lunchBreakCard.style.opacity = canInteract ? '1' : '0.6';
+                            lunchBreakCard.style.pointerEvents = canInteract ? 'auto' : 'none';
+                        } else if (record.lunch_end_time && record.lunch_end_time !== 'None') {
+                            lunchBreakTitle.textContent = 'Lunch Completed';
+                            lunchBreakDesc.textContent = 'Lunch break recorded';
+                            lunchBreakCard.style.opacity = '0.6';
+                            lunchBreakCard.style.pointerEvents = 'none';
+                            lunchBreakCard.classList.remove('active-lunch');
+                        } else {
+                            lunchBreakTitle.textContent = 'Start Lunch';
+                            lunchBreakDesc.textContent = isOffice && !isUserGeoInRange ? 'Enter geofence to start lunch' : 'Begin your lunch break';
+                            lunchBreakCard.style.opacity = canInteract ? '1' : '0.6';
+                            lunchBreakCard.style.pointerEvents = canInteract ? 'auto' : 'none';
+                            lunchBreakCard.classList.remove('active-lunch');
+                        }
+                    } else {
+                        lunchBreakCard.classList.add('hidden');
+                    }
+                }
             }
         } else {
             currentAttendanceRecord = null;
@@ -3139,7 +3759,7 @@ async function loadWFHEligibility() {
             const maxWfhLimit = 2; // Monthly WFH limit
 
             // Fetch approved leave requests for current month
-            const now = new Date();
+            const now = getCurrentISTDate();
             const year = now.getFullYear();
             const month = now.getMonth() + 1;
 
@@ -3498,11 +4118,40 @@ async function startAttendanceFlow() {
 
     // show three choices first
     document.getElementById('typeSelectionSection').classList.remove('hidden');
+
+    // ONLY Surveyors (including temporary tags) can see Client Location card
+    const clientOption = document.getElementById('clientOption');
+    if (clientOption) {
+        if (currentUser && currentUser.department === 'Surveyors') {
+            clientOption.classList.remove('hidden');
+        } else {
+            clientOption.classList.add('hidden');
+        }
+    }
+
     const officeBlock = document.getElementById('officeBlock');
     if (officeBlock) officeBlock.style.display = 'none';
     document.getElementById('cameraSection').classList.add('hidden');
 
     await refreshWFHAvailability();
+
+    // 9 AM - 6 PM Restriction (Except Surveyors and Admins) - Aligned to Synchronized IST
+    if (currentUser && currentUser.department !== 'Surveyors' && currentUser.role !== 'admin') {
+        const istDate = getCurrentISTDate();
+
+        const hour = istDate.getHours();
+        const minute = istDate.getMinutes();
+        const currentTimeInMinutes = hour * 60 + minute;
+
+        const startWindow = 9 * 60; // 9:00 AM
+        const endWindow = 18 * 60;  // 6:00 PM
+
+        if (currentTimeInMinutes < startWindow || currentTimeInMinutes >= endWindow) {
+            showNotification('Non-surveyors can only check in between 9:00 AM and 6:00 PM of the current day.', 'warning');
+            showScreen('dashboardScreen');
+            return;
+        }
+    }
 }
 
 // Check location permission and disable checkInCard if denied
@@ -4057,17 +4706,14 @@ async function capturePhoto() {
 
     // --- OVERLAY LOGIC (GPS Map Camera Style) ---
     // 1. Prepare Data
-    const now = new Date();
-    const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
-    const dateStr = now.toLocaleDateString('en-GB'); // DD/MM/YYYY
-    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    const now = getCurrentISTDate();
 
-    // Timezone Offset
-    const offset = -now.getTimezoneOffset();
-    const offsetSign = offset >= 0 ? '+' : '-';
-    const offsetHours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
-    const offsetMins = String(Math.abs(offset) % 60).padStart(2, '0');
-    const fullDateStr = `${dayName}, ${dateStr} ${timeStr} GMT ${offsetSign}${offsetHours}:${offsetMins}`;
+    // Hardcoded IST display to prevent device time leaks
+    const dayName = now.toLocaleDateString('en-IN', { weekday: 'long', timeZone: 'Asia/Kolkata' });
+    const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata' }).replace(/\//g, '/');
+    const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
+
+    const fullDateStr = `${dayName}, ${dateStr} ${timeStr} GMT +05:30`;
 
     let lat = 0, lng = 0;
     let shortAddress = "Location Not Found";
@@ -4522,7 +5168,7 @@ async function showCheckOut() {
         }
 
         const checkInTime = new Date(`${record.date}T${record.check_in_time}`);
-        const now = new Date();
+        const now = getCurrentISTDate();
         const workHours = (now - checkInTime) / (1000 * 60 * 60);
 
         // 1️⃣ Before 4.5 hours → do NOT allow check-out at all
@@ -4570,10 +5216,10 @@ function calculateWorkedHours(checkInTime, checkOutTime) {
     const [inH, inM, inS = 0] = checkInTime.split(':').map(Number);
     const [outH, outM, outS = 0] = checkOutTime.split(':').map(Number);
 
-    const inDate = new Date();
+    const inDate = getCurrentISTDate();
     inDate.setHours(inH, inM, inS, 0);
 
-    const outDate = new Date();
+    const outDate = getCurrentISTDate();
     outDate.setHours(outH, outM, outS, 0);
 
     const diffMs = outDate - inDate;
@@ -4676,7 +5322,17 @@ async function confirmCheckOut() {
 }
 
 
+// To allow admins/managers to view specific employee records
+let overrideRecordsEmployeeId = null;
+let overrideRecordsEmployeeName = null;
 
+function viewEmployeeRecords(empId, empName) {
+    overrideRecordsEmployeeId = empId;
+    overrideRecordsEmployeeName = empName;
+    document.querySelector('#recordsScreen .header-title').textContent = `Attendance Records: ${empName}`;
+    window._keepOverrideFilter = true;
+    showScreen('recordsScreen');
+}
 
 async function loadAttendanceRecords(isMore = false) {
     try {
@@ -4705,16 +5361,23 @@ async function loadAttendanceRecords(isMore = false) {
         };
 
         // For non-admin users (employees), fetch last 6 months of data
-        if (currentUser.role !== 'admin') {
+        if (currentUser.role !== 'admin' && currentUser.role !== 'manager') {
             params.employee_id = currentUser.id;
             // No strict 6-month limit here if we want true pagination, but we can keep it as a safety
-            const today = new Date();
-            const sixMonthsAgo = new Date();
+            const today = getCurrentISTDate();
+            const sixMonthsAgo = getCurrentISTDate();
             sixMonthsAgo.setMonth(today.getMonth() - 6);
             params.start_date = formatDate(sixMonthsAgo);
             params.end_date = formatDate(today);
+        } else if (overrideRecordsEmployeeId) {
+            // If an Admin/Manager clicked "Records" on a specific user
+            params.employee_id = overrideRecordsEmployeeId;
+        } else if (currentUser.role === 'manager') {
+            // If manager clicked "Records" from main dashboard, show their personal records
+            params.employee_id = currentUser.id;
         }
 
+        params.user_id = currentUser.id;
         const result = await apiCall('attendance-records', 'GET', params);
 
         if (result && result.success && Array.isArray(result.records)) {
@@ -4785,7 +5448,7 @@ function renderAttendanceTable(records) {
 
     const listContainer = document.getElementById('attendanceListContainer');
 
-    if (currentUser.role === 'admin') {
+    if (currentUser.role === 'admin' || currentUser.role === 'manager') {
         renderAdminDayWiseView(records, listContainer);
     } else {
         renderUserMonthWiseView(records, listContainer);
@@ -4811,6 +5474,24 @@ function renderAdminDayWiseView(records, containerEl) {
         return new Date(b) - new Date(a);
     });
 
+    let tableHeadersHtml = `
+        <th>Employee</th>
+        <th>Department</th>
+        <th>Check In</th>
+        <th>Check Out</th>
+        <th>Lunch Start</th>
+        <th>Lunch End</th>
+        <th>Lunch Duration</th>
+        <th>Hours</th>
+        <th>Type</th>
+        <th>Status</th>
+        <th>Office</th>
+        <th>Photo</th>
+    `;
+    if (currentUser.role === 'admin') {
+        tableHeadersHtml += `<th style="width: 160px">Actions</th>`;
+    }
+
     let html = '<div class="records-by-date">';
 
     sortedDates.forEach(date => {
@@ -4832,16 +5513,7 @@ function renderAdminDayWiseView(records, containerEl) {
                 <table class="records-table">
                     <thead>
                         <tr>
-                            <th>Employee</th>
-                            <th>Department</th>
-                            <th>Check In</th>
-                            <th>Check Out</th>
-                            <th>Hours</th>
-                            <th>Type</th>
-                            <th>Status</th>
-                            <th>Office</th>
-                            <th>Photo</th>
-                            <th style="width: 160px">Actions</th>
+                            ${tableHeadersHtml}
                         </tr>
                     </thead>
                     <tbody>
@@ -4902,6 +5574,9 @@ function renderUserMonthWiseView(records, containerEl) {
                             <th>Date</th>
                             <th>Check In</th>
                             <th>Check Out</th>
+                            <th>Lunch Start</th>
+                            <th>Lunch End</th>
+                            <th>Lunch Duration</th>
                             <th>Hours</th>
                             <th>Type</th>
                             <th>Status</th>
@@ -4964,7 +5639,7 @@ function applyAttendanceSearch() {
         return;
     }
 
-    if (currentUser.role === 'admin') {
+    if (currentUser.role === 'admin' || currentUser.role === 'manager') {
         renderAdminDayWiseView(filtered, listContainer);
     } else {
         renderUserMonthWiseView(filtered, listContainer);
@@ -5004,6 +5679,9 @@ function renderUserAttendanceRow(r) {
         <td>${dateDisplay}</td>
         <td>${r.check_in_time || '-'}</td>
         <td>${r.check_out_time || '-'}</td>
+        <td>${r.lunch_start_time ? r.lunch_start_time.substring(0, 5) : '-'}</td>
+        <td>${r.lunch_end_time ? r.lunch_end_time.substring(0, 5) : '-'}</td>
+        <td>${r.lunch_duration ? `${r.lunch_duration}h` : '-'}</td>
         <td>${totalHours}</td>
         <td>${(r.type || '').toUpperCase()}</td>
         <td><span class="status-badge ${statusClass}">${statusText}</span></td>
@@ -5033,17 +5711,9 @@ function renderAttendanceRow(r) {
                 style="width:64px;height:64px;border-radius:12px;object-fit:cover;aspect-ratio:1/1;">`
         : '-';
 
-    return `<tr>
-        <td>${r.employee_name || ''}</td>
-        <td>${r.department || ''}</td>
-        <td>${r.check_in_time || '-'}</td>
-        <td>${r.check_out_time || '-'}</td>
-        <td>${totalHours}</td>
-        <td>${(r.type || '').toUpperCase()}</td>
-        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-        <td>${r.office_name || '-'}</td>
-        <td>${photoCell}</td>
-        <td style="white-space:nowrap;">
+    let actionsHtml = '';
+    if (currentUser.role === 'admin') {
+        actionsHtml = `
             <button
                 class="btn btn-secondary"
                 data-id="${r.id}"
@@ -5057,6 +5727,24 @@ function renderAttendanceRow(r) {
             <button class="btn" style="background:#ef4444;color:#fff" onclick="deleteAttendance(${r.id})">
                 Delete
             </button>
+        `;
+    }
+
+    return `<tr>
+        <td>${r.employee_name || ''}</td>
+        <td>${r.department || ''}</td>
+        <td>${r.check_in_time || '-'}</td>
+        <td>${r.check_out_time || '-'}</td>
+        <td>${r.lunch_start_time ? r.lunch_start_time.substring(0, 5) : '-'}</td>
+        <td>${r.lunch_end_time ? r.lunch_end_time.substring(0, 5) : '-'}</td>
+        <td>${r.lunch_duration ? `${r.lunch_duration}h` : '-'}</td>
+        <td>${totalHours}</td>
+        <td>${(r.type || '').toUpperCase()}</td>
+        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+        <td>${r.office_name || '-'}</td>
+        <td>${photoCell}</td>
+        <td style="white-space:nowrap;">
+            ${actionsHtml}
         </td>
     </tr>`;
 }
@@ -5211,19 +5899,70 @@ let allAdminProfiles = [];
 /* Open Admin Panel and ALWAYS pull fresh data from DB */
 // === ADMIN: open panel and load everything ===
 async function openAdminPanel() {
-    if (!currentUser || currentUser.role !== 'admin') {
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'manager')) {
         showNotification('Admins only.', 'warning');
         return;
     }
     showScreen('adminScreen');
 
-    await Promise.all([
+    const promises = [
         refreshAdminOffices(),
         refreshAdminUsers(),
         refreshPrimaryOfficeSelects(),
         refreshManagerDropdown(),
         refreshAdminProfiles()          // 🔹 load extended user details
-    ]);
+    ];
+
+    if (currentUser.role === 'manager') {
+        document.getElementById('adminAddOfficeCard')?.classList.add('hidden');
+        document.getElementById('adminAddUserCard')?.classList.add('hidden');
+        document.getElementById('adminOfficesListCard')?.classList.add('hidden');
+        const titleEl = document.querySelector('#adminScreen .header-title');
+        if (titleEl) titleEl.textContent = 'Manage Employees';
+
+        // Move adminStatsGrid to adminScreen
+        const statsGrid = document.getElementById('adminStatsGrid');
+        const adminScreenContainer = document.querySelector('#adminScreen .container');
+        const adminGrid = document.querySelector('#adminScreen .admin-grid');
+        if (statsGrid && statsGrid.parentNode !== adminScreenContainer) {
+            adminScreenContainer.insertBefore(statsGrid, adminGrid);
+            statsGrid.style.marginBottom = '24px';
+        }
+        if (statsGrid) statsGrid.classList.remove('hidden');
+
+        // Manager needs to fetch these when opening the panel
+        promises.push(loadAdminSummary());
+        promises.push(loadUpcomingBirthdays());
+        promises.push(loadPendingRequests());
+        promises.push(loadActiveTasks());
+
+        // Hide Intelligence Hub for managers as requested
+        document.getElementById('intelligenceHubCard')?.classList.add('hidden');
+
+
+        // Show specific Admin Panel action buttons for managers
+        document.getElementById('btnAdminExportAttendance').style.display = 'inline-block';
+
+    } else {
+        document.getElementById('adminAddOfficeCard')?.classList.remove('hidden');
+        document.getElementById('adminAddUserCard')?.classList.remove('hidden');
+        document.getElementById('adminOfficesListCard')?.classList.remove('hidden');
+        const titleEl = document.querySelector('#adminScreen .header-title');
+        if (titleEl) titleEl.textContent = 'Admin Panel';
+
+        // Show specific Admin Panel action buttons for true admins too
+        document.getElementById('btnAdminExportAttendance').style.display = 'inline-block';
+
+        // Ensure Intelligence Hub is visible for true admins
+        document.getElementById('intelligenceHubCard')?.classList.remove('hidden');
+        document.getElementById('temporaryTagsCard')?.classList.remove('hidden');
+    }
+
+    try {
+        await Promise.all(promises);
+    } catch (e) {
+        console.error("Error loading admin data", e);
+    }
 
     accessibleOffices = [];
     adminOfficeEditId = null;
@@ -5509,7 +6248,7 @@ async function refreshAdminUsers() {
             <div class="text-center" style="padding:12px;"><div class="loading-spinner" style="margin:0 auto;"></div> Loading users…</div>
         </td></tr>`;
 
-    const res = await apiCall('admin-users', 'GET');
+    const res = await apiCall('admin-users', 'GET', { user_id: currentUser.id });
     allAdminUsers = (res && res.success && Array.isArray(res.users)) ? res.users : [];
 
     // Clear search input on refresh
@@ -5528,21 +6267,42 @@ function renderAdminUsers(users) {
         return;
     }
 
-    tbody.innerHTML = users.map(u => `
-        <tr>
-            <td>${u.id}</td>
-            <td>${u.name || ''}</td>
-            <td>${u.username || ''}</td>
-            <td>${u.phone || ''}</td>
-            <td>${u.department || ''}</td>
-            <td>${u.role || ''}</td>
-            <td>${u.manager_name || '<small class="text-muted">None</small>'}</td>
-            <td style="white-space:nowrap;">
+    tbody.innerHTML = users.map(u => {
+        let adminActions = '';
+        if (currentUser.role === 'admin') {
+            adminActions = `
                 <button class="btn btn-secondary" onclick="startEditUser(${u.id})">Edit</button>
                 <button class="btn" style="background:#ef4444;color:#fff" onclick="deleteUser(${u.id})">Delete</button>
-            </td>
-        </tr>
-    `).join('');
+            `;
+        }
+
+        // Check for birthday
+        let birthdayAction = '';
+        if (u.date_of_birth) {
+            const dob = u.date_of_birth.split('-');
+            const today = getCurrentISTDate();
+            if (parseInt(dob[1]) === today.getMonth() + 1 && parseInt(dob[2]) === today.getDate()) {
+                birthdayAction = `<button class="btn-wish" onclick="wishHappyBirthday(${u.id}, '${u.name.replace(/'/g, "\\'")}', '${u.gender || 'male'}')">Wish 🎂</button>`;
+            }
+        }
+
+        return `
+            <tr>
+                <td>${u.id}</td>
+                <td>${u.name || ''} ${birthdayAction}</td>
+                <td>${u.username || ''}</td>
+                <td>${u.phone || ''}</td>
+                <td>${u.department || ''}</td>
+                <td>${u.role || ''}</td>
+                <td>${u.manager_name || '<small class="text-muted">None</small>'}</td>
+                <td style="white-space:nowrap;">
+                    <button class="btn btn-secondary" style="background:#3b82f6;color:#fff" onclick="showEmployeePerformanceAnalysis(${u.id})">Stats</button>
+                    <button class="btn btn-secondary" onclick="viewEmployeeRecords(${u.id}, '${u.name}')">Records</button>
+                    ${adminActions}
+                </td>
+            </tr>
+        `;
+    }).join('');
 }
 
 function filterAdminUsers() {
@@ -5909,6 +6669,9 @@ async function saveProfile() {
         showNotification('Profile updated successfully');
         msg.textContent = 'All details saved successfully.';
 
+        // RE-CHECK Profile Completeness
+        checkProfileCompleteness();
+
     } catch (err) {
         console.error('saveProfile error:', err);
         msg.textContent = err.message || 'Error updating profile';
@@ -5991,7 +6754,7 @@ async function uploadProfileDocuments() {
 
         anySelected = true;
         formData.append('doc[aadhar][name]', 'Aadhaar Card');
-        formData.append('doc[aadhar][number]', number);
+        formData.append('docAadharNumber', number);
         formData.append('file_aadhar', file);
         formData.append('file_aadhar_filename', `${usernameBase}_aadhar.pdf`);
     }
@@ -6010,7 +6773,7 @@ async function uploadProfileDocuments() {
 
         anySelected = true;
         formData.append('doc[pan][name]', 'PAN Card');
-        formData.append('doc[pan][number]', number);
+        formData.append('docPanNumber', number);
         formData.append('file_pan', file);
         formData.append('file_pan_filename', `${usernameBase}_pan.pdf`);
     }
@@ -6130,6 +6893,9 @@ async function uploadProfileDocuments() {
                     input.value = '';
                 }
             });
+
+            // RE-CHECK Profile Completeness
+            checkProfileCompleteness();
         } else {
             const errorMsg = (result && result.message) || 'Failed to upload documents. Please try again.';
             msg.textContent = errorMsg;
@@ -6211,7 +6977,7 @@ async function deleteSelectedDocuments() {
 // Add this function near other export functions
 function openExportModal() {
     // Admin only
-    if (!currentUser || currentUser.role !== 'admin') {
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'manager')) {
         showNotification('Export feature is available for admin users only', 'warning');
         return;
     }
@@ -6237,7 +7003,7 @@ async function populateExportUsersDropdown() {
     select.innerHTML = '<option value="all">All Employees</option>';
 
     try {
-        const res = await apiCall('admin-users', 'GET');
+        const res = await apiCall('admin-users', 'GET', { user_id: currentUser.id });
         if (res && res.success && Array.isArray(res.users)) {
             res.users.forEach(u => {
                 const opt = document.createElement('option');
@@ -6291,6 +7057,7 @@ async function confirmExport() {
             params.type = selectedType;
         }
 
+        params.user_id = currentUser.id;
         const res = await apiCall('attendance-records', 'GET', params);
 
         if (!res || !res.success || !Array.isArray(res.records)) {
@@ -6446,7 +7213,7 @@ async function refreshAdminProfiles() {
             <div class="loading-spinner" style="margin:0 auto;"></div> Loading user details…
         </div>`;
 
-    const res = await apiCall('admin-profiles', 'GET', {});
+    const res = await apiCall('admin-profiles', 'GET', { user_id: currentUser.id });
     allAdminProfiles = (res && res.success && Array.isArray(res.profiles)) ? res.profiles : [];
 
     // Clear search input on refresh
@@ -6809,7 +7576,7 @@ async function exportSingleProfileExcel(employeeId) {
 async function exportAllProfilesExcel() {
     try {
         // 1) get the list of users (IDs + usernames, etc.)
-        const res = await apiCall('admin-profiles', 'GET', {});
+        const res = await apiCall('admin-profiles', 'GET', { user_id: currentUser.id });
         const profiles = (res && res.success && Array.isArray(res.profiles)) ? res.profiles : [];
 
         if (!profiles.length) {
@@ -7420,19 +8187,9 @@ function renderPredictionsTable(predictions) {
     });
 }
 
-// Show predictions card for admin users
-if (currentUser && currentUser.role === 'admin') {
-    const predictionsCard = document.getElementById('predictionsCard');
-    if (predictionsCard) {
-        predictionsCard.classList.remove('hidden');
-    }
+// Intelligence Hub and Predictions card visibility are now handled in loadDashboardData
+// End of predictive results section
 
-    // Show Intelligence Hub card
-    const intelligenceHubCard = document.getElementById('intelligenceHubCard');
-    if (intelligenceHubCard) {
-        intelligenceHubCard.classList.remove('hidden');
-    }
-}
 
 // ========== Intelligence Hub Functions ==========
 
@@ -8130,12 +8887,17 @@ function closePersonnelSearchModal() {
     }
 }
 
-async function showEmployeePerformanceAnalysis(employeeId) {
+async function showEmployeePerformanceAnalysis(employeeId, viewType = 'period', month = null, year = null, weekIdx = 'all') {
     try {
-        // Do NOT close search modal, just overlay on top
-        const result = await apiCall(`employee-performance-analysis/${employeeId}`, 'GET');
+        let url = `employee-performance-analysis/${employeeId}?view_type=${viewType}`;
+        if (viewType === 'month' && month && year) {
+            url += `&month=${month}&year=${year}`;
+            if (weekIdx) url += `&week_idx=${weekIdx}`;
+        }
+
+        const result = await apiCall(url, 'GET');
         if (result.success) {
-            renderEmployeePerformanceModal(result);
+            renderEmployeePerformanceModal(result, employeeId);
         } else {
             showNotification(result.message || 'Failed to load performance data', 'error');
         }
@@ -8145,7 +8907,26 @@ async function showEmployeePerformanceAnalysis(employeeId) {
     }
 }
 
-function renderEmployeePerformanceModal(data) {
+window.changeStatsViewMode = function (employeeId) {
+    const viewType = document.getElementById('statsViewMode').value;
+    const now = new Date();
+
+    const month = document.getElementById('statsMonth')?.value || (now.getMonth() + 1);
+    const year = document.getElementById('statsYear')?.value || now.getFullYear();
+    const weekIdx = document.getElementById('statsWeekIdx')?.value || 'all';
+
+    showEmployeePerformanceAnalysis(employeeId, viewType, month, year, weekIdx);
+};
+
+window.updateStatsFilter = function (employeeId) {
+    const viewType = document.getElementById('statsViewMode').value;
+    const month = document.getElementById('statsMonth')?.value;
+    const year = document.getElementById('statsYear')?.value;
+    const weekIdx = document.getElementById('statsWeekIdx')?.value || 'all';
+    showEmployeePerformanceAnalysis(employeeId, viewType, month, year, weekIdx);
+};
+
+function renderEmployeePerformanceModal(data, employeeId) {
     // Remove existing if any
     const existing = document.getElementById('employeePerformanceModal');
     if (existing) existing.remove();
@@ -8153,6 +8934,20 @@ function renderEmployeePerformanceModal(data) {
     const m = data.metrics;
     const t = data.tasks;
     const p = data.prediction;
+    const f = data.filter;
+    const viewType = f.view_type || 'period';
+
+    // Filter labels
+    const currentMonth = f.month || (new Date().getMonth() + 1);
+    const currentYear = f.year || new Date().getFullYear();
+    const currentWeek = f.week || getISOWeek(new Date());
+
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const years = [currentYear, currentYear - 1];
+
+    // Generate weeks
+    const weeks = [];
+    for (let i = 1; i <= 52; i++) weeks.push(i);
 
     // Handle N/A for accuracy if no completed tasks
     const accuracyValue = (t.completed > 0) ? `${t.avg_accuracy}%` : 'N/A';
@@ -8165,17 +8960,49 @@ function renderEmployeePerformanceModal(data) {
 
     modal.innerHTML = `
         <div class="predictive-modal modal-content" style="width: 850px; max-width: 95vw; max-height: 90vh; padding: 0 !important; overflow: hidden; background: white; border: none; display: flex; flex-direction: column;">
-            <div class="predictive-header" style="background: #4f46e5; background: linear-gradient(135deg, #4f46e5, #6366f1); color: white; padding: 28px; margin-bottom: 0; border-radius: 0; flex-shrink: 0;">
+            <div class="predictive-header" style="background: #4f46e5; background: linear-gradient(135deg, #4f46e5, #6366f1); color: white; padding: 24px; margin-bottom: 0; border-radius: 0; flex-shrink: 0;">
                 <div style="display: flex; justify-content: space-between; align-items: start; width: 100%;">
-                    <div style="display: flex; align-items: center; gap: 16px;">
-                        <div style="background: rgba(255,255,255,0.2); width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; border-radius: 16px; font-size: 24px;">
-                            👤
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <div style="display: flex; align-items: center; gap: 16px;">
+                            <div style="background: rgba(255,255,255,0.2); width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 12px; font-size: 20px;">
+                                👤
+                            </div>
+                            <div>
+                                <h2 style="margin: 0; font-size: 20px; font-weight: 800; color: white !important;">${data.employee_name}</h2>
+                                <p style="margin: 2px 0 0; opacity: 0.9; font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.9);">
+                                    ${data.department} • ${data.email}
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <h2 style="margin: 0; font-size: 24px; font-weight: 800; color: white !important;">${data.employee_name}</h2>
-                            <p style="margin: 4px 0 0; opacity: 0.9; font-size: 14px; font-weight: 500; color: rgba(255,255,255,0.9);">
-                                ${data.department} • ${data.email}
-                            </p>
+                        
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <select id="statsViewMode" onchange="changeStatsViewMode(${employeeId})" style="background: rgba(255,255,255,0.25); border: 1px solid rgba(255,255,255,0.4); color: white; border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 700; cursor: pointer; outline: none;">
+                                <option value="period" ${viewType === 'period' ? 'selected' : ''} style="color: #333">Last 30 Days</option>
+                                <option value="month" ${viewType === 'month' ? 'selected' : ''} style="color: #333">Monthly View</option>
+                            </select>
+
+                            ${viewType === 'month' ? `
+                                <div style="display: flex; gap: 4px;">
+                                    <select id="statsMonth" onchange="updateStatsFilter(${employeeId})" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; outline: none;">
+                                        ${monthNames.map((name, i) => `<option value="${i + 1}" ${currentMonth === i + 1 ? 'selected' : ''} style="color: #333">${name}</option>`).join('')}
+                                    </select>
+                                    <select id="statsYear" onchange="updateStatsFilter(${employeeId})" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; outline: none;">
+                                        ${years.map(y => `<option value="${y}" ${currentYear === y ? 'selected' : ''} style="color: #333">${y}</option>`).join('')}
+                                    </select>
+                                    <select id="statsWeekIdx" onchange="updateStatsFilter(${employeeId})" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; outline: none;">
+                                        <option value="all" ${f.week_idx === 'all' ? 'selected' : ''} style="color: #333">All Weeks</option>
+                                        <option value="1" ${f.week_idx === '1' ? 'selected' : ''} style="color: #333">Week 1 (1-7)</option>
+                                        <option value="2" ${f.week_idx === '2' ? 'selected' : ''} style="color: #333">Week 2 (8-14)</option>
+                                        <option value="3" ${f.week_idx === '3' ? 'selected' : ''} style="color: #333">Week 3 (15-21)</option>
+                                        <option value="4" ${f.week_idx === '4' ? 'selected' : ''} style="color: #333">Week 4 (22-28)</option>
+                                        <option value="5" ${f.week_idx === '5' ? 'selected' : ''} style="color: #333">Week 5 (29+)</option>
+                                    </select>
+                                </div>
+                            ` : ''}
+                            
+                            <span style="font-size: 11px; opacity: 0.8; margin-left: 8px; background: rgba(0,0,0,0.2); padding: 4px 10px; border-radius: 6px; font-weight: 500;">
+                                ${f.start_date} to ${f.end_date}
+                            </span>
                         </div>
                     </div>
                     <button onclick="document.getElementById('employeePerformanceModal').remove()" 
@@ -8190,7 +9017,7 @@ function renderEmployeePerformanceModal(data) {
                 <div style="display: flex; flex-direction: column; gap: 24px;">
                     <div class="glass-card" style="padding: 20px; background: white; border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #f1f5f9;">
                         <h3 style="margin: 0 0 16px; font-size: 16px; font-weight: 700; color: var(--gray-900); display: flex; align-items: center; gap: 8px;">
-                            📅 Attendance Habits (Last 30 Days)
+                            📅 Attendance Habits
                         </h3>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                             <div style="background: #f1f5f9; padding: 12px; border-radius: 12px; border-left: 4px solid var(--primary);">
@@ -8223,15 +9050,25 @@ function renderEmployeePerformanceModal(data) {
                                     <div style="height: 100%; width: ${m.wfh_ratio}%; background: linear-gradient(to right, var(--primary), #6366f1); border-radius: 5px;"></div>
                                 </div>
                             </div>
-                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8fafc; border-radius: 12px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8fafc; border-radius: 12px; gap: 8px;">
                                 <div style="text-align: center; flex: 1;">
-                                    <div style="font-size: 22px; font-weight: 800; color: var(--gray-900);">${m.total_present_30d}</div>
-                                    <div style="font-size: 10px; color: var(--gray-500); font-weight: 700; text-transform: uppercase;">Days Present</div>
+                                    <div style="font-size: 16px; font-weight: 800; color: var(--gray-900);">${m.total_present}</div>
+                                    <div style="font-size: 8px; color: var(--gray-500); font-weight: 700; text-transform: uppercase;">Days Present</div>
                                 </div>
                                 <div style="height: 30px; width: 1px; background: #e2e8f0;"></div>
-                                <div style="text-align: center; flex: 1;">
-                                    <div style="font-size: 22px; font-weight: 800; color: var(--gray-900);">${m.daily_workday_avg}h</div>
-                                    <div style="font-size: 10px; color: var(--gray-500); font-weight: 700; text-transform: uppercase;">Daily Avg</div>
+                                <div style="text-align: center; flex: 1.2;">
+                                    <div style="font-size: 16px; font-weight: 800; color: var(--primary);">${m.weekday_avg}h</div>
+                                    <div style="font-size: 8px; color: var(--gray-500); font-weight: 700; text-transform: uppercase;">M-F Avg</div>
+                                </div>
+                                <div style="height: 30px; width: 1px; background: #e2e8f0;"></div>
+                                <div style="text-align: center; flex: 1.2;">
+                                    <div style="font-size: 16px; font-weight: 800; color: #8b5cf6;">${m.saturday_avg}h</div>
+                                    <div style="font-size: 8px; color: var(--gray-500); font-weight: 700; text-transform: uppercase;">Sat Avg</div>
+                                </div>
+                                <div style="height: 30px; width: 1px; background: #e2e8f0;"></div>
+                                <div style="text-align: center; flex: 1.2;">
+                                    <div style="font-size: 16px; font-weight: 800; color: #f59e0b;">${m.avg_lunch_min}m</div>
+                                    <div style="font-size: 8px; color: var(--gray-500); font-weight: 700; text-transform: uppercase;">Lunch Avg</div>
                                 </div>
                             </div>
                         </div>
@@ -8605,4 +9442,583 @@ function populateEmployeeListInDropdown(listId, isTeamMember = false) {
 
     // Update checkboxes based on current selection
     updateCheckboxesInDropdown(listId, isTeamMember ? selectedTeamMemberIds : selectedEmployeeIds);
+}
+
+// Map Modal Functions
+window.openMapModal = function () {
+    const modal = document.getElementById('mapModal');
+    const record = window.currentAttendanceRecord;
+
+    if (!modal || !record) return;
+
+    modal.classList.add('active');
+
+    // Initialize map if not exists or resize
+    setTimeout(() => {
+        if (!window.fullScreenMap) {
+            // Base Layers
+            const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap'
+            });
+
+            const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19,
+                attribution: '© Esri'
+            });
+
+            window.fullScreenMap = L.map('fullMap', {
+                center: [20.5937, 78.9629],
+                zoom: 4,
+                layers: [streets], // Default
+                zoomControl: false
+            });
+
+            // Add Layer Control
+            const baseMaps = {
+                "Street": streets,
+                "Satellite": satellite
+            };
+            L.control.layers(baseMaps).addTo(window.fullScreenMap);
+            L.control.zoom({ position: 'topleft' }).addTo(window.fullScreenMap);
+
+            // Add Current Location Button
+            const locControl = L.Control.extend({
+                options: { position: 'topleft' },
+                onAdd: function (map) {
+                    const btn = L.DomUtil.create('button', 'leaflet-bar leaflet-control leaflet-control-custom');
+                    btn.innerHTML = '📍';
+                    btn.style.backgroundColor = 'white';
+                    btn.style.width = '30px';
+                    btn.style.height = '30px';
+                    btn.style.cursor = 'pointer';
+                    btn.style.border = '2px solid rgba(0,0,0,0.2)';
+                    btn.style.borderRadius = '4px';
+                    btn.title = "Show My Location";
+                    btn.onclick = function (e) {
+                        e.stopPropagation();
+                        if (navigator.geolocation) {
+                            btn.innerHTML = '⌛';
+                            navigator.geolocation.getCurrentPosition(pos => {
+                                const lat = pos.coords.latitude;
+                                const lon = pos.coords.longitude;
+                                map.flyTo([lat, lon], 17);
+
+                                // Clear existing location markers/circles
+                                if (map._locMarker) map.removeLayer(map._locMarker);
+                                if (map._locCircle) map.removeLayer(map._locCircle);
+
+                                // Add accuracy circle
+                                map._locCircle = L.circle([lat, lon], {
+                                    radius: pos.coords.accuracy || 100,
+                                    color: '#3b82f6',
+                                    fillColor: '#3b82f6',
+                                    fillOpacity: 0.15,
+                                    weight: 1
+                                }).addTo(map);
+
+                                // Add marker
+                                map._locMarker = L.circleMarker([lat, lon], {
+                                    radius: 8,
+                                    fillColor: "#3b82f6",
+                                    color: "#fff",
+                                    weight: 2,
+                                    opacity: 1,
+                                    fillOpacity: 0.8
+                                }).addTo(map).bindPopup("You are here").openPopup();
+
+                                btn.innerHTML = '📍';
+                            }, () => {
+                                alert("Location access denied.");
+                                btn.innerHTML = '📍';
+                            });
+                        } else {
+                            alert("Geolocation not supported.");
+                        }
+                    }
+                    return btn;
+                }
+            });
+            window.fullScreenMap.addControl(new locControl());
+        }
+
+        // Clear existing layers
+        window.fullScreenMap.eachLayer((layer) => {
+            if (layer instanceof L.Marker) {
+                window.fullScreenMap.removeLayer(layer);
+            }
+        });
+
+        window.fullScreenMap.invalidateSize();
+
+        // Add Markers (Same logic as mini map)
+        const map = window.fullScreenMap;
+        const markers = [];
+        const gender = (record.gender || 'other').toLowerCase();
+
+        const createEmojiIcon = (emoji) => {
+            let markerImage = '/static/images/marker-user.png'; // Default to PNG
+            if (gender === 'male') markerImage = '/static/images/marker-user.png';
+            else if (gender === 'female') markerImage = '/static/images/marker-female.png';
+
+            return L.divIcon({
+                className: 'custom-emoji-marker',
+                html: `<img src="${markerImage}" style="width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));">`,
+                iconSize: [100, 100], // Increased to 100px for full map
+                iconAnchor: [50, 50],
+                popupAnchor: [0, -55]
+            });
+        };
+
+        // 1. Check-In
+        if (record.check_in_location) {
+            try {
+                const loc = typeof record.check_in_location === 'string' ? JSON.parse(record.check_in_location) : record.check_in_location;
+                const lat = loc.latitude || loc.lat;
+                const lon = loc.longitude || loc.lon || loc.lng;
+                if (lat && lon) {
+                    const timeStr = record.check_in_time ? new Date(`1970-01-01T${record.check_in_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                    const marker = L.marker([lat, lon], { icon: createEmojiIcon('🧍') }).addTo(map).bindPopup(`<b>Check In</b><br>${timeStr}`);
+                    markers.push(marker);
+                }
+            } catch (e) { }
+        }
+
+        // 2. Lunch Start
+        if (record.lunch_start_lat && record.lunch_start_lon) {
+            const timeStr = record.lunch_start_time ? new Date(`1970-01-01T${record.lunch_start_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+            const marker = L.marker([record.lunch_start_lat, record.lunch_start_lon], { icon: createEmojiIcon('🚶') }).addTo(map).bindPopup(`<b>Lunch Start</b><br>${timeStr}`);
+            markers.push(marker);
+        }
+
+        // 3. Lunch End
+        if (record.lunch_end_lat && record.lunch_end_lon) {
+            const timeStr = record.lunch_end_time ? new Date(`1970-01-01T${record.lunch_end_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+            const marker = L.marker([record.lunch_end_lat, record.lunch_end_lon], { icon: createEmojiIcon('��') }).addTo(map).bindPopup(`<b>Lunch End</b><br>${timeStr}`);
+            markers.push(marker);
+        }
+
+        // 4. Check Out
+        if (record.check_out_location) {
+            try {
+                const loc = typeof record.check_out_location === 'string' ? JSON.parse(record.check_out_location) : record.check_out_location;
+                const lat = loc.latitude || loc.lat;
+                const lon = loc.longitude || loc.lon || loc.lng;
+                if (lat && lon) {
+                    const timeStr = record.check_out_time ? new Date(`1970-01-01T${record.check_out_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                    const marker = L.marker([lat, lon], { icon: createEmojiIcon('👋') }).addTo(map).bindPopup(`<b>Check Out</b><br>${timeStr}`);
+                    markers.push(marker);
+                }
+            } catch (e) { }
+        }
+
+        if (markers.length > 0) {
+            const group = new L.featureGroup(markers);
+            map.fitBounds(group.getBounds(), { padding: [50, 50] });
+        } else {
+            map.setView([20.5937, 78.9629], 4);
+        }
+
+    }, 100);
+};
+
+window.closeMapModal = function () {
+    const modal = document.getElementById('mapModal');
+    if (modal) modal.classList.remove('active');
+};
+
+// View My Stats Function
+function viewMyStats() {
+    if (typeof currentUser !== 'undefined' && currentUser.id) {
+        showEmployeePerformanceAnalysis(currentUser.id);
+    } else {
+        // Fallback if currentUser is not global, try to find it from DOM or re-fetch
+        // For now, simpler fallback
+        const userName = document.getElementById('userName').innerText;
+        if (userName !== 'User') {
+            // Try to find user ID from other sources if needed, 
+            // but currentUser should be there if dashboard is loaded.
+            showNotification('Loading your stats...', 'info');
+            // If we really can't find ID, we might need to fetch it.
+            // But based on previous read, currentUser is used in render logic.
+        } else {
+            showNotification('User profile not loaded', 'error');
+        }
+    }
+}
+
+function getISOWeek(date) {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+}
+
+/* ==========================================================================
+   BIRTHDAY CELEBRATION LOGIC
+   ========================================================================== */
+
+async function checkBirthday() {
+    if (!currentUser) return;
+
+    // If birth date or gender is missing, try to fetch the profile to get it
+    if (!currentUser.date_of_birth || currentUser.gender === undefined) {
+        try {
+            const res = await apiCall('employee-profile', 'GET', { employee_id: currentUser.id });
+            if (res && res.success && res.profile) {
+                currentUser.date_of_birth = res.profile.date_of_birth || currentUser.date_of_birth;
+                currentUser.gender = res.profile.gender || null;
+                localStorage.setItem('attendanceUser', JSON.stringify(currentUser));
+            } else if (!currentUser.date_of_birth) {
+                console.log("Birthday Mode: No DOB found in profile.");
+                return;
+            }
+        } catch (e) {
+            console.error("Error fetching profile for birthday check:", e);
+            return;
+        }
+    }
+
+    try {
+        const dobStr = currentUser.date_of_birth; // YYYY-MM-DD
+        const parts = dobStr.split('-');
+        if (parts.length < 3) return;
+
+        const dobMonth = parseInt(parts[1]) - 1; // 0-indexed
+        const dobDay = parseInt(parts[2]);
+
+        const today = new Date();
+        const currentMonth = today.getMonth();
+        const currentDate = today.getDate();
+
+        console.log(`Birthday Check: User DOB = ${dobStr} (Month: ${dobMonth}, Day: ${dobDay}) vs Today (Month: ${currentMonth}, Day: ${currentDate})`);
+
+        if (dobMonth === currentMonth && dobDay === currentDate) {
+            console.log("🎉 Happy Birthday, " + currentUser.name + "! Activating Celebration Mode...");
+            startBirthdayCelebration();
+        }
+    } catch (e) {
+        console.error("Error checking birthday:", e);
+    }
+}
+
+function startBirthdayCelebration() {
+    const gender = (currentUser && currentUser.gender) ? currentUser.gender.toLowerCase() : 'other';
+    let modeClass = 'birthday-mode-female';
+
+    if (gender === 'male') {
+        modeClass = 'birthday-mode-male';
+    }
+
+    document.documentElement.classList.add(modeClass);
+    document.body.classList.add(modeClass);
+    document.body.classList.add('birthday-mode-active');
+
+    // SOCIAL TRIGGER: Poll notifications to trigger animation for recipient if wishes exist
+    loadNotifications();
+}
+
+/**
+ * SOCIAL FEATURE: Triggers flower petals and graffiti with rainbow premium sequence
+ */
+async function showBirthdayWishFX(message = "HAPPY BIRTHDAY!", gender = 'male') {
+    const container = document.getElementById('birthdayFXContainer');
+    if (!container) return;
+
+    // 1. Create Overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'birthday-graffiti-overlay';
+    if (gender === 'female') overlay.classList.add('feminine');
+    overlay.innerHTML = `
+        <div class="graffiti-text"></div>
+    `;
+    container.appendChild(overlay);
+
+    // CURATED PREMIUM PALETTES (Cream/Burgundy base + alternatives)
+    const stickerPalettes = [
+        { main: '#f5f1e3', shadow: '#8b0000' }, // Classic Vintage (Original)
+        { main: '#e3f5f1', shadow: '#004d40' }, // Retro Mint & Forest
+        { main: '#f5e3f1', shadow: '#4a148c' }, // Pastel Lavender & Royal Purple
+        { main: '#fff9c4', shadow: '#e65100' }, // Sunshine Yellow & Deep Orange
+        { main: '#e1f5fe', shadow: '#01579b' }, // Ice Blue & Navy
+        { main: '#f1f8e9', shadow: '#33691e' }  // Sage Green & Dark Olive
+    ];
+    const selectedPalette = stickerPalettes[Math.floor(Math.random() * stickerPalettes.length)];
+
+    // Prepare message containers for 2-line sticker layout
+    const textTarget = overlay.querySelector('.graffiti-text');
+    textTarget.style.flexDirection = 'column';
+    textTarget.style.setProperty('--sticker-main', selectedPalette.main);
+    textTarget.style.setProperty('--sticker-shadow', selectedPalette.shadow);
+
+    const [namePart, ...wishParts] = message.split(':');
+    const wishText = wishParts.join(':').trim() || "Wishing you a very Happy Birthday!";
+    const fullLine1 = (namePart + (wishParts.length ? ":" : "")).trim();
+    const fullLine2 = (wishText + " 🎂");
+
+    const line1 = document.createElement('div');
+    line1.className = 'graffiti-line name-line';
+    const line2 = document.createElement('div');
+    line2.className = 'graffiti-line wish-line';
+    textTarget.appendChild(line1);
+    textTarget.appendChild(line2);
+
+    let charIndex = 0;
+
+    // Helper to add characters to a line
+    const addChars = (text, targetLine) => {
+        Array.from(text).forEach(char => {
+            const span = document.createElement('span');
+            span.textContent = char === ' ' ? '\u00A0' : char;
+            targetLine.appendChild(span);
+
+            setTimeout(() => {
+                span.classList.add('typed');
+            }, 400 + (charIndex * 60)); // Faster 60ms per char for longer text
+            charIndex++;
+        });
+    };
+
+    addChars(fullLine1, line1);
+    addChars(fullLine2, line2);
+
+    const typingDuration = 400 + (charIndex * 60);
+
+    // Initial sequence (instant text appearance)
+    setTimeout(() => overlay.classList.add('active'), 100);
+
+    // 2. Smooth Impact & Social FX (Triggered near text completion)
+    setTimeout(() => {
+        overlay.classList.add('shake');
+        createSparkles(overlay, gender === 'female' ? 'feminine' : true);
+        createFlowerPetals(gender === 'female' ? 'feminine' : true);
+        setTimeout(() => overlay.classList.remove('shake'), 400);
+    }, Math.max(1000, typingDuration - 400));
+
+    // 3. Smooth Cleanup
+    setTimeout(() => {
+        overlay.classList.remove('active');
+        setTimeout(() => overlay.remove(), 1000);
+    }, typingDuration + 1500);
+}
+
+function createSparkles(parent, theme = false) {
+    const cyberColors = ['#00fff2', '#ff00ff', '#2d00ff', '#00f2ff', '#ff00d4'];
+    const feminineColors = ['#ff9a9e', '#fecfef', '#feada6', '#ffc3a0', '#ff0080'];
+
+    const isRainbow = theme === true;
+    const isFeminine = theme === 'feminine';
+
+    const colors = isFeminine ? feminineColors : (isRainbow ? cyberColors : ['#ffd700']);
+
+    for (let i = 0; i < 30; i++) {
+        const s = document.createElement('div');
+        s.className = 'sparkle';
+        s.style.left = '50%';
+        s.style.top = '50%';
+
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        s.style.color = color;
+        s.style.backgroundColor = color;
+
+        const angle = Math.random() * Math.PI * 2;
+        const velocity = Math.random() * 150 + 100;
+        const vx = Math.cos(angle) * velocity;
+        const vy = Math.sin(angle) * velocity;
+
+        parent.appendChild(s);
+
+        s.animate([
+            { transform: 'translate(-50%, -50%) scale(1.5)', opacity: 1 },
+            { transform: `translate(calc(-50% + ${vx}px), calc(-50% + ${vy}px)) scale(0)`, opacity: 0 }
+        ], {
+            duration: 1200,
+            easing: 'cubic-bezier(0.1, 0.8, 0.2, 1)'
+        }).onfinish = () => s.remove();
+    }
+}
+
+function createFlowerPetals(theme = false) {
+    const container = document.getElementById('birthdayFXContainer');
+    if (!container) return;
+
+    const petalCount = 120;
+    const cyberColors = ['#00fff2', '#ff00ff', '#2d00ff', '#00f2ff', '#ff00d4'];
+    const feminineColors = ['#ff9a9e', '#fecfef', '#feada6', '#ffc3a0', '#fff0f5'];
+    const neutralColors = ['#ffffff', '#fffdd0', '#f2e7d5', '#faf9f6'];
+
+    const isRainbow = theme === true;
+    const isFeminine = theme === 'feminine';
+
+    const colors = isFeminine ? feminineColors : (isRainbow ? cyberColors : neutralColors);
+
+    for (let i = 0; i < petalCount; i++) {
+        setTimeout(() => {
+            const petal = document.createElement('div');
+            petal.className = 'petal';
+
+            petal.style.left = Math.random() * 100 + 'vw';
+            petal.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+            petal.style.width = (Math.random() * 15 + 10) + 'px';
+            petal.style.height = (Math.random() * 8 + 7) + 'px';
+            petal.style.opacity = Math.random() * 0.8 + 0.2;
+
+            // Soft floral fall for feminine, rapid for cyber
+            let duration;
+            if (isFeminine) {
+                duration = Math.random() * 2 + 3; // 3-5s (elegant)
+                petal.style.borderRadius = '50% 0 50% 50%'; // Leafy shape
+            } else {
+                duration = Math.random() * 0.5 + 0.8;
+            }
+
+            const delay = Math.random() * 0.2;
+            petal.style.animationDuration = `${duration}s, 0.5s`;
+            petal.style.animationDelay = `0s, ${delay}s`;
+
+            container.appendChild(petal);
+            setTimeout(() => petal.remove(), duration * 1000);
+        }, i * (isFeminine ? 20 : 10));
+    }
+}
+
+/**
+ * Action to "Wish" an employee
+ */
+async function wishHappyBirthday(employeeId, employeeName, gender = 'male') {
+    // Capture the name of the person wishing (current user)
+    const wisherName = currentUser ? currentUser.name || currentUser.username : "Someone";
+
+    // Construct the personalized message
+    const message = `${wisherName} wishes you a very Happy Birthday`;
+
+    // 1. Show FX locally for immediate feedback to sender
+    showBirthdayWishFX(message, gender);
+
+    // 2. Send actual wish notification to backend
+    try {
+        await apiCall('send-wish', 'POST', {
+            sender_id: currentUser.id,
+            receiver_id: employeeId,
+            message: message
+        });
+        showNotification(`Best wishes sent to ${employeeName}! 🎉`, 'success');
+    } catch (e) {
+        console.error("Failed to send social wish:", e);
+    }
+}
+
+
+
+/* Temporary Tags Management */
+
+async function openTemporaryTagsModal() {
+    openModal('temporaryTagsModal');
+    await Promise.all([
+        populateTempTagEmployeeDropdown(),
+        loadTemporaryTags()
+    ]);
+}
+
+let allTempTagEmployees = [];
+
+async function populateTempTagEmployeeDropdown() {
+    const select = document.getElementById('tempTagEmployee');
+    if (!select) return;
+
+    const res = await apiCall('admin-users', 'GET');
+    allTempTagEmployees = (res && res.success && Array.isArray(res.users)) ? res.users : [];
+
+    renderTempTagEmployeeOptions(allTempTagEmployees);
+}
+
+function renderTempTagEmployeeOptions(employees) {
+    const select = document.getElementById('tempTagEmployee');
+    if (!select) return;
+
+    select.innerHTML = employees.map(e => `<option value="${e.id}">${e.username} (${e.name})</option>`).join('');
+}
+
+function filterTempTagEmployees() {
+    const query = document.getElementById('tempTagSearchInput').value.toLowerCase();
+    const filtered = allTempTagEmployees.filter(e =>
+        e.username.toLowerCase().includes(query) ||
+        e.name.toLowerCase().includes(query)
+    );
+    renderTempTagEmployeeOptions(filtered);
+}
+
+async function loadTemporaryTags() {
+    const list = document.getElementById('temporaryTagsList');
+    if (!list) return;
+
+    list.innerHTML = '<tr><td colspan="6" class="text-center">Loading tags...</td></tr>';
+
+    const res = await apiCall('temporary-tags', 'GET');
+    const tags = (res && res.success && Array.isArray(res.tags)) ? res.tags : [];
+
+    if (tags.length === 0) {
+        list.innerHTML = '<tr><td colspan="6" class="text-center">No temporary tags found.</td></tr>';
+        return;
+    }
+
+    list.innerHTML = tags.map(t => `
+        <tr>
+            <td>${t.employee_username}</td>
+            <td>${t.department}</td>
+            <td>${t.role}</td>
+            <td>${t.start_date}</td>
+            <td>${t.end_date}</td>
+            <td>
+                <button class="btn btn-subtle" onclick="deleteTemporaryTag(${t.id})" style="color: #ef4444;">Delete</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function submitTemporaryTag() {
+    const employeeId = document.getElementById('tempTagEmployee').value;
+    const department = document.getElementById('tempTagDept').value;
+    const role = document.getElementById('tempTagRole').value;
+    const startDate = document.getElementById('tempTagStart').value;
+    const endDate = document.getElementById('tempTagEnd').value;
+
+    if (!employeeId || !department || !role || !startDate || !endDate) {
+        showNotification('Please fill all fields', 'warning');
+        return;
+    }
+
+    const res = await apiCall('temporary-tags', 'POST', {
+        employee_id: employeeId,
+        department: department,
+        role: role,
+        start_date: startDate,
+        end_date: endDate
+    });
+
+    if (res && res.success) {
+        showNotification('Temporary tag added successfully');
+        await loadTemporaryTags();
+        // Clear dates
+        document.getElementById('tempTagStart').value = '';
+        document.getElementById('tempTagEnd').value = '';
+    } else {
+        const errorMsg = res.message || (res.raw ? `Server Error: ${res.status}` : 'Failed to add tag');
+        showNotification(errorMsg, 'error');
+        if (res.raw) console.error("Server Error Details:", res.raw);
+    }
+}
+
+async function deleteTemporaryTag(id) {
+    if (!confirm('Are you sure you want to delete this temporary tag?')) return;
+
+    const res = await apiCall('temporary-tags', 'DELETE', { id: id });
+
+    if (res && res.success) {
+        showNotification('Temporary tag deleted');
+        await loadTemporaryTags();
+    } else {
+        showNotification('Failed to delete tag', 'error');
+    }
 }

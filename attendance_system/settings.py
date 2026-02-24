@@ -3,6 +3,7 @@ Django settings for attendance_system project.
 """
 from pathlib import Path
 import os
+import random
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -33,7 +34,7 @@ INSTALLED_APPS = [
 ]
 CSRF_TRUSTED_ORIGINS = [
     "https://roadathena.com",
-    "https://attendance.roadathena.com",
+    "https://attendance.hanuai.com",
 ]
 
 MIDDLEWARE = [
@@ -160,6 +161,28 @@ REST_FRAMEWORK = {
     ],
     # Disable SessionAuthentication (and CSRF requirement) for these API endpoints
     'DEFAULT_AUTHENTICATION_CLASSES': [],
+}
+
+# Email Settings
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+
+if not EMAIL_HOST_USER:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+    EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
+    EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
+
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'noreply@hanuai.com')
+
+# Cache settings (for OTP storage)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
 }
 
 # CORS settings

@@ -9,11 +9,11 @@
     <!-- External Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
-
-    <!-- Leaflet Maps -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Orbitron:wght@400;700;900&family=Dancing+Script:wght@700&family=Pacifico&family=Tilt+Prism&family=Bungee+Spice&family=Nabla&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <!-- External Stylesheet -->
@@ -52,9 +52,73 @@
                 </form>
 
                 <div class="signup-link">
+                    <p><a href="#" onclick="showScreen('forgotPasswordScreen')">Forgot Password?</a></p>
                     <p>New employee? <a href="#" onclick="showScreen('signupScreen')">Sign up here</a></p>
                 </div>
             </div>
+        </div>
+    </div>
+
+    </div>
+
+    <!-- Forgot Password Screen -->
+    <div id="forgotPasswordScreen" class="screen">
+        <div class="login-container">
+            <div class="login-card">
+                <div class="login-title">Forgot Password</div>
+                <div class="login-subtitle" id="forgotStepSubtitle">Enter your registered email to receive an OTP</div>
+
+                <!-- Step 1: Enter Email -->
+                <div id="forgotStep1">
+                    <form onsubmit="handleForgotPasswordSubmit(event)">
+                        <div class="form-group">
+                            <label class="form-label">Email Address</label>
+                            <input type="email" id="forgotEmail" class="form-control" placeholder="Enter your email"
+                                required>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-full-width" id="forgotBtn">
+                            <span id="forgotBtnText">Send OTP</span>
+                            <span id="forgotSpinner" class="loading-spinner hidden"></span>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Step 2: Enter OTP and New Password -->
+                <div id="forgotStep2" class="hidden">
+                    <form onsubmit="handleResetPasswordSubmit(event)">
+                        <div class="form-group">
+                            <label class="form-label">Verification OTP</label>
+                            <input type="text" id="resetOtp" class="form-control" placeholder="6-digit OTP" required
+                                maxlength="6">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">New Password</label>
+                            <div class="password-wrapper">
+                                <input type="password" id="resetNewPassword" class="form-control"
+                                    placeholder="Enter new password" required minlength="6">
+                                <button type="button" class="toggle-password-btn"
+                                    data-target="resetNewPassword">👁</button>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-full-width" id="resetBtn">
+                            <span id="resetBtnText">Reset Password</span>
+                            <span id="resetSpinner" class="loading-spinner hidden"></span>
+                        </button>
+                    </form>
+                </div>
+
+                <div class="login-link">
+                    <p><a href="#" onclick="showScreen('loginScreen')">← Back to Login</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Map Modal -->
+    <div id="mapModal" class="map-modal">
+        <div class="map-modal-content">
+            <button class="close-map-btn" onclick="closeMapModal()">&times;</button>
+            <div id="fullMap" style="width: 100%; height: 100%; border-radius: 12px;"></div>
         </div>
     </div>
 
@@ -185,6 +249,9 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Profile Completion Alert -->
+            <div id="profileCompletionAlert" class="hidden" style="margin-bottom: 20px;"></div>
 
             <!-- Employee Stats Grid (shown for non-admin users) -->
             <div class="stats-grid" id="employeeStatsGrid">
@@ -331,6 +398,10 @@
                                 <button class="intelligence-hub-btn" onclick="event.stopPropagation(); viewTrends();">
                                     <span class="btn-icon">📊</span> View Analysis
                                 </button>
+                                <button id="hubMyStatsBtn" class="intelligence-hub-btn"
+                                    onclick="event.stopPropagation(); viewMyStats();">
+                                    <span class="btn-icon">👤</span> My Stats
+                                </button>
                                 <button class="intelligence-hub-btn"
                                     onclick="event.stopPropagation(); searchPersonnel();">
                                     <span class="btn-icon">🔍</span> Search Personnel
@@ -352,11 +423,24 @@
                     <div class="action-card-title">Check Out</div>
                     <div class="action-card-description">Complete your work day</div>
                 </div>
+                <div class="action-card hidden" onclick="handleLunchBreak()" id="lunchBreakCard">
+                    <span class="action-card-icon">🍽️</span>
+                    <div class="action-card-title" id="lunchBreakTitle">Start Lunch</div>
+                    <div class="action-card-description" id="lunchBreakDesc">Begin your lunch break</div>
+                </div>
                 <div id="calendarModal" class="modal">
                     <div class="modal-content calendar-modal-content">
                         <div
                             style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                            <h3 style="margin: 0;">Attendance Calendar – <span id="calendarMonthLabel"></span></h3>
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <h3 style="margin: 0;">Attendance Calendar – <span id="calendarMonthLabel"></span></h3>
+                                <div class="calendar-nav-controls">
+                                    <button onclick="changeCalendarMonth(-1)" class="btn-calendar-nav"
+                                        title="Previous Month">❮</button>
+                                    <button onclick="changeCalendarMonth(1)" class="btn-calendar-nav"
+                                        title="Next Month">❯</button>
+                                </div>
+                            </div>
                             <button onclick="closeModal('calendarModal')"
                                 style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--gray-500); padding: 4px 8px; line-height: 1;"
                                 title="Close">&times;</button>
@@ -432,6 +516,11 @@
                     <div class="action-card-title">My Tasks</div>
                     <div class="action-card-description">View and manage your assigned tasks</div>
                 </div>
+                <div class="action-card" onclick="viewMyStats()" id="myStatsCard">
+                    <span class="action-card-icon">📈</span>
+                    <div class="action-card-title">My Stats</div>
+                    <div class="action-card-description">View your attendance trends and performance analysis</div>
+                </div>
                 <div class="action-card" onclick="showScreen('recordsScreen')">
                     <span class="action-card-icon">📋</span>
                     <div class="action-card-title">Records</div>
@@ -441,6 +530,11 @@
                     <span class="action-card-icon">✍️</span>
                     <div class="action-card-title">Admin Panel</div>
                     <div class="action-card-description">Add/Edit Users/Offices (Admin only)</div>
+                </div>
+                <div class="action-card hidden" onclick="openAdminPanel()" id="manageEmployeesCard">
+                    <span class="action-card-icon">👥</span>
+                    <div class="action-card-title">Manage Employees</div>
+                    <div class="action-card-description">View and manage your team</div>
                 </div>
                 <div class="action-card hidden" onclick="openProfile()" id="profileCard">
                     <span class="action-card-icon">🧑‍💻</span>
@@ -459,6 +553,12 @@
                     <div class="action-card-description">AI-powered attendance forecasting for all employees (Admin
                         only)
                     </div>
+                </div>
+                <div class="action-card hidden" onclick="openTemporaryTagsModal()" id="temporaryTagsCard">
+                    <span class="action-card-icon">🏷️</span>
+                    <div class="action-card-title">Temporary Tags</div>
+                    <div class="action-card-description">Assign temporary department/role for a fixed period (Admin
+                        only)</div>
                 </div>
             </div>
         </div>
@@ -915,7 +1015,7 @@
                             <p>Shows offices after you tap</p>
                         </div>
 
-                        <div class="office-card" onclick="selectType('client', event)">
+                        <div class="office-card" onclick="selectType('client', event)" id="clientOption">
                             <span class="action-card-icon">📍</span>
                             <h3>Client Location</h3>
                             <p>No geofence required</p>
@@ -1005,7 +1105,7 @@
 
             <div class="admin-grid">
                 <!-- Add Office -->
-                <div class="card">
+                <div class="card" id="adminAddOfficeCard">
                     <h3 style="margin-bottom:12px;">Add New Office</h3>
                     <div class="form-group">
                         <label class="form-label">Office ID</label>
@@ -1058,7 +1158,7 @@
                 </div>
 
                 <!-- Add User -->
-                <div class="card">
+                <div class="card" id="adminAddUserCard">
                     <h3 style="margin-bottom:12px;">Add New User</h3>
                     <div class="form-group">
                         <label class="form-label">Full Name</label>
@@ -1129,22 +1229,28 @@
 
             <!-- Lists -->
             <div style="display:grid; grid-template-columns:1fr; gap:20px; width: auto">
-                <div class="card">
+                <div class="card" id="adminOfficesListCard">
                     <h3>Offices <small id="officeCount" style="color:var(--gray-500); font-size:10px;"></small></h3>
                     <div id="adminOfficesList" style="margin-top:12px;"></div>
                 </div>
 
                 <div class="card">
                     <div
-                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
                         <h3 style="margin: 0;">Users Management <small id="userCount"
                                 style="color:var(--gray-500); font-size:10px;"></small></h3>
-                        <div style="position: relative; width: 250px;">
-                            <input type="text" id="adminUsersSearch" class="form-control" placeholder="Search users..."
-                                style="padding-left: 36px; height: 38px; font-size: 0.9rem; border-radius: 8px;"
-                                oninput="filterAdminUsers()">
-                            <span
-                                style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 0.9rem;">🔍</span>
+                        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                            <button id="btnAdminExportAttendance" class="btn btn-primary" onclick="openExportModal()"
+                                style="padding: 6px 12px; font-size: 0.85rem; display: none;">📊 Export
+                                Attendance</button>
+                            <div style="position: relative; width: 250px;">
+                                <input type="text" id="adminUsersSearch" class="form-control"
+                                    placeholder="Search users..."
+                                    style="padding-left: 36px; height: 38px; font-size: 0.9rem; border-radius: 8px;"
+                                    oninput="filterAdminUsers()">
+                                <span
+                                    style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 0.9rem;">🔍</span>
+                            </div>
                         </div>
                     </div>
                     <div class="table-wrap" id="adminUsersListWrapper"
@@ -2010,12 +2116,96 @@
         </div>
     </div>
 
+    <!-- Temporary Tags Modal -->
+    <div id="temporaryTagsModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0;">Manage Temporary Tags</h3>
+                <button onclick="closeModal('temporaryTagsModal')"
+                    style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--gray-500);">&times;</button>
+            </div>
+
+            <!-- Add New Tag Form -->
+            <div class="card"
+                style="background: var(--gray-50); margin-bottom: 24px; padding: 16px; border: 1px solid var(--gray-200);">
+                <h4 style="margin-top: 0; margin-bottom: 12px;">Add New Temporary Tag</h4>
+                <div class="form-row"
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">Search Employee</label>
+                        <input type="text" id="tempTagSearchInput" class="form-control"
+                            placeholder="Search name/user..." oninput="filterTempTagEmployees()">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Employee</label>
+                        <select id="tempTagEmployee" class="form-control"></select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Department</label>
+                        <select id="tempTagDept" class="form-control">
+                            <option value="IT">IT</option>
+                            <option value="HR">HR</option>
+                            <option value="Surveyors">Surveyors</option>
+                            <option value="Accounts">Accounts</option>
+                            <option value="Growth">Growth</option>
+                            <option value="Others">Others</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Role</label>
+                        <select id="tempTagRole" class="form-control">
+                            <option value="employee">Employee</option>
+                            <option value="manager">Manager</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row"
+                    style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; margin-top: 12px; align-items: end;">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label class="form-label">Start Date</label>
+                        <input type="date" id="tempTagStart" class="form-control">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label class="form-label">End Date</label>
+                        <input type="date" id="tempTagEnd" class="form-control">
+                    </div>
+                    <button class="btn btn-primary" onclick="submitTemporaryTag()" style="height: 42px;">Add
+                        Tag</button>
+                </div>
+            </div>
+
+            <!-- Tags List -->
+            <div id="temporaryTagsListContainer" style="overflow-x: auto;">
+                <table class="records-table">
+                    <thead>
+                        <tr>
+                            <th>Employee</th>
+                            <th>Temp Dept</th>
+                            <th>Temp Role</th>
+                            <th>Start Date</th>
+                            <th>End Date</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="temporaryTagsList">
+                        <!-- Filled by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <!-- Notification -->
     <div id="notification" class="notification"></div>
 
     <!-- External JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     {% load static %}
     <script src="{% static 'script.js' %}"></script>
+
+    <!-- Birthday Special Effects Container -->
+    <div id="birthdayFXContainer"></div>
 </body>
 
 </html>
