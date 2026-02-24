@@ -9012,7 +9012,7 @@ function renderEmployeePerformanceModal(data, employeeId) {
                 </div>
             </div>
 
-            <div style="padding: 24px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; background: #f8fafc; overflow-y: auto; flex: 1;">
+            <div class="stats-modal-body" style="padding: 24px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; background: #f8fafc; overflow-y: auto; flex: 1;">
                 <!-- Left Column: Attendance & Habits -->
                 <div style="display: flex; flex-direction: column; gap: 24px;">
                     <div class="glass-card" style="padding: 20px; background: white; border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #f1f5f9;">
