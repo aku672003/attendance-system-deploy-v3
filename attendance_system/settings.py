@@ -12,6 +12,7 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-change-this-in-production-1234567890'
+ATTENDANCE_SECRET_KEY = os.getenv('ATTENDANCE_SECRET_KEY', 'hanuai-attendance-secret-shared-key')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True

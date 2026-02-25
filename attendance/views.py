@@ -18,6 +18,8 @@ import json
 import uuid
 import math
 import os
+import hashlib
+import hmac
 import zipfile
 import tempfile
 from datetime import datetime, date, time, timedelta
@@ -3480,3 +3482,35 @@ def temporary_tags_api(request):
             return Response({'success': False, 'message': 'Tag not found'}, status=404)
         except Exception as e:
             return Response({'success': False, 'message': str(e)}, status=400)
+
+
+@api_view(['POST'])
+@parser_classes([JSONParser])
+def verify_token(request):
+    """Verify attendance token from portal"""
+    token = request.data.get('token')
+    if not token:
+        return Response({
+            'success': False,
+            'message': 'Token is required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # Use ATTENDANCE_SECRET_KEY to generate expected token
+    secret = getattr(settings, "ATTENDANCE_SECRET_KEY", "hanuai-attendance-secret-shared-key").encode()
+    # Use current date as the messenger factor (YYYY-MM-DD)
+    message = datetime.now().strftime("%Y-%m-%d").encode()
+    
+    # Create HMAC hash
+    expected_signature = hmac.new(secret, message, hashlib.sha256).hexdigest()
+    
+    if hmac.compare_digest(token, expected_signature):
+        return Response({
+            'success': True,
+            'message': 'Token verified'
+        })
+    else:
+        return Response({
+            'success': False,
+            'message': 'Invalid token'
+        }, status=status.HTTP_401_UNAUTHORIZED)
+
