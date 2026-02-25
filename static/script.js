@@ -670,13 +670,14 @@ async function handleLogin(event) {
 
 async function handleForgotPasswordSubmit(event) {
     event.preventDefault();
+    const username = document.getElementById('forgotUsername').value;
     const email = document.getElementById('forgotEmail').value;
     const btn = document.getElementById('forgotBtn');
     const btnText = document.getElementById('forgotBtnText');
     const spinner = document.getElementById('forgotSpinner');
 
-    if (!email) {
-        showNotification('Please enter your email', 'error');
+    if (!username || !email) {
+        showNotification('Please enter both username and email', 'error');
         return;
     }
 
@@ -685,7 +686,7 @@ async function handleForgotPasswordSubmit(event) {
     spinner.classList.remove('hidden');
 
     try {
-        const result = await apiCall('send-otp', 'POST', { email });
+        const result = await apiCall('send-otp', 'POST', { username, email });
         if (result.success) {
             showNotification(result.message || 'OTP sent to your email');
             document.getElementById('forgotStep1').classList.add('hidden');
@@ -705,6 +706,7 @@ async function handleForgotPasswordSubmit(event) {
 
 async function handleResetPasswordSubmit(event) {
     event.preventDefault();
+    const username = document.getElementById('forgotUsername').value;
     const email = document.getElementById('forgotEmail').value;
     const otp = document.getElementById('resetOtp').value;
     const newPassword = document.getElementById('resetNewPassword').value;
@@ -723,6 +725,7 @@ async function handleResetPasswordSubmit(event) {
 
     try {
         const result = await apiCall('reset-password', 'POST', {
+            username,
             email,
             otp,
             new_password: newPassword
@@ -732,12 +735,13 @@ async function handleResetPasswordSubmit(event) {
             showNotification('Password reset successfully! Please login with your new password.');
             showScreen('loginScreen');
             // Reset form for next time
+            document.getElementById('forgotUsername').value = '';
             document.getElementById('forgotEmail').value = '';
             document.getElementById('resetOtp').value = '';
             document.getElementById('resetNewPassword').value = '';
             document.getElementById('forgotStep1').classList.remove('hidden');
             document.getElementById('forgotStep2').classList.add('hidden');
-            document.getElementById('forgotStepSubtitle').textContent = 'Enter your registered email to receive an OTP';
+            document.getElementById('forgotStepSubtitle').textContent = 'Enter your registered username and email to receive an OTP';
         } else {
             showNotification(result.message || 'Reset failed', 'error');
         }
