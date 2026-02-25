@@ -50,14 +50,16 @@ def send_otp(request):
     """
     Send a 6-digit OTP to the user's email for password reset.
     """
+    username = request.data.get('username', '').strip()
     email = request.data.get('email', '').strip()
-    if not email:
-        return Response({'success': False, 'message': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if not username or not email:
+        return Response({'success': False, 'message': 'Username and Email are required'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        employee = Employee.objects.get(email__iexact=email, is_active=True)
+        employee = Employee.objects.get(username__iexact=username, email__iexact=email, is_active=True)
     except Employee.DoesNotExist:
-        return Response({'success': False, 'message': 'Account not found with this email'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'success': False, 'message': 'Account not found with this username and email combo'}, status=status.HTTP_404_NOT_FOUND)
 
     # Generate 6-digit OTP
     otp = ''.join(random.choices(string.digits, k=6))
@@ -94,12 +96,13 @@ def reset_password(request):
     """
     Verify OTP and reset user password.
     """
+    username = request.data.get('username')
     email = request.data.get('email')
     otp = request.data.get('otp')
     new_password = request.data.get('new_password')
 
-    if not email or not otp or not new_password:
-        return Response({'success': False, 'message': 'Email, OTP, and new password are required'}, status=status.HTTP_400_BAD_REQUEST)
+    if not username or not email or not otp or not new_password:
+        return Response({'success': False, 'message': 'Username, Email, OTP, and new password are required'}, status=status.HTTP_400_BAD_REQUEST)
 
     # Verify OTP from cache
     cache_key = f"otp_{email}"
@@ -112,7 +115,7 @@ def reset_password(request):
         return Response({'success': False, 'message': 'Invalid OTP'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        employee = Employee.objects.get(email=email, is_active=True)
+        employee = Employee.objects.get(username__iexact=username, email__iexact=email, is_active=True)
         employee.password = make_password(new_password)
         employee.save()
         
@@ -212,7 +215,7 @@ def register(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     # Check if username or email already exists
-    if Employee.objects.filter(Q(username=data['username']) | Q(email=data['email'])).exists():
+    if Employee.objects.filter(Q(username__iexact=data['username']) | Q(email__iexact=data['email'])).exists():
         return Response({
             'success': False,
             'message': 'Username or email already exists'
