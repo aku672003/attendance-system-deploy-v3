@@ -59,6 +59,24 @@ document.addEventListener('DOMContentLoaded', async function () {
         } catch (e) {
             localStorage.removeItem('attendanceUser');
         }
+    } else {
+        // Gatekeeper: Redirect to Hanu AI Employee Portal if no session or valid token
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+
+        if (!token) {
+            console.log('No access token found. Redirecting to employee portal...');
+            window.location.href = 'https://hanuai.com/employee';
+            return;
+        }
+
+        const verifyRes = await apiCall('verify-token', 'POST', { token });
+        if (!verifyRes || !verifyRes.success) {
+            console.log('Invalid access token. Redirecting to employee portal...');
+            window.location.href = 'https://hanuai.com/employee';
+            return;
+        }
+        console.log('Access token verified successfully.');
     }
 
     // Load face detection models
