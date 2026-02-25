@@ -5663,6 +5663,47 @@ input:checked+.slider:before {
     font-size: 14px;
 }
 
+.intelligence-hub-btn:disabled {
+    opacity: 0.7;
+    cursor: wait;
+    transform: none;
+}
+
+.status-badge.active {
+    background: rgba(139, 92, 246, 0.2);
+    color: #6d28d9;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    min-width: unset;
+    text-transform: none;
+}
+
+.action-card.loading {
+    opacity: 0.7;
+    cursor: wait;
+    pointer-events: none;
+}
+
+.action-card.loading .action-card-icon {
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.1);
+        opacity: 0.7;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .intelligence-hub-percentage {

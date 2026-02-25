@@ -24,7 +24,7 @@ from datetime import datetime, date, time, timedelta
 from .models import (
     Employee, EmployeeProfile, OfficeLocation, DepartmentOfficeAccess,
     AttendanceRecord, EmployeeRequest, EmployeeDocument, Task, BirthdayWish, TaskComment, Team,
-    TemporaryTag
+    TemporaryTag, TrainingLog
 )
 from django.contrib.auth.hashers import make_password, check_password
 
@@ -3171,10 +3171,11 @@ def attendance_predictions(request):
 def intelligence_hub_forecast(request):
     """Get current attendance forecast with confidence and trend"""
     try:
-        from .intelligence_hub import calculate_forecast, get_current_day_name
+        from .intelligence_hub import calculate_forecast, get_current_day_name, load_model_state
         
         forecast, confidence, trend = calculate_forecast()
         day_name = get_current_day_name()
+        model_state = load_model_state()
         
         return Response({
             'success': True,
@@ -3183,7 +3184,8 @@ def intelligence_hub_forecast(request):
                 'confidence': confidence,
                 'trend': trend,
                 'day_name': day_name,
-                'subtitle': f"{day_name}'s Forecast"
+                'subtitle': f"{day_name}'s Forecast",
+                'model_state': model_state
             }
         })
     except Exception as e:
@@ -3243,6 +3245,77 @@ def intelligence_hub_search(request):
         return Response({
             'success': False,
             'message': f'Failed to search personnel: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+def intelligence_hub_train(request):
+    """Trigger training of the forecast model using all historical data"""
+    try:
+        from .intelligence_hub import train_forecast_model
+        
+        user_id = request.data.get('user_id')
+        user = Employee.objects.filter(id=user_id).first()
+        
+        result = train_forecast_model()
+        
+        if result['success']:
+            # Create a localized log entry
+            summary = result['summary']
+            TrainingLog.objects.create(
+                trained_by=user,
+                data_points=summary.get('data_points', 0),
+                average_rate=summary.get('average_rate', 0.0),
+                stability_factor=summary.get('stability_factor', 0.0),
+                logs=result.get('logs', []),
+                summary=summary
+            )
+            
+            return Response({
+                'success': True,
+                'message': 'Model trained successfully',
+                'summary': summary,
+                'logs': result.get('logs', [])
+            })
+        else:
+            return Response({
+                'success': False,
+                'message': result['message'],
+                'logs': result.get('logs', [])
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({
+            'success': False,
+            'message': f'Training failed: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def intelligence_hub_training_history(request):
+    """Fetch recent model training history"""
+    try:
+        logs = TrainingLog.objects.all().select_related('trained_by')[:10]
+        data = [{
+            'id': log.id,
+            'timestamp': log.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+            'trained_by_name': log.trained_by.name if log.trained_by else 'System',
+            'data_points': log.data_points,
+            'average_rate': log.average_rate,
+            'stability_factor': log.stability_factor,
+            'summary': log.summary
+        } for log in logs]
+        
+        return Response({
+            'success': True,
+            'history': data
+        })
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'Failed to fetch history: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

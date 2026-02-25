@@ -1,0 +1,57 @@
+{
+    "average_rate": 65.36,
+    "stability_factor": 0.9242,
+    "data_points": 18,
+    "last_trained": "2026-02-25 11:07:48",
+    "version": "1.0.0",
+    "logs": [
+        {
+            "timestamp": "11:07:48",
+            "message": "Initializing model training sequence..."
+        },
+        {
+            "timestamp": "11:07:48",
+            "message": "Fetching employee database for normalization..."
+        },
+        {
+            "timestamp": "11:07:48",
+            "message": "System identified 98 active employees."
+        },
+        {
+            "timestamp": "11:07:48",
+            "message": "Analyzing historical attendance records..."
+        },
+        {
+            "timestamp": "11:07:48",
+            "message": "Retrieved 25 days of historical data."
+        },
+        {
+            "timestamp": "11:07:48",
+            "message": "Filtering working days and removing anomalies..."
+        },
+        {
+            "timestamp": "11:07:48",
+            "message": "Processed 18 working days. Identified 18 valid data points."
+        },
+        {
+            "timestamp": "11:07:48",
+            "message": "Calculating long-term attendance averages..."
+        },
+        {
+            "timestamp": "11:07:48",
+            "message": "Global historical average set to 65.36%."
+        },
+        {
+            "timestamp": "11:07:48",
+            "message": "Performing variance and stability analysis..."
+        },
+        {
+            "timestamp": "11:07:48",
+            "message": "Standard deviation: 4.96. Stability factor: 0.9242."
+        },
+        {
+            "timestamp": "11:07:48",
+            "message": "Finalizing neural pattern calibration..."
+        }
+    ]
+}

@@ -82,6 +82,8 @@ urlpatterns = [
     path('intelligence-hub-forecast', views.intelligence_hub_forecast, name='intelligence_hub_forecast'),
     path('intelligence-hub-trends', views.intelligence_hub_trends, name='intelligence_hub_trends'),
     path('intelligence-hub-search', views.intelligence_hub_search, name='intelligence_hub_search'),
+    path('intelligence-hub-train', views.intelligence_hub_train, name='intelligence_hub_train'),
+    path('intelligence-hub-training-history', views.intelligence_hub_training_history, name='intelligence_hub_training_history'),
     path('employee-performance-analysis/<int:employee_id>', views.employee_performance_analysis, name='employee_performance_analysis'),
     path('temporary-tags', views.temporary_tags_api, name='temporary_tags_api'),
 
