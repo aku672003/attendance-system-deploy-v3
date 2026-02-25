@@ -9212,12 +9212,24 @@ function renderEmployeePerformanceModal(data, employeeId) {
                         <h3 style="margin: 0 0 16px; font-size: 16px; font-weight: 700; color: var(--gray-900);">⚡ Work Efficiency</h3>
                         <div style="display: flex; flex-direction: column; gap: 16px;">
                             <div>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
-                                    <span style="font-weight: 600; color: var(--gray-600);">WFH vs Office Ratio</span>
-                                    <span style="color: var(--primary); font-weight: 700;">${m.wfh_ratio}% WFH</span>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase;">
+                                    <span style="color: #6366f1;">${m.office_ratio}% Office</span>
+                                    <span style="color: var(--primary);">${m.wfh_ratio}% WFH</span>
                                 </div>
-                                <div style="height: 10px; width: 100%; background: #e2e8f0; border-radius: 5px; overflow: hidden;">
-                                    <div style="height: 100%; width: ${m.wfh_ratio}%; background: linear-gradient(to right, var(--primary), #6366f1); border-radius: 5px;"></div>
+                                <div style="height: 10px; width: 100%; background: #e2e8f0; border-radius: 5px; overflow: hidden; display: flex;">
+                                    <div style="height: 100%; width: ${m.office_ratio}%; background: #6366f1; border-radius: 5px 0 0 5px;"></div>
+                                    <div style="height: 100%; width: ${m.wfh_ratio}%; background: var(--primary); border-radius: 0 5px 5px 0;"></div>
+                                </div>
+                            </div>
+                            <!-- Standard vs Overtime Bar -->
+                            <div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase;">
+                                    <span style="color: var(--gray-600);">${m.reg_ratio}% Standard</span>
+                                    <span style="color: #f59e0b;">${m.ot_ratio}% Hard Work</span>
+                                </div>
+                                <div style="height: 10px; width: 100%; background: #e2e8f0; border-radius: 5px; overflow: hidden; display: flex;">
+                                    <div style="height: 100%; width: ${m.reg_ratio}%; background: #94a3b8; border-radius: 5px 0 0 5px;"></div>
+                                    <div style="height: 100%; width: ${m.ot_ratio}%; background: #f59e0b; border-radius: 0 5px 5px 0;"></div>
                                 </div>
                             </div>
                             <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8fafc; border-radius: 12px; gap: 8px;">
@@ -9233,7 +9245,7 @@ function renderEmployeePerformanceModal(data, employeeId) {
                                 <div style="height: 30px; width: 1px; background: #e2e8f0;"></div>
                                 <div style="text-align: center; flex: 1.2;">
                                     <div style="font-size: 16px; font-weight: 800; color: #8b5cf6;">${m.saturday_avg}h</div>
-                                    <div style="font-size: 8px; color: var(--gray-500); font-weight: 700; text-transform: uppercase;">Sat Avg</div>
+                                    <div style="font-size: 8px; color: var(--gray-500); font-weight: 700; text-transform: uppercase;">Sat-Sun Avg</div>
                                 </div>
                                 <div style="height: 30px; width: 1px; background: #e2e8f0;"></div>
                                 <div style="text-align: center; flex: 1.2;">
@@ -9258,7 +9270,7 @@ function renderEmployeePerformanceModal(data, employeeId) {
                                     <circle cx="70" cy="70" r="62" fill="none" stroke="#f1f5f9" stroke-width="14"></circle>
                                     <circle cx="70" cy="70" r="62" fill="none" stroke="var(--primary)" stroke-width="14"
                                         stroke-dasharray="${2 * Math.PI * 62}"
-                                        stroke-dashoffset="${2 * Math.PI * 62 * (1 - t.completed / (t.total || 1))}"
+                                        stroke-dashoffset="${2 * Math.PI * 62 * (1 - t.completed / (t.total_assigned || 1))}"
                                         stroke-linecap="round"></circle>
                                 </svg>
                                 <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
@@ -9268,7 +9280,7 @@ function renderEmployeePerformanceModal(data, employeeId) {
                             </div>
                         </div>
 
-                        <div style="background: linear-gradient(135deg, #f8fafc, #ffffff); border: 1px solid #e2e8f0; padding: 16px; border-radius: 16px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);">
+                        <div style="background: linear-gradient(135deg, #f8fafc, #ffffff); border: 1px solid #e2e8f0; padding: 16px; border-radius: 16px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); margin-bottom: 12px;">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <div>
                                     <div style="font-size: 11px; color: var(--gray-500); font-weight: 700; text-transform: uppercase; margin-bottom: 2px;">Task Accuracy Score</div>
@@ -9280,14 +9292,26 @@ function renderEmployeePerformanceModal(data, employeeId) {
                             </div>
                         </div>
 
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px;">
-                            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; text-align: center; border: 1px solid #f1f5f9;">
-                                <div style="font-size: 18px; font-weight: 800; color: #6366f1;">${t.in_progress}</div>
-                                <div style="font-size: 9px; font-weight: 700; color: var(--gray-500); text-transform: uppercase;">In Progress</div>
+                        <div style="background: #f1f5f9; padding: 12px; border-radius: 12px; border-left: 4px solid var(--primary); display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-size: 10px; color: var(--gray-500); font-weight: 700; text-transform: uppercase;">Avg. Task Span</div>
+                                <div style="font-size: 18px; font-weight: 800; color: var(--gray-900);">${t.avg_span_hours}h</div>
                             </div>
-                            <div style="background: #f8fafc; padding: 12px; border-radius: 12px; text-align: center; border: 1px solid #f1f5f9;">
-                                <div style="font-size: 18px; font-weight: 800; color: var(--gray-600);">${t.todo}</div>
-                                <div style="font-size: 9px; font-weight: 700; color: var(--gray-500); text-transform: uppercase;">To Do</div>
+                            <div style="font-size: 20px;">⏱️</div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 20px;">
+                            <div style="background: #f8fafc; padding: 10px 4px; border-radius: 12px; text-align: center; border: 1px solid #f1f5f9;">
+                                <div style="font-size: 16px; font-weight: 800; color: var(--primary);">${t.total_assigned}</div>
+                                <div style="font-size: 8px; font-weight: 700; color: var(--gray-500); text-transform: uppercase;">Assigned</div>
+                            </div>
+                            <div style="background: #f8fafc; padding: 10px 4px; border-radius: 12px; text-align: center; border: 1px solid #f1f5f9;">
+                                <div style="font-size: 16px; font-weight: 800; color: #6366f1;">${t.in_progress}</div>
+                                <div style="font-size: 8px; font-weight: 700; color: var(--gray-500); text-transform: uppercase;">Progress</div>
+                            </div>
+                            <div style="background: #f8fafc; padding: 10px 4px; border-radius: 12px; text-align: center; border: 1px solid #f1f5f9;">
+                                <div style="font-size: 16px; font-weight: 800; color: var(--gray-600);">${t.todo}</div>
+                                <div style="font-size: 8px; font-weight: 700; color: var(--gray-500); text-transform: uppercase;">To Do</div>
                             </div>
                         </div>
                     </div>

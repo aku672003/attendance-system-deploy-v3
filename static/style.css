@@ -5090,7 +5090,7 @@ input:checked+.slider:before {
 .cal-leave,
 .calendar-day.cal-leave {
     background: rgba(6, 182, 212, 0.1) !important;
-    color: #06b6d4 !important;
+    color: #1a0510 !important;
     border: 1px solid rgba(6, 182, 212, 0.3) !important;
     box-shadow: 0 0 15px rgba(6, 182, 212, 0.15), inset 0 0 10px rgba(6, 182, 212, 0.05);
 }

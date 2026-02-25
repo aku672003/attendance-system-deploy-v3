@@ -1999,24 +1999,28 @@ def employee_performance_analysis(request, employee_id):
         } for r in records]
 
         # 2. Performance Metrics
+        num_days = (end_date - start_date).days + 1
+        num_weeks = max(num_days / 7.0, 0.1) # Avoid division by zero, min 0.1 weeks
         
         # Calculate Mon-Fri Avg
         weekday_records = records.filter(
             date__week_day__in=[2, 3, 4, 5, 6] # Mon-Fri (1=Sun, 2=Mon... 7=Sat)
         ).aggregate(
-            sum_hours=Sum('total_hours'),
-            count=Count('id', filter=Q(status__in=['present', 'half_day', 'wfh', 'client']))
+            sum_hours=Sum('total_hours')
         )
-        weekday_avg = float(weekday_records['sum_hours'] or 0) / (weekday_records['count'] or 1)
+        # Fixed denominator logic as per user request: (num_weeks * 5)
+        total_weekday_hours = float(weekday_records['sum_hours'] or 0)
+        weekday_avg = total_weekday_hours / (num_weeks * 5)
 
-        # Calculate Sat Avg
-        saturday_records = records.filter(
-            date__week_day=7 # Sat
+        # Calculate Sat-Sun Avg
+        weekend_records = records.filter(
+            date__week_day__in=[1, 7] # Sun (1) and Sat (7)
         ).aggregate(
-            sum_hours=Sum('total_hours'),
-            count=Count('id', filter=Q(status__in=['present', 'half_day', 'wfh', 'client']))
+            sum_hours=Sum('total_hours')
         )
-        saturday_avg = float(saturday_records['sum_hours'] or 0) / (saturday_records['count'] or 1)
+        # Fixed denominator logic as per user request: (num_weeks * 2)
+        total_weekend_hours = float(weekend_records['sum_hours'] or 0)
+        saturday_avg = total_weekend_hours / (num_weeks * 2)
 
         # Calculate Lunch Avg
         lunch_records = records.filter(
@@ -2037,8 +2041,8 @@ def employee_performance_analysis(request, employee_id):
         summary_stats = records.aggregate(
             total_present=Count('id', filter=Q(status__in=['present', 'half_day', 'wfh', 'client'])),
             sum_hours=Sum('total_hours'),
-            wfh_count=Count('id', filter=Q(type='wfh')),
-            office_count=Count('id', filter=Q(type='office'))
+            wfh_count=Count('id', filter=Q(type='wfh', status__in=['present', 'half_day', 'wfh', 'client'])),
+            office_count=Count('id', filter=Q(type='office', status__in=['present', 'half_day', 'wfh', 'client']))
         )
 
         total_hours_sum = float(summary_stats['sum_hours'] or 0)
@@ -2085,20 +2089,94 @@ def employee_performance_analysis(request, employee_id):
             
             if out_seconds:
                 avg_out_sec = sum(out_seconds) / len(out_seconds)
-                avg_check_out = f"{int(avg_out_sec // 3600):02d}:{int((avg_out_sec % 3600) // 60):02d}"
+        avg_check_out = f"{int(avg_out_sec // 3600):02d}:{int((avg_out_sec % 3600) // 60):02d}"
         
         # Task Management Performance (for filtered period)
         tasks_base = Task.objects.filter(assignees=employee, created_at__date__range=[start_date, end_date]).distinct()
         completed_tasks = tasks_base.filter(status='completed')
-        avg_accuracy = completed_tasks.aggregate(avg_acc=Avg('accuracy'))['avg_acc'] or 0
+        
+        # New Advanced Accuracy Logic
+        total_accuracy_points = 0
+        tasks_evaluated = 0
+        total_span_hours = 0
+        spans_counted = 0
+
+        for t in completed_tasks:
+            task_score = 0
+            
+            # 1. Response Speed (Created to Started) - 30% Weight
+            if t.started_at:
+                response_delta = (t.started_at - t.created_at).total_seconds() / 3600
+                if response_delta <= 2: task_score += 30
+                elif response_delta <= 6: task_score += 25
+                elif response_delta <= 12: task_score += 20
+                elif response_delta <= 24: task_score += 15
+                else: task_score += 5
+            else:
+                task_score += 10 # Default minimum
+
+            # 2. Task Span (Started to Completed) - 35% Weight
+            if t.started_at and t.completed_at:
+                span_delta = (t.completed_at - t.started_at).total_seconds() / 3600
+                total_span_hours += span_delta
+                spans_counted += 1
+                
+                if span_delta <= 8: task_score += 35
+                elif span_delta <= 24: task_score += 30
+                elif span_delta <= 48: task_score += 25
+                elif span_delta <= 72: task_score += 15
+                else: task_score += 5
+            else:
+                task_score += 10
+
+            # 3. Deadline Punctuality (Completed to Due Date) - 35% Weight
+            if t.due_date and t.completed_at:
+                # Treat due_date as end of day
+                due_datetime = timezone.make_aware(datetime.combine(t.due_date, time(23, 59, 59)))
+                days_diff = (due_datetime - t.completed_at).days
+                
+                if days_diff >= 2: task_score += 35 # Finished 2+ days early
+                elif days_diff >= 1: task_score += 32 # Finished 1 day early
+                elif days_diff == 0:
+                    if t.completed_at <= due_datetime: task_score += 28 # Finished on due date
+                    else: task_score += 15 # Slightly late
+                elif days_diff == -1: task_score += 10 # 1 day late
+                else: task_score += 0 # 2+ days late
+            else:
+                task_score += 20 # Neutral score if no due date set
+
+            # Blend with manual manager accuracy if it exists (50/50 balance)
+            if t.accuracy:
+                task_score = (task_score + t.accuracy) / 2
+
+            total_accuracy_points += task_score
+            tasks_evaluated += 1
+
+        avg_accuracy = total_accuracy_points / (tasks_evaluated or 1)
+        avg_span_h = total_span_hours / (spans_counted or 1)
 
         task_stats = {
-            'total': tasks_base.count(),
+            'total_assigned': tasks_base.count(),
             'todo': tasks_base.filter(status='todo').count(),
             'in_progress': tasks_base.filter(status='in_progress').count(),
             'completed': completed_tasks.count(),
-            'avg_accuracy': round(float(avg_accuracy), 1)
+            'avg_accuracy': round(float(avg_accuracy), 1),
+            'avg_span_hours': round(float(avg_span_h), 1)
         }
+
+        # Calculate Regular vs Overtime Hours (Standard 8h)
+        total_reg_h = 0
+        total_ot_h = 0
+        for r in records:
+            h = float(r.total_hours or 0)
+            reg = min(h, 8.0)
+            ot = max(0.0, h - 8.0)
+            total_reg_h += reg
+            total_ot_h += ot
+        
+        total_all_h = total_reg_h + total_ot_h
+        ot_ratio = round((total_ot_h / total_all_h) * 100, 1) if total_all_h > 0 else 0
+        reg_ratio = round((total_reg_h / total_all_h) * 100, 1) if total_all_h > 0 else 0
 
         return Response({
             'success': True,
@@ -2121,6 +2199,11 @@ def employee_performance_analysis(request, employee_id):
                 'saturday_avg': round(saturday_avg, 1),
                 'avg_lunch_min': round(avg_lunch_min, 0),
                 'wfh_ratio': round((summary_stats['wfh_count'] / (summary_stats['total_present'] or 1)) * 100, 1) if summary_stats['total_present'] else 0,
+                'office_ratio': round((summary_stats['office_count'] / (summary_stats['total_present'] or 1)) * 100, 1) if summary_stats['total_present'] else 0,
+                'ot_ratio': ot_ratio,
+                'reg_ratio': reg_ratio,
+                'total_reg_h': round(total_reg_h, 1),
+                'total_ot_h': round(total_ot_h, 1),
                 'weekly_avg_hours': round(weekly_avg_hours, 1),
                 'avg_check_in': avg_check_in,
                 'avg_check_out': avg_check_out
@@ -2662,7 +2745,12 @@ def _update_task_admin(task, data, user=None):
         raise ValueError(f"Cannot modify a completed task.")
 
     if 'status' in data:
-        task.status = data['status']
+        new_status = data['status']
+        if new_status == 'in_progress' and not task.started_at:
+            task.started_at = timezone.now()
+        elif new_status == 'completed' and not task.completed_at:
+            task.completed_at = timezone.now()
+        task.status = new_status
     if 'priority' in data:
         task.priority = data['priority']
     if 'title' in data:
@@ -2701,7 +2789,12 @@ def _update_task_employee(task, data, user=None):
         raise ValueError(f"Cannot modify a completed task (ReqID: {user.id if user else '?'})")
 
     if 'status' in data:
-        task.status = data['status']
+        new_status = data['status']
+        if new_status == 'in_progress' and not task.started_at:
+            task.started_at = timezone.now()
+        elif new_status == 'completed' and not task.completed_at:
+            task.completed_at = timezone.now()
+        task.status = new_status
 
     # Employee cannot change title, description, priority, etc. in strict mode
     # But if original UI allowed it, we might need to support it. 
