@@ -577,7 +577,10 @@ async function apiCall(path, method = 'GET', data = null) {
 
     if (method === 'GET' && data && typeof data === 'object') {
         const qs = Object.keys(data).map(k => encodeURIComponent(k) + '=' + encodeURIComponent(data[k])).join('&');
-        if (qs) url += '?' + qs;
+        if (qs) {
+            const separator = url.includes('?') ? '&' : '?';
+            url += separator + qs;
+        }
     }
 
     const opts = { method, headers: {} };
@@ -2035,11 +2038,12 @@ async function openRequestsModal() {
 
 function renderRequestCards(requests) {
     if (requests.length === 0) {
+        const modeText = (window.requestMode || 'pending') === 'history' ? 'history records' : 'pending requests';
         return `
             <div class="empty-requests">
                 <div class="empty-icon">✨</div>
                 <h4>All Clear!</h4>
-                <p>No pending requests found.</p>
+                <p>No ${modeText} found.</p>
             </div>
         `;
     }
@@ -2108,6 +2112,12 @@ function filterRequestsByType(type, tabElement) {
 
 async function switchRequestMode(mode) {
     window.requestMode = mode;
+
+    // Update title
+    const titleEl = document.querySelector('.premium-header .header-title span[style*="font-weight: 800"]');
+    if (titleEl) {
+        titleEl.textContent = mode === 'history' ? 'Request History' : 'Pending Requests';
+    }
 
     // Update button visual state
     document.getElementById('btn-mode-pending').classList.toggle('active', mode === 'pending');
