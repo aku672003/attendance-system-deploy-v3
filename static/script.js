@@ -977,6 +977,11 @@ async function loadDashboardData() {
         document.getElementById('adminCard').classList.remove('hidden');
         document.getElementById('exportCard').classList.remove('hidden');
         document.getElementById('profileCard').classList.add('hidden');
+        document.getElementById('myTasksCard')?.classList.remove('hidden');
+        document.getElementById('myStatsCard')?.classList.remove('hidden');
+        document.getElementById('temporaryTagsCard')?.classList.remove('hidden');
+        document.getElementById('trainModelCard')?.classList.remove('hidden');
+        document.getElementById('manageEmployeesCard')?.classList.add('hidden');
         document.getElementById('adminExportNote')?.classList.remove('hidden');
 
         // Load admin dashboard data
@@ -994,6 +999,7 @@ async function loadDashboardData() {
         document.getElementById('profileCard').classList.remove('hidden');
         document.getElementById('adminCard').classList.add('hidden');
         document.getElementById('exportCard').classList.add('hidden');
+        document.getElementById('trainModelCard')?.classList.add('hidden');
         document.getElementById('adminExportNote')?.classList.add('hidden');
         document.getElementById('myStatsCard')?.classList.remove('hidden');
 
@@ -1037,32 +1043,6 @@ async function loadDashboardData() {
             try { await checkProfileCompleteness(); } catch (e) { console.error(e); }
         }
     }
-
-    // Initialize Intelligence Hub Visibility - Admin only
-    const intelligenceHubCard = document.getElementById('intelligenceHubCard');
-    if (intelligenceHubCard) {
-        if (currentUser.role === 'admin') {
-            intelligenceHubCard.classList.remove('hidden');
-        } else {
-            intelligenceHubCard.classList.add('hidden');
-        }
-
-        // Handle button visibility based on role
-        const btnViewAnalysis = document.getElementById('btnViewAnalysis');
-        const btnSearchPersonnel = document.getElementById('btnSearchPersonnel');
-        const btnMyStats = document.getElementById('btnMyStats');
-
-        if (currentUser.role !== 'admin' && currentUser.role !== 'manager') {
-            if (btnViewAnalysis) btnViewAnalysis.style.display = 'none';
-            if (btnSearchPersonnel) btnSearchPersonnel.style.display = 'none';
-        } else {
-            if (btnViewAnalysis) btnViewAnalysis.style.display = '';
-            if (btnSearchPersonnel) btnSearchPersonnel.style.display = '';
-        }
-
-        if (btnMyStats) btnMyStats.style.display = '';
-    }
-
     // Check if it is the user's Birthday!
     try {
         await checkBirthday();
@@ -8236,6 +8216,182 @@ function updateIntelligenceHubUI(data) {
             trendBadge.textContent = trend.toUpperCase();
             trendBadge.className = `intelligence-hub-trend-badge ${trend}`;
         }
+
+        // Update Last Trained Info
+        const lastTrainedEl = document.getElementById('lastTrainedText');
+        if (lastTrainedEl && f.model_state && f.model_state.last_trained) {
+            lastTrainedEl.textContent = `Last Trained: ${f.model_state.last_trained}`;
+        }
+    }
+}
+
+async function trainPredictionModel() {
+    // Open the new training modal instead of running immediately
+    openModal('trainModelModal');
+
+    // Reset modal state
+    document.getElementById('trainingProgressBar').style.width = '0%';
+    document.getElementById('trainingProgressText').textContent = 'Ready to calibrate model using historical data';
+    document.getElementById('btnStartTraining').disabled = false;
+    document.getElementById('btnStartTraining').textContent = 'Start Training Session';
+
+    // Switch to logs tab by default
+    switchTrainingTab('logs');
+
+    // Reset logs
+    const logContainer = document.getElementById('trainingLogs');
+    logContainer.innerHTML = '<div class="log-entry" style="color: #9ca3af;">[SYSTEM] Waiting for training sequence to start...</div>';
+
+    // Load history in background
+    loadTrainingHistory();
+}
+
+function switchTrainingTab(tab) {
+    const logsBtn = document.getElementById('tabLogsBtn');
+    const historyBtn = document.getElementById('tabHistoryBtn');
+    const logsTab = document.getElementById('trainingLogTab');
+    const historyTab = document.getElementById('trainingHistoryTab');
+
+    if (tab === 'logs') {
+        logsBtn.classList.add('active');
+        historyBtn.classList.remove('active');
+        logsBtn.style.borderBottomColor = 'var(--primary-color)';
+        logsBtn.style.color = 'var(--primary-color)';
+        historyBtn.style.borderBottomColor = 'transparent';
+        historyBtn.style.color = 'var(--gray-500)';
+
+        logsTab.classList.remove('hidden');
+        historyTab.classList.add('hidden');
+    } else {
+        logsBtn.classList.remove('active');
+        historyBtn.classList.add('active');
+        logsBtn.style.borderBottomColor = 'transparent';
+        logsBtn.style.color = 'var(--gray-500)';
+        historyBtn.style.borderBottomColor = 'var(--primary-color)';
+        historyBtn.style.color = 'var(--primary-color)';
+
+        logsTab.classList.add('hidden');
+        historyTab.classList.remove('hidden');
+        loadTrainingHistory();
+    }
+}
+
+async function loadTrainingHistory() {
+    const container = document.getElementById('trainingHistoryItems');
+    container.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--gray-400); font-size: 13px;">Loading history...</div>';
+
+    try {
+        const result = await apiCall('intelligence-hub-training-history', 'GET');
+        if (result.success && result.history.length > 0) {
+            container.innerHTML = result.history.map(item => `
+                <div class="history-item">
+                    <div class="history-item-header">
+                        <span>Calibration #${item.id}</span>
+                        <span>${item.timestamp}</span>
+                    </div>
+                    <div class="history-item-details">
+                        <span>📊 ${item.data_points} points</span>
+                        <span>📈 Avg: ${item.average_rate}%</span>
+                        <span>🎯 Stability: ${item.stability_factor}</span>
+                    </div>
+                    <div style="font-size: 10px; color: var(--gray-400); margin-top: 4px;">Trained by: ${item.trained_by_name}</div>
+                </div>
+            `).join('');
+        } else {
+            container.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--gray-400); font-size: 13px;">No previous training sessions found</div>';
+        }
+    } catch (error) {
+        container.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--error-color); font-size: 13px;">Failed to load history</div>';
+    }
+}
+
+async function startTrainingProcess() {
+    const btn = document.getElementById('btnStartTraining');
+    const progressBar = document.getElementById('trainingProgressBar');
+    const progressText = document.getElementById('trainingProgressText');
+    const logContainer = document.getElementById('trainingLogs');
+
+    btn.disabled = true;
+    btn.textContent = 'Training in Progress...';
+    logContainer.innerHTML = '';
+
+    const addLog = (msg, type = 'info') => {
+        const div = document.createElement('div');
+        div.style.marginBottom = '4px';
+        const color = type === 'error' ? '#ef4444' : (type === 'system' ? '#9ca3af' : '#10b981');
+        const prefix = type === 'error' ? '✖ ' : (type === 'system' ? '⚙ ' : '✔ ');
+        div.innerHTML = `<span style="color: ${color}">${prefix} ${msg}</span>`;
+        logContainer.appendChild(div);
+        logContainer.scrollTop = logContainer.scrollHeight;
+    };
+
+    try {
+        addLog("Establishing connection to Intelligence Hub...", "system");
+        progressBar.style.width = '10%';
+        progressText.textContent = 'Initializing engine...';
+
+        // Short delay for UI feel
+        await new Promise(r => setTimeout(r, 800));
+
+        addLog("Requesting batch processing of historical records...", "system");
+        progressBar.style.width = '25%';
+        progressText.textContent = 'Analyzing historical patterns...';
+
+        const result = await apiCall('intelligence-hub-train', 'POST', {
+            user_id: currentUser.id
+        });
+
+        if (result.success) {
+            // "Stream" the logs returned from backend
+            if (result.logs && result.logs.length > 0) {
+                for (let i = 0; i < result.logs.length; i++) {
+                    const log = result.logs[i];
+                    addLog(log.message);
+
+                    // Increment progress bar based on log index
+                    const progress = 25 + ((i + 1) / result.logs.length) * 75;
+                    progressBar.style.width = `${progress}%`;
+                    progressText.textContent = `Processing: ${log.message.substring(0, 30)}...`;
+
+                    // Artificial delay for visual feedback
+                    await new Promise(r => setTimeout(r, 400));
+                }
+            }
+
+            progressBar.style.width = '100%';
+            progressText.textContent = 'Calibration complete!';
+            addLog("Intelligence model successfully recalibrated.", "info");
+            addLog(`Final Stability Factor: ${result.summary.stability_factor}`, "info");
+
+            showNotification('Prediction model trained successfully!', 'success');
+
+            // Reload main dashboard data
+            await loadIntelligenceHubData();
+
+            btn.textContent = 'Recalibration Successful';
+            btn.style.background = 'var(--success-color)';
+
+            // Auto switch to history after a short delay
+            setTimeout(() => {
+                if (document.getElementById('trainModelModal').classList.contains('active')) {
+                    switchTrainingTab('history');
+                }
+            }, 2000);
+
+        } else {
+            addLog(result.message || "Recalibration failed.", "error");
+            progressBar.style.background = 'var(--error-color)';
+            progressText.textContent = 'Recalibration failed';
+            btn.disabled = false;
+            btn.textContent = 'Retry Training Session';
+        }
+    } catch (error) {
+        console.error('Training Error:', error);
+        addLog("A critical communication error occurred.", "error");
+        progressBar.style.background = 'var(--error-color)';
+        showNotification('An error occurred during training', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Retry Training Session';
     }
 }
 

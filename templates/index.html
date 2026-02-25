@@ -377,7 +377,7 @@
                                     <span class="info-icon"
                                         style="background: rgba(255,255,255,0.2); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: help; color: white;">?</span>
                                     <div class="tooltip-content">Predicted attendance percentage for this day based on
-                                        30 working days of history.</div>
+                                        historical patterns.</div>
                                 </div>
                             </div>
                             <div class="intelligence-hub-subtitle" id="hubSubtitle">Attendance Forecast</div>
@@ -413,6 +413,17 @@
             </div>
 
             <div class="actions-grid">
+                <div class="action-card hidden" onclick="trainPredictionModel()" id="trainModelCard">
+                    <span class="action-card-icon">⚙️</span>
+                    <div class="action-card-title">Train Forecast Model</div>
+                    <div class="action-card-description">Calibrate prediction engine using full history</div>
+                    <div id="trainModelStatus"
+                        style="font-size: 11px; margin-top: 8px; color: var(--primary-color); font-weight: 500;">
+                        <span id="lastTrainedText">Checking model status...</span>
+                        <span id="trainSpinner" class="loading-spinner hidden"
+                            style="display:inline-block; width:10px; height:10px; vertical-align:middle; margin-left:5px;"></span>
+                    </div>
+                </div>
                 <div class="action-card" onclick="startAttendanceFlow()" id="checkInCard">
                     <span class="action-card-icon">📍</span>
                     <div class="action-card-title">Check In</div>
@@ -547,13 +558,6 @@
                     <div class="action-card-description">Select date range to export attendance records (Admin only)
                     </div>
                 </div>
-                <div class="action-card hidden" onclick="openPredictionsModal()" id="predictionsCard">
-                    <span class="action-card-icon">🔮</span>
-                    <div class="action-card-title">Attendance Predictions</div>
-                    <div class="action-card-description">AI-powered attendance forecasting for all employees (Admin
-                        only)
-                    </div>
-                </div>
                 <div class="action-card hidden" onclick="openTemporaryTagsModal()" id="temporaryTagsCard">
                     <span class="action-card-icon">🏷️</span>
                     <div class="action-card-title">Temporary Tags</div>
@@ -562,6 +566,7 @@
                 </div>
             </div>
         </div>
+    </div>
     </div>
     <!-- Edit Attendance Modal -->
     <div id="editAttendanceModal" class="modal">
@@ -2192,6 +2197,64 @@
                         <!-- Filled by JS -->
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Training Modal -->
+    <div id="trainModelModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0;">Forecast Model Training</h3>
+                <button onclick="closeModal('trainModelModal')"
+                    style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--gray-500); padding: 4px 8px; line-height: 1;">&times;</button>
+            </div>
+
+            <div class="training-container">
+                <div class="training-status-card">
+                    <div class="training-progress-wrapper">
+                        <div class="progress-bar-container"
+                            style="width: 100%; height: 12px; background: #e5e7eb; border-radius: 6px; overflow: hidden; margin-top: 10px;">
+                            <div id="trainingProgressBar" class="progress-bar-fill"
+                                style="width: 0%; height: 100%; background: var(--primary-color); transition: width 0.3s ease;">
+                            </div>
+                        </div>
+                        <div id="trainingProgressText"
+                            style="font-size: 12px; color: var(--gray-500); margin-top: 8px; text-align: center; font-weight: 500;">
+                            Ready to calibrate model using historical data</div>
+                    </div>
+                    <button id="btnStartTraining" class="btn btn-primary" style="width: 100%; margin-top: 20px;"
+                        onclick="startTrainingProcess()">
+                        Start Training Session
+                    </button>
+                </div>
+
+                <div class="training-tabs" style="margin-top: 24px;">
+                    <div class="tabs-header"
+                        style="display: flex; border-bottom: 1px solid #e5e7eb; margin-bottom: 16px;">
+                        <button class="training-tab-btn active" id="tabLogsBtn" onclick="switchTrainingTab('logs')"
+                            style="padding: 10px 16px; border: none; background: none; cursor: pointer; border-bottom: 2px solid var(--primary-color); font-weight: 600; color: var(--primary-color);">Live
+                            Logs</button>
+                        <button class="training-tab-btn" id="tabHistoryBtn" onclick="switchTrainingTab('history')"
+                            style="padding: 10px 16px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; font-weight: 500; color: var(--gray-500);">Training
+                            History</button>
+                    </div>
+
+                    <div id="trainingLogTab" class="tab-content">
+                        <div id="trainingLogs" class="log-console"
+                            style="background: #111827; color: #10b981; padding: 16px; border-radius: 8px; font-family: 'Courier New', Courier, monospace; font-size: 12px; height: 200px; overflow-y: auto; line-height: 1.5;">
+                            <div class="log-entry" style="color: #9ca3af;">[SYSTEM] Waiting for training sequence to
+                                start...</div>
+                        </div>
+                    </div>
+
+                    <div id="trainingHistoryTab" class="tab-content hidden">
+                        <div id="trainingHistoryItems" class="history-list"
+                            style="max-height: 200px; overflow-y: auto;">
+                            <!-- History populated by JS -->
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

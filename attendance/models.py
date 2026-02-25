@@ -401,3 +401,20 @@ class TemporaryTag(models.Model):
 
     def __str__(self):
         return f"Temp Tag: {self.employee.username} ({self.department}/{self.role})"
+
+
+class TrainingLog(models.Model):
+    trained_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, related_name='training_logs')
+    timestamp = models.DateTimeField(auto_now_add=True)
+    data_points = models.IntegerField()
+    average_rate = models.FloatField()
+    stability_factor = models.FloatField()
+    logs = models.JSONField(null=True, blank=True)
+    summary = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'training_logs'
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"Training Log {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')} - Accuracy: {self.stability_factor}"
