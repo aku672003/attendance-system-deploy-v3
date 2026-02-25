@@ -43,10 +43,22 @@ document.addEventListener('DOMContentLoaded', async function () {
     console.log('MySQL Attendance System Initializing...');
     refreshPrimaryOfficeSelects();
     // Check for stored user session
-    const storedUser = localStorage.getItem('attendanceUser');
+    const storedUser = sessionStorage.getItem('attendanceUser');
+    const tokenVerified = sessionStorage.getItem('attendanceTokenVerified');
+    const today = getCurrentISTDate().toISOString().split('T')[0];
+
     if (storedUser) {
         try {
             currentUser = JSON.parse(storedUser);
+            // Even if logged in, we check if the session-token was verified today
+            if (tokenVerified !== today) {
+                // If the user closed the tab and came back later (same session but different day) 
+                // or if we want to force daily re-verification even for active sessions
+                console.log('Daily verification required.');
+                // For now, if we have storedUser, we assume they are valid for the session
+                // But we switch to sessionStorage so it clears on tab close
+            }
+
             showScreen('dashboardScreen');
             await syncServerTime(); // Wait for sync before loading data
 
@@ -56,27 +68,35 @@ document.addEventListener('DOMContentLoaded', async function () {
 
             loadDashboardData();
             updateDashboardVisibility();
+
+            // If they are logged in, we skip the gatekeeper logic below
+            // because they already "passed" the gatekeeper to get the session.
         } catch (e) {
-            localStorage.removeItem('attendanceUser');
+            sessionStorage.removeItem('attendanceUser');
         }
     } else {
         // Gatekeeper: Redirect to Hanu AI Employee Portal if no session or valid token
         const urlParams = new URLSearchParams(window.location.search);
         const token = urlParams.get('token');
 
-        if (!token) {
-            console.log('No access token found. Redirecting to employee portal...');
+        // Check if they already verified in this session
+        if (tokenVerified === today) {
+            console.log('Session already verified for today.');
+            // Allow them to stay on login/signup screen
+        } else if (!token) {
+            console.log('No access token found & no active session. Redirecting to employee portal...');
             window.location.href = 'https://hanuai.com/employee';
             return;
+        } else {
+            const verifyRes = await apiCall('verify-token', 'POST', { token });
+            if (!verifyRes || !verifyRes.success) {
+                console.log('Invalid access token. Redirecting to employee portal...');
+                window.location.href = 'https://hanuai.com/employee';
+                return;
+            }
+            console.log('Access token verified successfully.');
+            sessionStorage.setItem('attendanceTokenVerified', today);
         }
-
-        const verifyRes = await apiCall('verify-token', 'POST', { token });
-        if (!verifyRes || !verifyRes.success) {
-            console.log('Invalid access token. Redirecting to employee portal...');
-            window.location.href = 'https://hanuai.com/employee';
-            return;
-        }
-        console.log('Access token verified successfully.');
     }
 
     // Load face detection models
@@ -650,7 +670,7 @@ async function handleLogin(event) {
 
         if (result.success) {
             currentUser = result.user;
-            localStorage.setItem('attendanceUser', JSON.stringify(currentUser));
+            sessionStorage.setItem('attendanceUser', JSON.stringify(currentUser));
 
             // Sync server time FIRST — must happen before any time-sensitive operations
             await syncServerTime();
@@ -828,7 +848,8 @@ async function handleSignup(event) {
 
 function logout() {
     currentUser = null;
-    localStorage.removeItem('attendanceUser');
+    sessionStorage.removeItem('attendanceUser');
+    sessionStorage.removeItem('attendanceTokenVerified');
     showNotification('Logged out successfully');
     showScreen('loginScreen');
 }
@@ -6676,7 +6697,7 @@ async function saveProfile() {
             phone: basePayload.phone,
             primary_office: basePayload.primary_office
         };
-        localStorage.setItem('attendanceUser', JSON.stringify(currentUser));
+        sessionStorage.setItem('attendanceUser', JSON.stringify(currentUser));
 
         showNotification('Profile updated successfully');
         msg.textContent = 'All details saved successfully.';
@@ -7441,7 +7462,7 @@ async function adminEditProfile(id) {
             department: p.department || currentUser.department,
             role: currentUser.role // keep admin role
         };
-        localStorage.setItem('attendanceUser', JSON.stringify(currentUser));
+        sessionStorage.setItem('attendanceUser', JSON.stringify(currentUser));
 
         openProfile();
         showNotification('Editing profile of ' + (p.name || 'User'));
@@ -9881,7 +9902,7 @@ async function checkBirthday() {
             if (res && res.success && res.profile) {
                 currentUser.date_of_birth = res.profile.date_of_birth || currentUser.date_of_birth;
                 currentUser.gender = res.profile.gender || null;
-                localStorage.setItem('attendanceUser', JSON.stringify(currentUser));
+                sessionStorage.setItem('attendanceUser', JSON.stringify(currentUser));
             } else if (!currentUser.date_of_birth) {
                 console.log("Birthday Mode: No DOB found in profile.");
                 return;
