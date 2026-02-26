@@ -91,4 +91,5 @@ urlpatterns = [
     path('send-otp', views.send_otp, name='send_otp'),
     path('reset-password', views.reset_password, name='reset_password'),
     path('verify-token', views.verify_token, name='verify_token'),
+    path('gated-dashboard', views.gated_dashboard, name='gated_dashboard'),
 ]

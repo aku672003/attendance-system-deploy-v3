@@ -1,5 +1,6 @@
-from django.shortcuts import render
-from django.http import JsonResponse, FileResponse
+from django.shortcuts import render, redirect
+from django.http import HttpResponse, JsonResponse, HttpResponseForbidden
+from .security import require_valid_token
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils.decorators import method_decorator
@@ -3487,30 +3488,57 @@ def temporary_tags_api(request):
 @api_view(['POST'])
 @parser_classes([JSONParser])
 def verify_token(request):
-    """Verify attendance token from portal"""
+    """Verify attendance token from portal (supports both HMAC and itsdangerous)"""
     token = request.data.get('token')
     if not token:
-        return Response({
-            'success': False,
-            'message': 'Token is required'
-        }, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'success': False, 'message': 'Token is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Use ATTENDANCE_SECRET_KEY to generate expected token
+    # 1. Try HMAC verification (The legacy way)
     secret = getattr(settings, "ATTENDANCE_SECRET_KEY", "hanuai-attendance-secret-shared-key").encode()
-    # Use current date as the messenger factor (YYYY-MM-DD)
-    message = datetime.now().strftime("%Y-%m-%d").encode()
+    from django.utils import timezone
+    message = timezone.localtime(timezone.now()).strftime("%Y-%m-%d").encode()
+    expected_hmac = hmac.new(secret, message, hashlib.sha256).hexdigest()
     
-    # Create HMAC hash
-    expected_signature = hmac.new(secret, message, hashlib.sha256).hexdigest()
+    if hmac.compare_digest(token, expected_hmac):
+        return Response({'success': True, 'message': 'Token verified (HMAC)'})
+
+    # 2. Try Gated Access verification (itsdangerous)
+    from .security import validate_gated_token
+    success, result = validate_gated_token(token)
+    if success:
+        return Response({'success': True, 'message': 'Token verified (Gated)'})
     
-    if hmac.compare_digest(token, expected_signature):
-        return Response({
-            'success': True,
-            'message': 'Token verified'
-        })
-    else:
-        return Response({
-            'success': False,
-            'message': 'Invalid token'
-        }, status=status.HTTP_401_UNAUTHORIZED)
+    return Response({'success': False, 'message': f'Invalid token: {result}'}, status=status.HTTP_401_UNAUTHORIZED)
+
+
+def error_400_view(request, exception=None):
+    """Custom 400 Bad Request handler"""
+    return render(request, '400.html', status=400)
+
+
+def error_403_view(request, exception=None):
+    """Custom 403 Forbidden handler"""
+    return render(request, '403.html', status=403)
+
+
+def error_404_view(request, exception=None):
+    """Custom 404 Not Found handler"""
+    return render(request, '404.html', status=404)
+
+
+def error_500_view(request):
+    """Custom 500 Server Error handler"""
+    return render(request, '500.html', status=500)
+
+
+@require_valid_token
+def spa_view(request):
+    """Protected view to serve the SPA index.html."""
+    return render(request, 'index.html')
+
+
+@require_valid_token
+def gated_dashboard(request):
+    """Example of a protected dashboard view."""
+    return render(request, 'index.html')
 

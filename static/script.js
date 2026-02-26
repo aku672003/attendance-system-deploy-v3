@@ -50,13 +50,14 @@ document.addEventListener('DOMContentLoaded', async function () {
     if (storedUser) {
         try {
             currentUser = JSON.parse(storedUser);
-            // Even if logged in, we check if the session-token was verified today
-            if (tokenVerified !== today) {
-                // If the user closed the tab and came back later (same session but different day) 
-                // or if we want to force daily re-verification even for active sessions
-                console.log('Daily verification required.');
-                // For now, if we have storedUser, we assume they are valid for the session
-                // But we switch to sessionStorage so it clears on tab close
+            const loginTime = sessionStorage.getItem('attendanceLoginTime');
+            const now = Date.now();
+            const oneHour = 3600000;
+
+            if (loginTime && (now - parseInt(loginTime) > oneHour)) {
+                console.log('Session expired (1 hour limit reached).');
+                logout();
+                return;
             }
 
             showScreen('dashboardScreen');
@@ -75,32 +76,26 @@ document.addEventListener('DOMContentLoaded', async function () {
             sessionStorage.removeItem('attendanceUser');
         }
     } else {
-        // Gatekeeper: Redirect to Hanu AI Employee Portal if no session or valid token
-        const urlParams = new URLSearchParams(window.location.search);
-        const token = urlParams.get('token');
-
-        // Check if they already verified in this session
-        if (tokenVerified === today) {
-            console.log('Session already verified for today.');
-            // Allow them to stay on login/signup screen
-        } else if (!token) {
-            console.log('No access token found & no active session. Redirecting to employee portal...');
-            window.location.href = 'https://hanuai.com/employee';
-            return;
-        } else {
-            const verifyRes = await apiCall('verify-token', 'POST', { token });
-            if (!verifyRes || !verifyRes.success) {
-                console.log('Invalid access token. Redirecting to employee portal...');
-                window.location.href = 'https://hanuai.com/employee';
-                return;
-            }
-            console.log('Access token verified successfully.');
-            sessionStorage.setItem('attendanceTokenVerified', today);
-        }
+        // Since the server-side @require_valid_token decorator handles the initial request,
+        // we only reach this point if a valid token was provided.
+        // The user is not yet logged in, so they stay on the login screen.
     }
 
     // Load face detection models
     loadFaceDetectionModels();
+
+    // Background session timeout check (every minute)
+    setInterval(() => {
+        const loginTime = sessionStorage.getItem('attendanceLoginTime');
+        if (loginTime && currentUser) {
+            const now = Date.now();
+            const oneHour = 3600000;
+            if (now - parseInt(loginTime) > oneHour) {
+                console.log('Session expired (background check). Logging out...');
+                logout();
+            }
+        }
+    }, 60000);
 });
 // Toggle password visibility for any button with .toggle-password-btn
 document.addEventListener('click', function (e) {
@@ -671,6 +666,7 @@ async function handleLogin(event) {
         if (result.success) {
             currentUser = result.user;
             sessionStorage.setItem('attendanceUser', JSON.stringify(currentUser));
+            sessionStorage.setItem('attendanceLoginTime', Date.now().toString());
 
             // Sync server time FIRST — must happen before any time-sensitive operations
             await syncServerTime();
@@ -850,8 +846,11 @@ function logout() {
     currentUser = null;
     sessionStorage.removeItem('attendanceUser');
     sessionStorage.removeItem('attendanceTokenVerified');
-    showNotification('Logged out successfully');
-    showScreen('loginScreen');
+    sessionStorage.removeItem('attendanceLoginTime');
+
+    // Redirect to root. Since session and token are gone, 
+    // the server-side gate will trigger the custom 404 page.
+    window.location.href = '/';
 }
 
 // Dashboard Functions
