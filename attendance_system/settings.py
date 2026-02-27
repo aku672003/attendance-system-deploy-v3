@@ -72,11 +72,11 @@ if DB_ENGINE == 'postgresql':
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.getenv('DB_NAME', 'attendance_django'),
-            'USER': os.getenv('DB_USER', 'postgres'),
-            'PASSWORD': os.getenv('DB_PASSWORD', 'HanuAI@123'),
-            'HOST': os.getenv('DB_HOST', '65.1.191.126'),
-            'PORT': os.getenv('DB_PORT', '5432'),
+            'NAME': os.getenv('DB_NAME', 'attendance_django').strip(),
+            'USER': os.getenv('DB_USER', 'postgres').strip(),
+            'PASSWORD': os.getenv('DB_PASSWORD', 'HanuAI@123').strip(),
+            'HOST': os.getenv('DB_HOST', '65.1.191.126').strip(),
+            'PORT': os.getenv('DB_PORT', '5432').strip(),
         }
     }
 elif DB_ENGINE == 'mysql':

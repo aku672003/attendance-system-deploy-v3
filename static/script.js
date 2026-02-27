@@ -7607,6 +7607,10 @@ async function exportSingleProfileExcel(employeeId) {
 }
 async function exportAllProfilesExcel() {
     try {
+        if (!currentUser) {
+            showNotification('You must be logged in to export profiles', 'warning');
+            return;
+        }
         // 1) get the list of users (IDs + usernames, etc.)
         const res = await apiCall('admin-profiles', 'GET', { user_id: currentUser.id });
         const profiles = (res && res.success && Array.isArray(res.profiles)) ? res.profiles : [];
@@ -7729,7 +7733,8 @@ async function exportAllProfilesExcel() {
         showNotification('All user profiles Excel downloaded');
     } catch (e) {
         console.error('exportAllProfilesExcel error', e);
-        showNotification('Error exporting all profiles', 'error');
+        const msg = (e && e.message) || 'Error exporting all profiles';
+        showNotification(msg, 'error');
     }
 }
 

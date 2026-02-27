@@ -12,23 +12,41 @@ def get_serializer():
 def validate_gated_token(token):
     """
     Validates an itsdangerous token.
+    Tries the configured ATTENDANCE_SECRET_KEY first,
+    then falls back to the default shared key for compatibility.
     Returns (True, data) or (False, error_message).
     """
     if not token:
         return False, "Token Missing"
 
-    serializer = get_serializer()
-    try:
-        data = serializer.loads(token, max_age=60)
-        if not isinstance(data, dict) or 'user_id' not in data or 'timestamp' not in data:
-            return False, "Invalid Token Payload"
-        return True, data
-    except SignatureExpired:
-        return False, "Token Expired"
-    except BadSignature:
-        return False, "Invalid Token"
-    except Exception as e:
-        return False, str(e)
+    # List of secrets to try: [Configured Secret, Default Fallback]
+    configured_secret = getattr(settings, "ATTENDANCE_SECRET_KEY", None)
+    default_secret = "hanuai-attendance-secret-shared-key"
+    
+    secrets_to_try = []
+    if configured_secret:
+        secrets_to_try.append(configured_secret)
+    if default_secret not in secrets_to_try:
+        secrets_to_try.append(default_secret)
+
+    last_error = "Invalid Token"
+    for secret in secrets_to_try:
+        serializer = URLSafeTimedSerializer(secret)
+        try:
+            data = serializer.loads(token, max_age=3600)
+            if not isinstance(data, dict) or 'user_id' not in data or 'timestamp' not in data:
+                return False, "Invalid Token Payload"
+            return True, data
+        except SignatureExpired:
+            return False, "Token Expired"
+        except BadSignature:
+            last_error = "Invalid Token"
+            continue
+        except Exception as e:
+            last_error = str(e)
+            continue
+            
+    return False, last_error
 
 def require_valid_token(view_func):
     """

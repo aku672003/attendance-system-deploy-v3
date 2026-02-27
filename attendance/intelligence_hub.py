@@ -79,64 +79,63 @@ def calculate_daily_attendance_rates(days=30):
 
 def calculate_forecast():
     """
-    Calculate attendance forecast using weighted moving average (Refined)
+    Calculate attendance forecast using weighted moving average and trained model parameters.
     Returns: (forecast_percentage, confidence_score, trend_indicator)
     """
     daily_data = calculate_daily_attendance_rates(30)
     
-    # Filter out days with 0 attendance as they usually represent missing data or non-working days
+    # Filter out days with 0 attendance
     valid_rates = [d['rate'] for d in daily_data if d['rate'] > 0]
     
     if not valid_rates:
         return 0, 0, "STABLE"
     
-    if len(valid_rates) < 7:
-        # If very little data, just use the average of what we have
-        avg = sum(valid_rates) / len(valid_rates)
-        return round(avg, 1), 30, "STABLE"
-    
-    # Weighted moving average: favor the MOST recent data
+    # 1. Base Forecast: Recent moving average (7 days)
     recent_count = min(7, len(valid_rates))
-    recent_data = valid_rates[-recent_count:]
-    older_data = valid_rates[:-recent_count]
+    recent_avg = sum(valid_rates[-recent_count:]) / recent_count
     
-    recent_avg = sum(recent_data) / len(recent_data)
-    older_avg = sum(older_data) / len(older_data) if older_data else recent_avg
-    
-    # Check for trained model state
+    # 2. Advanced Model Adjustments
     model_state = load_model_state()
-    stability_bonus = 1.0
-    pattern_adjustment = 1.0
+    forecast = recent_avg
+    confidence_bonus = 1.0
     
     if model_state:
-        # Use stability factor to adjust weights
-        # High stability (low variance) means we can trust historical data more
-        stability_factor = model_state.get('stability_factor', 0.5)
-        stability_bonus = 1.0 + (stability_factor * 0.2)
+        # A. Day-of-Week Adjustment
+        dow_patterns = model_state.get('dow_patterns', {})
+        tomorrow_idx = (datetime.now().date() + timedelta(days=1)).weekday()
+        tomorrow_str = str(tomorrow_idx)
         
-        # Adjust forecast based on long-term historical average
-        historical_avg = model_state.get('average_rate', older_avg)
-        # 70% weight on recent, 20% on older, 10% on global historical
-        forecast = (recent_avg * 0.7) + (older_avg * 0.2) + (historical_avg * 0.1)
-    else:
-        # 80% weight on recent trend, 20% on historical average
-        forecast = (recent_avg * 0.8) + (older_avg * 0.2)
-    
-    # Confidence: higher when std_dev is low and we have more data points
+        if tomorrow_str in dow_patterns:
+            dow_avg = dow_patterns[tomorrow_str]
+            historical_avg = model_state.get('average_rate', recent_avg)
+            
+            # If tomorrow is historically higher/lower than average, nudge the forecast
+            dow_offset = dow_avg - historical_avg
+            forecast += (dow_offset * 0.4) # Apply 40% of the DOW expected deviation
+            
+        # B. Momentum Adjustment
+        momentum = model_state.get('momentum', 1.0)
+        # Momentum > 1 means recent growth, nudge forecast up slightly
+        forecast *= (1.0 + (momentum - 1.0) * 0.2)
+        
+        # C. Stability/Confidence Bonus
+        stability = model_state.get('stability_factor', 0.5)
+        confidence_bonus = 1.0 + (stability * 0.3)
+
+    # 3. Confidence Calculation
     try:
-        std_dev = statistics.stdev(valid_rates) if len(valid_rates) > 1 else 0
-        data_abundance = min(len(valid_rates) / 30, 1.0)
-        consistency = max(0, 100 - (std_dev * 2))
+        std_dev = statistics.stdev(valid_rates) if len(valid_rates) > 1 else 5
+        consistency = max(0, 100 - (std_dev * 2.5))
+        data_weight = min(len(valid_rates) / 20, 1.0)
         
-        # Apply stability bonus from trained model
-        confidence = ((consistency * 0.6) + (data_abundance * 100 * 0.4)) * stability_bonus
-        confidence = min(confidence, 99) # Cap at 99 for realism
+        confidence = (consistency * 0.7 + data_weight * 30) * confidence_bonus
+        confidence = min(round(confidence, 0), 99)
     except:
-        confidence = 50
+        confidence = 65
     
     trend = detect_trend(valid_rates)
     
-    return round(forecast, 1), round(confidence, 0), trend
+    return round(forecast, 1), confidence, trend
 
 
 def load_model_state():
@@ -154,90 +153,111 @@ def load_model_state():
 def train_forecast_model():
     """
     Train the forecast model by analyzing the ENTIRE attendance history.
-    Calculates stability factors and long-term averages.
+    Calculates Day-of-Week patterns, momentum, stability, and detects anomalies.
     """
-    from django.db.models import Count, Q
-    from django.db.models.functions import TruncDate
-    
     logs = []
     def add_log(msg):
         logs.append({'timestamp': datetime.now().strftime('%H:%M:%S'), 'message': msg})
 
-    add_log("Initializing model training sequence...")
+    add_log("Initializing enhanced model training sequence...")
     
-    # Get all working days with attendance
-    add_log("Fetching employee database for normalization...")
     all_employees_count = Employee.objects.filter(role='employee').count()
     if all_employees_count == 0:
-        add_log("ERROR: No employees found in system.")
         return {'success': False, 'message': 'No employees found to train model'}
     
     add_log(f"System identified {all_employees_count} active employees.")
-    add_log("Analyzing historical attendance records...")
-        
+    
+    # Fetch all historical attendance records
     daily_counts = AttendanceRecord.objects.filter(
         status__in=['present', 'wfh', 'client']
     ).values('date').annotate(count=Count('id')).order_by('date')
     
     if not daily_counts:
-        add_log("ERROR: Database is empty or no valid attendance records found.")
-        return {'success': False, 'message': 'No attendance records found to train model'}
+        return {'success': False, 'message': 'No attendance records found'}
+
+    add_log(f"Retrieved {len(daily_counts)} days of attendance history.")
     
-    add_log(f"Retrieved {len(daily_counts)} days of historical data.")
-    add_log("Filtering working days and removing anomalies...")
-        
-    rates = []
-    working_days_count = 0
+    # 1. Day-of-Week Analysis
+    add_log("Step 1/4: Analyzing weekly cyclical patterns...")
+    dow_groups = {i: [] for i in range(5)} # Mon-Fri
+    all_valid_rates = []
+    
     for day in daily_counts:
-        # Only count working days (Mon-Fri) for stability analysis
-        if day['date'].weekday() < 5:
-            working_days_count += 1
+        wd = day['date'].weekday()
+        if wd < 5:
             rate = (day['count'] / all_employees_count) * 100
-            if rate > 0: # Filter out anomaly days with 0 (holidays)
-                rates.append(rate)
+            if rate > 5: # Ignore days with negligible attendance (likely downtime/holidays)
+                dow_groups[wd].append(rate)
+                all_valid_rates.append(rate)
+
+    dow_patterns = {}
+    for dow, rates in dow_groups.items():
+        if rates:
+            dow_patterns[dow] = round(sum(rates) / len(rates), 2)
     
-    add_log(f"Processed {working_days_count} working days. Identified {len(rates)} valid data points.")
-                
-    if not rates:
-        add_log("ERROR: Insufficient valid data points after filtering.")
-        return {'success': False, 'message': 'Insufficient data for training'}
-    
-    add_log("Calculating long-term attendance averages...")
-    avg_rate = sum(rates) / len(rates)
-    add_log(f"Global historical average set to {round(avg_rate, 2)}%.")
-    
-    # Calculate stability factor (inverse of normalized variance)
-    add_log("Performing variance and stability analysis...")
-    if len(rates) > 1:
-        std_dev = statistics.stdev(rates)
-        # Normalize std_dev relative to the average (coefficient of variation)
-        cv = std_dev / avg_rate if avg_rate > 0 else 1
-        stability_factor = max(0, 1.0 - cv)
-        add_log(f"Standard deviation: {round(std_dev, 2)}. Stability factor: {round(stability_factor, 4)}.")
-    else:
-        add_log("Single data point detected. Defaulting stability factor to 0.5.")
-        stability_factor = 0.5
+    add_log(f"Cyclical patterns identified for {len(dow_patterns)} working days.")
+
+    # 2. Anomaly Detection (Outlier Filtering)
+    add_log("Step 2/4: Detecting and isolating statistical anomalies...")
+    if len(all_valid_rates) > 5:
+        global_avg = sum(all_valid_rates) / len(all_valid_rates)
+        global_std = statistics.stdev(all_valid_rates)
         
+        # Filter rates within 2 standard deviations
+        filtered_rates = [r for r in all_valid_rates if abs(r - global_avg) <= (2 * global_std)]
+        anomaly_count = len(all_valid_rates) - len(filtered_rates)
+        add_log(f"Filtered {anomaly_count} outliers. Optimized dataset contains {len(filtered_rates)} points.")
+    else:
+        filtered_rates = all_valid_rates
+        add_log("Insufficient data pool for outlier analysis. Using full dataset.")
+
+    # 3. Momentum Calculation
+    add_log("Step 3/4: Calculating organizational momentum...")
+    if len(filtered_rates) >= 14:
+        recent_pool = filtered_rates[-7:]
+        older_pool = filtered_rates[:-7]
+        recent_avg = sum(recent_pool) / len(recent_pool)
+        older_avg = sum(older_pool) / len(older_pool)
+        
+        # Momentum > 1 means trending UP
+        momentum = recent_avg / older_avg if older_avg > 0 else 1.0
+        add_log(f"Current momentum factor: {round(momentum, 4)}.")
+    else:
+        momentum = 1.0
+        add_log("Stable momentum assumed (insufficient velocity data).")
+
+    # 4. Stability Factor
+    add_log("Step 4/4: Performing volatility and stability evaluation...")
+    if len(filtered_rates) > 2:
+        final_avg = sum(filtered_rates) / len(filtered_rates)
+        final_std = statistics.stdev(filtered_rates)
+        cv = final_std / final_avg if final_avg > 0 else 1
+        stability = max(0, min(1.0, 1.0 - cv))
+    else:
+        final_avg = sum(filtered_rates) / len(filtered_rates) if filtered_rates else 0
+        stability = 0.5
+
+    add_log(f"Training complete. Final stability index: {round(stability, 4)}.")
+
     model_state = {
-        'average_rate': round(avg_rate, 2),
-        'stability_factor': round(stability_factor, 4),
-        'data_points': len(rates),
+        'average_rate': round(final_avg, 2),
+        'stability_factor': round(stability, 4),
+        'momentum': round(momentum, 4),
+        'dow_patterns': dow_patterns,
+        'data_points': len(filtered_rates),
         'last_trained': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'version': '1.0.0',
+        'version': '1.1.0',
         'logs': logs
     }
     
-    add_log("Finalizing neural pattern calibration...")
     # Save to file
     file_path = os.path.join(settings.BASE_DIR, 'attendance', 'model_state.json')
     try:
         with open(file_path, 'w') as f:
             json.dump(model_state, f, indent=4)
-        add_log("Model state serialized and committed to storage.")
         return {'success': True, 'summary': model_state, 'logs': logs}
     except Exception as e:
-        add_log(f"CRITICAL ERROR: Disk write failed. {str(e)}")
-        return {'success': False, 'message': f'Failed to save model: {str(e)}', 'logs': logs}
+        return {'success': False, 'message': str(e), 'logs': logs}
 
 
 def detect_trend(daily_rates):

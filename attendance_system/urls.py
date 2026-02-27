@@ -10,6 +10,9 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('attendance.urls')),
     
+    # Favicon handling
+    path('favicon.ico', TemplateView.as_view(template_name="index.html"), name='favicon'),
+    
     # Catch-all pattern for SPA - serve protected spa_view for all non-API routes
     re_path(r'^(?!api/|admin/|static/|media/).*$', views.spa_view, name='spa'),
 ]
@@ -23,7 +26,6 @@ handler500 = 'attendance.views.error_500_view'
 # Serve media files in development
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
 # Ensure uploads directory exists
 import os
