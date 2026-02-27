@@ -4,183 +4,294 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>404 - Page Not Found | HanuAI</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+    <title>Wait! Wrong Lane! | HanuAI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap"
         rel="stylesheet">
     <style>
         :root {
-            --primary: #4f46e5;
-            --primary-light: #6366f1;
-            --gray-900: #0f172a;
-            --gray-600: #475569;
-            --gray-400: #94a3b8;
+            --primary: #FF3D68;
+            --secondary: #4F46E5;
+            --accent: #FFD21E;
+            --bg-gradient: linear-gradient(135deg, #F8FAFC 0%, #E2E8F0 100%);
+            --glass-bg: rgba(255, 255, 255, 0.8);
+            --text-dark: #0F172A;
+            --text-muted: #64748B;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
 
         body,
         html {
-            margin: 0;
-            padding: 0;
-            height: 100%;
+            height: 100dvh;
             font-family: 'Outfit', sans-serif;
-            background: #f8fafc;
+            background: var(--bg-gradient);
+            color: var(--text-dark);
             display: flex;
             align-items: center;
             justify-content: center;
             overflow: hidden;
         }
 
-        .animated-bg {
-            position: fixed;
-            top: 0;
-            left: 0;
+        .container {
+            max-width: 800px;
+            width: 90%;
+            max-height: 95dvh;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: 40px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.1);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            animation: containerEntry 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        @keyframes containerEntry {
+            0% {
+                opacity: 0;
+                transform: scale(0.95) translateY(20px);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        /* Abstract Illustration instead of sticker-robot */
+        .visual-element {
+            position: relative;
+            width: 140px;
+            height: 140px;
+            margin-bottom: 24px;
+            flex-shrink: 0;
+        }
+
+        .circle-bg {
+            position: absolute;
             width: 100%;
             height: 100%;
-            z-index: -1;
-            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-        }
-
-        .blob {
-            position: absolute;
-            width: 500px;
-            height: 500px;
-            background: linear-gradient(135deg, rgba(79, 70, 229, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%);
+            background: var(--secondary);
             border-radius: 50%;
-            filter: blur(80px);
-            animation: move 20s infinite alternate;
+            opacity: 0.1;
+            animation: pulse 3s ease-in-out infinite;
         }
 
-        @keyframes move {
-            from {
-                transform: translate(-10%, -10%) scale(1);
-            }
-
-            to {
-                transform: translate(10%, 10%) scale(1.1);
-            }
+        .icon-main {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 60px;
+            animation: wiggle 4s ease-in-out infinite;
         }
 
-        .error-container {
-            text-align: center;
-            padding: 60px;
-            background: rgba(255, 255, 255, 0.7);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.5);
-            border-radius: 40px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
-            max-width: 600px;
-            width: 90%;
-            animation: fadeIn 0.8s ease-out;
-        }
+        @keyframes pulse {
 
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 0.1;
             }
 
-            to {
-                opacity: 1;
-                transform: translateY(0);
+            50% {
+                transform: scale(1.2);
+                opacity: 0.15;
             }
         }
 
-        .error-code {
-            font-size: 150px;
+        @keyframes wiggle {
+
+            0%,
+            100% {
+                transform: translate(-50%, -50%) rotate(-5deg);
+            }
+
+            50% {
+                transform: translate(-50%, -50%) rotate(5deg);
+            }
+        }
+
+        .title {
+            font-size: clamp(24px, 4vw, 36px);
             font-weight: 900;
-            background: linear-gradient(135deg, var(--primary), var(--primary-light));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin: 0;
-            line-height: 1;
-            letter-spacing: -5px;
+            color: var(--primary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            line-height: 1.1;
         }
 
-        .error-title {
-            font-size: 32px;
+        .subtitle {
+            font-size: clamp(14px, 2.5vw, 18px);
+            font-weight: 500;
+            color: var(--text-muted);
+            margin-bottom: 24px;
+            max-width: 500px;
+        }
+
+        .instruction-box {
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 24px;
+            padding: 24px;
+            margin-bottom: 32px;
+            width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.6);
+        }
+
+        .instruction-heading {
             font-weight: 800;
-            color: var(--gray-900);
-            margin: 20px 0 10px;
+            font-size: 11px;
+            color: var(--secondary);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 16px;
         }
 
-        .error-message {
-            font-size: 18px;
-            color: var(--gray-600);
-            margin-bottom: 40px;
-            line-height: 1.6;
+        .path-steps {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
         }
 
-        .home-button {
+        .step {
+            background: white;
+            padding: 10px 16px;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 13px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.03);
+            color: var(--text-dark);
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .step:hover {
+            border-color: var(--secondary);
+            transform: translateY(-2px);
+        }
+
+        .arrow {
+            color: var(--secondary);
+            font-weight: 900;
+            font-size: 16px;
+            opacity: 0.5;
+        }
+
+        .action-area {
+            flex-shrink: 0;
+        }
+
+        .popy-btn {
             display: inline-flex;
             align-items: center;
             gap: 10px;
-            background: var(--primary);
+            background: var(--secondary);
             color: white;
-            padding: 16px 40px;
-            border-radius: 18px;
+            padding: 16px 36px;
+            border-radius: 16px;
             text-decoration: none;
-            font-weight: 700;
-            font-size: 16px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3);
-        }
-
-        .home-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 20px 25px -5px rgba(79, 70, 229, 0.4);
-            background: var(--primary-light);
-        }
-
-        .logo {
-            font-size: 24px;
             font-weight: 800;
-            color: var(--gray-900);
-            margin-bottom: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 20px -5px rgba(79, 70, 229, 0.4);
         }
 
-        .logo-icon {
-            width: 40px;
-            height: 40px;
-            background: var(--primary);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 20px;
+        .popy-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 30px -5px rgba(79, 70, 229, 0.5);
+            filter: brightness(1.1);
+        }
+
+        .funny-text {
+            color: var(--text-muted);
+            margin-top: 20px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        @media (max-height: 700px) {
+            .container {
+                padding: 24px;
+            }
+
+            .visual-element {
+                width: 100px;
+                height: 100px;
+                margin-bottom: 16px;
+            }
+
+            .icon-main {
+                font-size: 40px;
+            }
+
+            .instruction-box {
+                padding: 16px;
+                margin-bottom: 24px;
+            }
+
+            .subtitle {
+                margin-bottom: 16px;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .path-steps {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .arrow {
+                transform: rotate(90deg);
+                margin: 2px 0;
+            }
         }
     </style>
 </head>
 
 <body>
-    <div class="animated-bg">
-        <div class="blob" style="top: -100px; left: -100px;"></div>
-        <div class="blob" style="bottom: -100px; right: -100px; animation-delay: -5s;"></div>
-    </div>
-
-    <div class="error-container">
-        <div class="logo">
-            <div class="logo-icon">H</div>
-            HanuAI
+    <div class="container">
+        <div class="visual-element">
+            <div class="circle-bg"></div>
+            <div class="icon-main">🚦</div>
         </div>
 
-        <h1 class="error-code">404</h1>
-        <h2 class="error-title">Whoops! Page Lost.</h2>
-        <p class="error-message">
-            It seems you've wandered into uncharted territory. The page you are looking for might have been moved,
-            deleted, or never existed in the first place.
-        </p>
+        <h1 class="title">Wait! Wrong Lane!</h1>
+        <p class="subtitle">Direct access is restricted. Please follow the official entrance point to get started.</p>
 
-        <a href="https://hanuai.com/" class="home-button">
-            <span>Take Me Home</span>
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-            </svg>
-        </a>
+        <div class="instruction-box">
+            <div class="instruction-heading">The Official Path:</div>
+            <div class="path-steps">
+                <div class="step">HanuAi Website</div>
+                <div class="arrow">→</div>
+                <div class="step">Employee Portal</div>
+                <div class="arrow">→</div>
+                <div class="step">Yes, I am an employee</div>
+                <div class="arrow">→</div>
+                <div class="step">Mark Attendance</div>
+            </div>
+        </div>
+
+        <div class="action-area">
+            <a href="https://hanuai.com/" class="popy-btn">
+                <span>Return to HanuAI</span>
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                        d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+            </a>
+            <p class="funny-text">No hard feelings. The robot just gets lonely without a valid token. ☕</p>
+        </div>
     </div>
 </body>
 
