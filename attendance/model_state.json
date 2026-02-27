@@ -1,57 +1,61 @@
 {
-    "average_rate": 65.36,
-    "stability_factor": 0.9242,
-    "data_points": 18,
-    "last_trained": "2026-02-25 11:07:48",
-    "version": "1.0.0",
+    "average_rate": 70.41,
+    "stability_factor": 0.9318,
+    "momentum": 0.9697,
+    "dow_patterns": {
+        "0": 70.56,
+        "1": 73.06,
+        "2": 71.11,
+        "3": 68.89,
+        "4": 67.78
+    },
+    "data_points": 19,
+    "last_trained": "2026-02-26 17:05:10",
+    "version": "1.1.0",
     "logs": [
         {
-            "timestamp": "11:07:48",
-            "message": "Initializing model training sequence..."
+            "timestamp": "17:05:10",
+            "message": "Initializing enhanced model training sequence..."
         },
         {
-            "timestamp": "11:07:48",
-            "message": "Fetching employee database for normalization..."
+            "timestamp": "17:05:10",
+            "message": "System identified 90 active employees."
         },
         {
-            "timestamp": "11:07:48",
-            "message": "System identified 98 active employees."
+            "timestamp": "17:05:10",
+            "message": "Retrieved 26 days of attendance history."
         },
         {
-            "timestamp": "11:07:48",
-            "message": "Analyzing historical attendance records..."
+            "timestamp": "17:05:10",
+            "message": "Step 1/4: Analyzing weekly cyclical patterns..."
         },
         {
-            "timestamp": "11:07:48",
-            "message": "Retrieved 25 days of historical data."
+            "timestamp": "17:05:10",
+            "message": "Cyclical patterns identified for 5 working days."
         },
         {
-            "timestamp": "11:07:48",
-            "message": "Filtering working days and removing anomalies..."
+            "timestamp": "17:05:10",
+            "message": "Step 2/4: Detecting and isolating statistical anomalies..."
         },
         {
-            "timestamp": "11:07:48",
-            "message": "Processed 18 working days. Identified 18 valid data points."
+            "timestamp": "17:05:10",
+            "message": "Filtered 0 outliers. Optimized dataset contains 19 points."
         },
         {
-            "timestamp": "11:07:48",
-            "message": "Calculating long-term attendance averages..."
+            "timestamp": "17:05:10",
+            "message": "Step 3/4: Calculating organizational momentum..."
         },
         {
-            "timestamp": "11:07:48",
-            "message": "Global historical average set to 65.36%."
+            "timestamp": "17:05:10",
+            "message": "Current momentum factor: 0.9697."
         },
         {
-            "timestamp": "11:07:48",
-            "message": "Performing variance and stability analysis..."
+            "timestamp": "17:05:10",
+            "message": "Step 4/4: Performing volatility and stability evaluation..."
         },
         {
-            "timestamp": "11:07:48",
-            "message": "Standard deviation: 4.96. Stability factor: 0.9242."
-        },
-        {
-            "timestamp": "11:07:48",
-            "message": "Finalizing neural pattern calibration..."
+            "timestamp": "17:05:10",
+            "message": "Training complete. Final stability index: 0.9318."
         }
     ]
 }

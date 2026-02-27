@@ -993,12 +993,12 @@ def wfh_request(request):
 # Profile Management Views
 @api_view(['GET', 'POST'])
 @parser_classes([JSONParser])
-def employee_profile(request):
+def employee_profile(request, employee_id=None):
     """Get or save employee profile"""
     # Handle POST (save profile)
     if request.method == 'POST':
         data = request.data
-        employee_id = data.get('employee_id')
+        employee_id = employee_id or data.get('employee_id')
 
         if not employee_id:
             return Response({
@@ -1063,7 +1063,7 @@ def employee_profile(request):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     # Handle GET (get profile)
-    employee_id = request.GET.get('employee_id')
+    employee_id = employee_id or request.GET.get('employee_id')
 
     if not employee_id:
         return Response({
@@ -3540,5 +3540,14 @@ def spa_view(request):
 @require_valid_token
 def gated_dashboard(request):
     """Example of a protected dashboard view."""
-    return render(request, 'index.html')
+    token_str = request.GET.get('token')
+    from .security import validate_gated_token
+    success, data = validate_gated_token(token_str)
+    
+    context = {}
+    if success:
+        context['gated_user_id'] = data.get('user_id')
+        context['is_gated'] = True
+        
+    return render(request, 'index.html', context)
 
