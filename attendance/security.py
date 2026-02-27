@@ -33,7 +33,7 @@ def validate_gated_token(token):
     for secret in secrets_to_try:
         serializer = URLSafeTimedSerializer(secret)
         try:
-            data = serializer.loads(token, max_age=3600)
+            data = serializer.loads(token, max_age=30)
             if not isinstance(data, dict) or 'user_id' not in data or 'timestamp' not in data:
                 return False, "Invalid Token Payload"
             return True, data

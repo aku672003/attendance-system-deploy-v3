@@ -17,8 +17,6 @@ urlpatterns = [
     # Attendance
     path('mark-attendance', views.mark_attendance, name='mark_attendance'),
     path('check-out', views.check_out, name='check_out'),
-    path('lunch-break/start', views.start_lunch, name='start_lunch'),
-    path('lunch-break/end', views.end_lunch, name='end_lunch'),
     path('server-time', views.get_server_time, name='get_server_time'),
     path('today-attendance', views.today_attendance, name='today_attendance'),
     path('attendance-records', views.attendance_records, name='attendance_records'),
@@ -93,4 +91,5 @@ urlpatterns = [
     path('reset-password', views.reset_password, name='reset_password'),
     path('verify-token', views.verify_token, name='verify_token'),
     path('gated-dashboard', views.gated_dashboard, name='gated_dashboard'),
+    path('employee-list-summary', views.employee_list_summary, name='employee_list_summary'),
 ]

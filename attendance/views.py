@@ -412,78 +412,6 @@ def get_server_time(request):
         'timezone': 'Asia/Kolkata'
     })
 
-@api_view(['POST'])
-@parser_classes([JSONParser])
-def start_lunch(request):
-    data = request.data
-    employee_id = data.get('employee_id')
-    lat = data.get('latitude')
-    lon = data.get('longitude')
-    now_local = timezone.localtime(timezone.now())
-    att_date = now_local.date()
-
-    try:
-        employee = Employee.objects.get(id=employee_id)
-        assignment = employee.get_current_assignment()
-        
-        # Restriction check: 9 AM - 6 PM for non-Surveyors
-        if assignment['department'] != 'Surveyors' and employee.role != 'admin':
-            current_hour = now_local.hour
-            if current_hour < 9 or current_hour >= 18:
-                return Response({
-                    'success': False,
-                    'message': 'Lunch actions are only allowed during office hours (9:00 AM - 6:00 PM).'
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-        record = AttendanceRecord.objects.get(employee_id=employee_id, date=att_date)
-        
-        if record.status == 'absent':
-            return Response({'success': False, 'message': 'Cannot start lunch while marked absent. Please check in first.'}, status=400)
-            
-        if record.lunch_start_time:
-             return Response({'success': False, 'message': 'Lunch already started'}, status=400)
-        
-        record.lunch_start_time = now_local.time()
-        if lat and lon:
-            record.lunch_start_lat = lat
-            record.lunch_start_lon = lon
-        record.save()
-        return Response({'success': True, 'message': 'Lunch break started'})
-    except (Employee.DoesNotExist, AttendanceRecord.DoesNotExist):
-        return Response({'success': False, 'message': 'No attendance record found for today'}, status=404)
-    except Exception as e:
-        return Response({'success': False, 'message': str(e)}, status=500)
-
-@api_view(['POST'])
-@parser_classes([JSONParser])
-def end_lunch(request):
-    data = request.data
-    employee_id = data.get('employee_id')
-    lat = data.get('latitude')
-    lon = data.get('longitude')
-    now_local = timezone.localtime(timezone.now())
-    att_date = now_local.date()
-
-    try:
-        record = AttendanceRecord.objects.get(employee_id=employee_id, date=att_date)
-        if record.status == 'absent':
-             return Response({'success': False, 'message': 'Record is marked absent'}, status=400)
-             
-        if not record.lunch_start_time:
-             return Response({'success': False, 'message': 'Lunch not started yet'}, status=400)
-        if record.lunch_end_time:
-             return Response({'success': False, 'message': 'Lunch already ended'}, status=400)
-        
-        record.lunch_end_time = now_local.time()
-        if lat and lon:
-            record.lunch_end_lat = lat
-            record.lunch_end_lon = lon
-        record.save()
-        return Response({'success': True, 'message': 'Lunch break ended'})
-    except AttendanceRecord.DoesNotExist:
-        return Response({'success': False, 'message': 'No attendance record found for today'}, status=404)
-    except Exception as e:
-        return Response({'success': False, 'message': str(e)}, status=500)
 
 @api_view(['POST'])
 def create_task(request):
@@ -718,12 +646,7 @@ def today_attendance(request):
                 'office_address': record.office.address if record.office else None,
                 'check_in_location': record.check_in_location,
                 'check_out_location': record.check_out_location,
-                'lunch_start_lat': float(record.lunch_start_lat) if record.lunch_start_lat else None,
-                'lunch_start_lon': float(record.lunch_start_lon) if record.lunch_start_lon else None,
-                'lunch_end_lat': float(record.lunch_end_lat) if record.lunch_end_lat else None,
-                'lunch_end_lon': float(record.lunch_end_lon) if record.lunch_end_lon else None,
-                'lunch_start_time': str(record.lunch_start_time) if record.lunch_start_time else None,
-                'lunch_end_time': str(record.lunch_end_time) if record.lunch_end_time else None,
+                'check_out_photo_url': record.check_out_photo if record.check_out_photo and not record.check_out_photo.startswith('data:') else None,
                 'total_hours': float(record.total_hours),
                 'gender': getattr(record.employee.profile, 'gender', 'other') if hasattr(record.employee, 'profile') else 'other',
             }
@@ -804,7 +727,7 @@ def attendance_records(request):
                 'check_in_time': str(record.check_in_time) if record.check_in_time else None,
                 'check_out_time': str(record.check_out_time) if record.check_out_time else None,
                 'type': record.type,
-                'status': record.status.lower(),
+                'status': str(record.status or '').lower(),
                 'office_id': record.office_id,
                 'office_name': record.office.name if record.office else None,
                 'office_address': record.office.address if record.office else None,
@@ -815,18 +738,7 @@ def attendance_records(request):
                 'photo_url': record.check_out_photo or record.check_in_photo or None,
                 'total_hours': float(record.total_hours),
                 'is_half_day': record.is_half_day,
-                'lunch_start_time': str(record.lunch_start_time) if record.lunch_start_time else None,
-                'lunch_end_time': str(record.lunch_end_time) if record.lunch_end_time else None,
-                'lunch_duration': None
             })
-            
-            if record.lunch_start_time and record.lunch_end_time:
-                from datetime import datetime
-                # Using dummy date for time comparison
-                start = datetime.combine(record.date, record.lunch_start_time)
-                end = datetime.combine(record.date, record.lunch_end_time)
-                duration = (end - start).total_seconds() / 3600 # in hours
-                records_data[-1]['lunch_duration'] = round(duration, 2)
 
         return Response({
             'success': True,
@@ -2025,21 +1937,7 @@ def employee_performance_analysis(request, employee_id):
         total_weekend_hours = float(weekend_records['sum_hours'] or 0)
         saturday_avg = total_weekend_hours / (num_weeks * 2)
 
-        # Calculate Lunch Avg
-        lunch_records = records.filter(
-            lunch_start_time__isnull=False,
-            lunch_end_time__isnull=False
-        )
-        total_lunch_minutes = 0
-        lunch_count = 0
-        for r in lunch_records:
-            # Combine with dummy date to calculate delta
-            t1 = datetime.combine(date.today(), r.lunch_start_time)
-            t2 = datetime.combine(date.today(), r.lunch_end_time)
-            if t2 > t1:
-                total_lunch_minutes += (t2 - t1).total_seconds() / 60
-                lunch_count += 1
-        avg_lunch_min = total_lunch_minutes / (lunch_count or 1)
+
 
         summary_stats = records.aggregate(
             total_present=Count('id', filter=Q(status__in=['present', 'half_day', 'wfh', 'client'])),
@@ -2200,7 +2098,7 @@ def employee_performance_analysis(request, employee_id):
                 'avg_hours_present': round(total_hours_sum / (summary_stats['total_present'] or 1), 1),
                 'weekday_avg': round(weekday_avg, 1),
                 'saturday_avg': round(saturday_avg, 1),
-                'avg_lunch_min': round(avg_lunch_min, 0),
+
                 'wfh_ratio': round((summary_stats['wfh_count'] / (summary_stats['total_present'] or 1)) * 100, 1) if summary_stats['total_present'] else 0,
                 'office_ratio': round((summary_stats['office_count'] / (summary_stats['total_present'] or 1)) * 100, 1) if summary_stats['total_present'] else 0,
                 'ot_ratio': ot_ratio,
@@ -3551,3 +3449,23 @@ def gated_dashboard(request):
         
     return render(request, 'index.html', context)
 
+
+@api_view(['GET'])
+def employee_list_summary(request):
+    """
+    Returns a simplified list of active employees including:
+    name, department, phone, and role.
+    """
+    try:
+        employees = Employee.objects.filter(is_active=True).values(
+            'name', 'department', 'phone', 'role'
+        ).order_by('name')
+        return Response({
+            'success': True,
+            'employees': list(employees)
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'Failed to fetch employee list: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
