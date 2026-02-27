@@ -3531,7 +3531,6 @@ def error_500_view(request):
     return render(request, '500.html', status=500)
 
 
-@require_valid_token
 def spa_view(request):
     """Protected view to serve the SPA index.html."""
     return render(request, 'index.html')

@@ -2276,45 +2276,7 @@
     <div id="birthdayFXContainer"></div>
     <!-- Gated Access Initialization -->
     {% if is_gated %}
-    <script>
-        document.addEventListener('DOMContentLoaded', async () => {
-            const gatedUserId = "{{ gated_user_id }}";
-            console.log('Gated access for user:', gatedUserId);
-
-            try {
-                // Fetch profile to initialize session
-                const res = await apiCall(`admin-profile/${gatedUserId}`, 'GET');
-                if (res && res.success && res.profile) {
-                    const p = res.profile;
-                    currentUser = {
-                        id: p.employee_id || p.id,
-                        name: p.name,
-                        username: p.username,
-                        email: p.official_email || p.email,
-                        phone: p.official_phone || p.phone,
-                        department: p.department,
-                        role: 'admin' // Force admin for gated dashboard view access
-                    };
-                    sessionStorage.setItem('attendanceUser', JSON.stringify(currentUser));
-                    sessionStorage.setItem('attendanceLoginTime', Date.now().toString());
-                    sessionStorage.setItem('attendanceTokenVerified', 'true');
-
-                    // Show dashboard
-                    showScreen('dashboardScreen');
-                    updateUIForUser();
-
-                    // Specific dashboard initializations
-                    if (currentUser.role === 'admin' || currentUser.role === 'manager') {
-                        initAdminDashboard();
-                    }
-                } else {
-                    console.error('Failed to initialize gated session');
-                }
-            } catch (e) {
-                console.error('Gated initialization error:', e);
-            }
-        });
-    </script>
+    <!-- Gated access detected, landing on login page -->
     {% endif %}
 </body>
 
