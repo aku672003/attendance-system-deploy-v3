@@ -844,11 +844,13 @@ async function handleSignup(event) {
 
 function logout() {
     currentUser = null;
-    sessionStorage.clear(); // Clear everything for safety
+    sessionStorage.removeItem('attendanceUser');
+    sessionStorage.removeItem('attendanceTokenVerified');
+    sessionStorage.removeItem('attendanceLoginTime');
 
-    // Redirect to root. Now that spa_view is unprotected, 
-    // this will show the login screen within index.html.
-    window.location.href = '/';
+    // Reload the current page. This preserves the gated token in the URL
+    // if it's present, ensuring the user stays on the gated login screen.
+    window.location.reload();
 }
 
 // Dashboard Functions
