@@ -844,12 +844,10 @@ async function handleSignup(event) {
 
 function logout() {
     currentUser = null;
-    sessionStorage.removeItem('attendanceUser');
-    sessionStorage.removeItem('attendanceTokenVerified');
-    sessionStorage.removeItem('attendanceLoginTime');
+    sessionStorage.clear(); // Clear everything for safety
 
-    // Redirect to root. Since session and token are gone, 
-    // the server-side gate will trigger the custom 404 page.
+    // Redirect to root. Now that spa_view is unprotected, 
+    // this will show the login screen within index.html.
     window.location.href = '/';
 }
 
