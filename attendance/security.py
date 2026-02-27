@@ -57,6 +57,12 @@ def require_valid_token(view_func):
     @wraps(view_func)
     def _wrapped_view(request, *args, **kwargs):
         token = request.GET.get('token')
+        
+        # Strictly require token presence for gated access
+        if not token:
+            from .views import error_404_view
+            return error_404_view(request)
+            
         success, result = validate_gated_token(token)
         
         if not success:
