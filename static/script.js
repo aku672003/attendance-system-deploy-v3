@@ -5097,21 +5097,69 @@ async function confirmCheckOut() {
             }
         }
 
-        // Try to get location, but don't block checkout if it fails
+        // 3️⃣ GEOFENCE GATE — Mandatory for office-type attendance
+        // WFH and client records have no fixed office to check against.
+        const attendanceType = (record.type || '').toLowerCase();
+        const isOfficeType = attendanceType === 'office' || attendanceType === '';
         let location = null;
-        if (navigator.geolocation) {
+
+        if (isOfficeType && record.office_id) {
+            showNotification('Verifying your location...', 'info');
+            let position = null;
             try {
-                const position = await new Promise((resolve, reject) => {
-                    navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
-                });
-                location = {
-                    latitude: position.coords.latitude,
-                    longitude: position.coords.longitude
-                };
+                position = await new Promise((resolve, reject) =>
+                    navigator.geolocation.getCurrentPosition(resolve, reject, {
+                        enableHighAccuracy: true,
+                        timeout: 12000,
+                        maximumAge: 0
+                    })
+                );
             } catch (geoErr) {
-                console.warn('Checkout without location (non-blocking):', geoErr);
+                showNotification(
+                    'Location access is required to check out. Please enable GPS and try again.',
+                    'error'
+                );
+                return;
             }
+
+            location = {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude
+            };
+
+            // Call the existing check-location endpoint
+            const geoResult = await apiCall('check-location', 'POST', {
+                latitude: location.latitude,
+                longitude: location.longitude,
+                office_id: record.office_id
+            });
+
+            if (!geoResult || !geoResult.success) {
+                showNotification(
+                    'Unable to verify your location. Please try again.',
+                    'error'
+                );
+                return;
+            }
+
+            if (!geoResult.in_range) {
+                const distM = Math.round(geoResult.distance);
+                showNotification(
+                    `⛔ Geofence violation: You are ${distM}m away from the office (allowed radius: ${geoResult.office_location?.radius_meters ?? '?'}m). Move closer to check out.`,
+                    'error'
+                );
+                return;
+            }
+        } else if (navigator.geolocation) {
+            // Non-office: still grab location softly for the record, but don't block
+            try {
+                const pos = await new Promise((resolve, reject) =>
+                    navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 })
+                );
+                location = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+            } catch (_) { /* non-blocking for WFH/client */ }
         }
+
 
         const result = await apiCall('check-out', 'POST', {
             employee_id: currentUser.id,
