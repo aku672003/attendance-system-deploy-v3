@@ -7,7 +7,7 @@ def test_token_verification():
     # Configuration
     # Note: Use the same secret key as defined in settings.py
     SECRET_KEY = "hanuai-attendance-secret-shared-key"
-    BASE_URL = "http://127.0.0.1:8000/api" # Adjust if running on a different port
+    BASE_URL = "http://[IP_ADDRESS]/api" # Adjust if running on a different port
     
     print("--- Starting Backend Token Verification Test ---")
     

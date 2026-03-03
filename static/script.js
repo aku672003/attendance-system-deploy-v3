@@ -3383,71 +3383,7 @@ function openMultiRequestModal() {
 }
 
 
-/* Lunch Break Logic */
-async function handleLunchBreak() {
-    if (!currentUser) return;
 
-    const titleEl = document.getElementById('lunchBreakTitle');
-    const isStarting = titleEl.textContent.includes('Start');
-    const endpoint = isStarting ? 'lunch-break/start' : 'lunch-break/end';
-    const action = isStarting ? 'start' : 'end';
-
-    // Geofence Check
-    if (currentAttendanceRecord && currentAttendanceRecord.type === 'office' && !isUserGeoInRange) {
-        showNotification('You must be within the office geofence to mark lunch break.', 'error');
-        return;
-    }
-
-    const icon = isStarting ? '🍴' : '🏠';
-    const message = `Are you sure you want to ${action} your lunch break?`;
-    const title = isStarting ? 'Start Lunch' : 'End Lunch';
-
-    if (!(await showConfirm(message, title, icon))) return;
-
-    // Get Location
-    if (!navigator.geolocation) {
-        showNotification('Geolocation is not supported by your browser', 'error');
-        return;
-    }
-
-    const getLocation = () => {
-        return new Promise((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
-            });
-        });
-    };
-
-    try {
-        let position = null;
-        try {
-            position = await getLocation();
-        } catch (geoError) {
-            console.warn('Geolocation failed:', geoError);
-            // Proceed without location or block based on policy? 
-            // Assuming we want to allow but maybe warn, or just send without location
-        }
-
-        const payload = {
-            employee_id: currentUser.id,
-            latitude: position ? position.coords.latitude : null,
-            longitude: position ? position.coords.longitude : null
-        };
-
-        const res = await apiCall(endpoint, 'POST', payload);
-        if (res.success) {
-            showNotification(res.message, 'success');
-            await loadTodayAttendance();
-        } else {
-            showNotification(res.message, 'error');
-        }
-    } catch (e) {
-        console.error('Error handling lunch break:', e);
-        showNotification('Failed to process request', 'error');
-    }
-}
 
 async function loadTodayAttendance(isUserInRange = false) {
     // Sync initial state
@@ -3484,17 +3420,7 @@ async function loadTodayAttendance(isUserInRange = false) {
                 let html = `<div style="display:flex; flex-direction:column; gap:4px;">
                                 <div><span style="opacity:0.8; font-size:0.9em;">Shift:</span> <span style="font-weight:600;">${checkInFormatted} - ${checkOutFormatted}</span></div>`;
 
-                // Add Lunch Duration
-                if (record.lunch_start_time && record.lunch_end_time) {
-                    const start = new Date(`1970-01-01T${record.lunch_start_time}`);
-                    const end = new Date(`1970-01-01T${record.lunch_end_time}`);
-                    const diffMs = end - start;
-                    const diffMins = Math.round(diffMs / 60000);
-                    const hours = Math.floor(diffMins / 60);
-                    const mins = diffMins % 60;
-                    const durationStr = hours > 0 ? `${hours}hr ${mins}m` : `${mins}m`;
-                    html += `<div><span style="opacity:0.8; font-size:0.9em;">Lunch:</span> <span style="font-weight:600;">${durationStr}</span></div>`;
-                }
+
                 html += `</div>`;
                 timingElement.innerHTML = html;
 
@@ -3518,67 +3444,7 @@ async function loadTodayAttendance(isUserInRange = false) {
                 let html = `<div style="display:flex; flex-direction:column; gap:4px;">
                                 <div><span style="opacity:0.8; font-size:0.9em;">Check-in:</span> <span style="font-weight:600;">${checkInFormatted}</span></div>`;
 
-                // Add Lunch Status/Duration
-                if (record.lunch_start_time) {
-                    if (record.lunch_end_time) {
-                        // Completed long
-                        const start = new Date(`1970-01-01T${record.lunch_start_time}`);
-                        const end = new Date(`1970-01-01T${record.lunch_end_time}`);
-                        const diffMs = end - start;
-                        const diffMins = Math.round(diffMs / 60000);
-                        const hours = Math.floor(diffMins / 60);
-                        const mins = diffMins % 60;
-                        const durationStr = hours > 0 ? `${hours}hr ${mins}m` : `${mins}m`;
 
-                        html += `<div><span style="opacity:0.8; font-size:0.9em;">Lunch:</span> <span style="font-weight:600;">${durationStr}</span></div>`;
-                    } else {
-                        // Ongoing
-                        const lunchStartFormatted = formatTime(record.lunch_start_time);
-                        html += `<div style="color:#d97706; font-weight:600; display:flex; align-items:center; gap:4px; margin-top:4px;">
-                                    <span>🍽️ On Lunch</span>
-                                    <span style="font-size:0.85em; opacity:0.9; font-weight:normal;" id="lunchTimer">(since ${lunchStartFormatted})</span>
-                                 </div>`;
-
-                        // Start live timer
-                        if (window.lunchTimerInterval) clearInterval(window.lunchTimerInterval);
-
-                        const start = getCurrentISTDate();
-                        const [h, m, s] = record.lunch_start_time.split(':');
-                        // Handle potential microseconds/seconds variation
-                        const seconds = s ? s.split('.')[0] : '00';
-
-                        // We need to construct a date object for today with the start time
-                        // Assuming lunch started today (as this is today's attendance)
-                        const startTime = getCurrentISTDate();
-                        startTime.setHours(parseInt(h), parseInt(m), parseInt(seconds), 0);
-
-                        const updateTimer = () => {
-                            const now = getCurrentISTDate();
-                            const diff = now - startTime;
-                            if (diff < 0) return; // Should not happen ideally
-
-                            const diffSecs = Math.floor(diff / 1000);
-                            const hours = Math.floor(diffSecs / 3600);
-                            const mins = Math.floor((diffSecs % 3600) / 60);
-                            const secs = diffSecs % 60;
-
-                            const pad = (n) => n.toString().padStart(2, '0');
-                            const timerStr = hours > 0
-                                ? `${hours}:${pad(mins)}:${pad(secs)}`
-                                : `${mins}:${pad(secs)}`;
-
-                            const timerEl = document.getElementById('lunchTimer');
-                            if (timerEl) {
-                                timerEl.textContent = `(${timerStr})`;
-                                timerEl.style.color = '#d97706';
-                                timerEl.style.fontWeight = '700';
-                            }
-                        };
-
-                        updateTimer(); // Initial call
-                        window.lunchTimerInterval = setInterval(updateTimer, 1000);
-                    }
-                }
                 // Add Mini Map Container
                 html += `<div id="statusMiniMap" onclick="openMapModal()" style="height: 180px; width: 100%; margin-top: 12px; border-radius: 8px; z-index: 1; cursor: pointer; position: relative;">
                             <div style="position: absolute; bottom: 8px; right: 8px; background: rgba(255,255,255,0.9); padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 1000;">View Full Map ⤢</div>
@@ -3649,19 +3515,7 @@ async function loadTodayAttendance(isUserInRange = false) {
                             } catch (e) { console.error('Error parsing check-in location', e); }
                         }
 
-                        // 2. Lunch Start (Walking Human)
-                        if (record.lunch_start_lat && record.lunch_start_lon) {
-                            const timeStr = record.lunch_start_time ? new Date(`1970-01-01T${record.lunch_start_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-                            const marker = L.marker([record.lunch_start_lat, record.lunch_start_lon], { icon: createEmojiIcon('🚶') }).addTo(map).bindPopup(`Lunch Start: ${timeStr}`);
-                            markers.push(marker);
-                        }
 
-                        // 3. Lunch End (Running Human)
-                        if (record.lunch_end_lat && record.lunch_end_lon) {
-                            const timeStr = record.lunch_end_time ? new Date(`1970-01-01T${record.lunch_end_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-                            const marker = L.marker([record.lunch_end_lat, record.lunch_end_lon], { icon: createEmojiIcon('🏃') }).addTo(map).bindPopup(`Lunch End: ${timeStr}`);
-                            markers.push(marker);
-                        }
 
                         // 4. Check Out (Waving Human)
                         if (record.check_out_location) {
@@ -3692,42 +3546,7 @@ async function loadTodayAttendance(isUserInRange = false) {
                 // Update UI state based on current location status
                 updateCheckOutButtonState();
 
-                // Lunch Break Logic
-                const lunchBreakCard = document.getElementById('lunchBreakCard');
-                const lunchBreakTitle = document.getElementById('lunchBreakTitle');
-                const lunchBreakDesc = document.getElementById('lunchBreakDesc');
 
-                if (lunchBreakCard) {
-                    if (record.status === 'present' || record.status === 'half_day') {
-                        lunchBreakCard.classList.remove('hidden');
-
-                        // Geofence Check for UI
-                        const isOffice = record.type === 'office';
-                        const canInteract = !isOffice || (isOffice && isUserGeoInRange);
-
-                        if (record.lunch_start_time && record.lunch_start_time !== 'None' && (!record.lunch_end_time || record.lunch_end_time === 'None')) {
-                            lunchBreakTitle.textContent = 'End Lunch';
-                            lunchBreakDesc.textContent = isOffice && !isUserGeoInRange ? 'Enter geofence to end lunch' : 'Complete your lunch break';
-                            lunchBreakCard.classList.add('active-lunch');
-                            lunchBreakCard.style.opacity = canInteract ? '1' : '0.6';
-                            lunchBreakCard.style.pointerEvents = canInteract ? 'auto' : 'none';
-                        } else if (record.lunch_end_time && record.lunch_end_time !== 'None') {
-                            lunchBreakTitle.textContent = 'Lunch Completed';
-                            lunchBreakDesc.textContent = 'Lunch break recorded';
-                            lunchBreakCard.style.opacity = '0.6';
-                            lunchBreakCard.style.pointerEvents = 'none';
-                            lunchBreakCard.classList.remove('active-lunch');
-                        } else {
-                            lunchBreakTitle.textContent = 'Start Lunch';
-                            lunchBreakDesc.textContent = isOffice && !isUserGeoInRange ? 'Enter geofence to start lunch' : 'Begin your lunch break';
-                            lunchBreakCard.style.opacity = canInteract ? '1' : '0.6';
-                            lunchBreakCard.style.pointerEvents = canInteract ? 'auto' : 'none';
-                            lunchBreakCard.classList.remove('active-lunch');
-                        }
-                    } else {
-                        lunchBreakCard.classList.add('hidden');
-                    }
-                }
             }
         } else {
             currentAttendanceRecord = null;
@@ -5512,9 +5331,6 @@ function renderAdminDayWiseView(records, containerEl) {
         <th>Department</th>
         <th>Check In</th>
         <th>Check Out</th>
-        <th>Lunch Start</th>
-        <th>Lunch End</th>
-        <th>Lunch Duration</th>
         <th>Hours</th>
         <th>Type</th>
         <th>Status</th>
@@ -5607,9 +5423,6 @@ function renderUserMonthWiseView(records, containerEl) {
                             <th>Date</th>
                             <th>Check In</th>
                             <th>Check Out</th>
-                            <th>Lunch Start</th>
-                            <th>Lunch End</th>
-                            <th>Lunch Duration</th>
                             <th>Hours</th>
                             <th>Type</th>
                             <th>Status</th>
@@ -5712,9 +5525,6 @@ function renderUserAttendanceRow(r) {
         <td>${dateDisplay}</td>
         <td>${r.check_in_time || '-'}</td>
         <td>${r.check_out_time || '-'}</td>
-        <td>${r.lunch_start_time ? r.lunch_start_time.substring(0, 5) : '-'}</td>
-        <td>${r.lunch_end_time ? r.lunch_end_time.substring(0, 5) : '-'}</td>
-        <td>${r.lunch_duration ? `${r.lunch_duration}h` : '-'}</td>
         <td>${totalHours}</td>
         <td>${(r.type || '').toUpperCase()}</td>
         <td><span class="status-badge ${statusClass}">${statusText}</span></td>
@@ -5768,9 +5578,6 @@ function renderAttendanceRow(r) {
         <td>${r.department || ''}</td>
         <td>${r.check_in_time || '-'}</td>
         <td>${r.check_out_time || '-'}</td>
-        <td>${r.lunch_start_time ? r.lunch_start_time.substring(0, 5) : '-'}</td>
-        <td>${r.lunch_end_time ? r.lunch_end_time.substring(0, 5) : '-'}</td>
-        <td>${r.lunch_duration ? `${r.lunch_duration}h` : '-'}</td>
         <td>${totalHours}</td>
         <td>${(r.type || '').toUpperCase()}</td>
         <td><span class="status-badge ${statusClass}">${statusText}</span></td>
@@ -6737,6 +6544,22 @@ async function uploadProfileDocuments() {
     const msg = document.getElementById('profileDocsMsg');
     msg.textContent = 'Uploading...';
     msg.style.color = 'var(--gray-600)';
+
+    const maxPdfSize = 3 * 1024 * 1024; // 3 MB
+    const pdfInputs = ['docAadharFile', 'docPanFile', 'docOtherIdFile', 'qualHighestFile', 'qualProfessionalFile', 'qualOtherFile'];
+    for (const inputId of pdfInputs) {
+        const input = document.getElementById(inputId);
+        if (input && input.files && input.files.length > 0) {
+            const file = input.files[0];
+            if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+                if (file.size > maxPdfSize) {
+                    msg.textContent = 'Each PDF must be less than 3 MB.';
+                    msg.style.color = 'var(--error-color)';
+                    return;
+                }
+            }
+        }
+    }
 
     const usernameBase = (currentUser.username || currentUser.name || ('user' + currentUser.id)).toLowerCase().replace(/\s+/g, '');
 
@@ -9286,11 +9109,7 @@ function renderEmployeePerformanceModal(data, employeeId) {
                                     <div style="font-size: 16px; font-weight: 800; color: #8b5cf6;">${m.saturday_avg}h</div>
                                     <div style="font-size: 8px; color: var(--gray-500); font-weight: 700; text-transform: uppercase;">Sat-Sun Avg</div>
                                 </div>
-                                <div style="height: 30px; width: 1px; background: #e2e8f0;"></div>
-                                <div style="text-align: center; flex: 1.2;">
-                                    <div style="font-size: 16px; font-weight: 800; color: #f59e0b;">${m.avg_lunch_min}m</div>
-                                    <div style="font-size: 8px; color: var(--gray-500); font-weight: 700; text-transform: uppercase;">Lunch Avg</div>
-                                </div>
+
                             </div>
                         </div>
                     </div>
@@ -9817,20 +9636,6 @@ window.openMapModal = function () {
             } catch (e) { }
         }
 
-        // 2. Lunch Start
-        if (record.lunch_start_lat && record.lunch_start_lon) {
-            const timeStr = record.lunch_start_time ? new Date(`1970-01-01T${record.lunch_start_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-            const marker = L.marker([record.lunch_start_lat, record.lunch_start_lon], { icon: createEmojiIcon('🚶') }).addTo(map).bindPopup(`<b>Lunch Start</b><br>${timeStr}`);
-            markers.push(marker);
-        }
-
-        // 3. Lunch End
-        if (record.lunch_end_lat && record.lunch_end_lon) {
-            const timeStr = record.lunch_end_time ? new Date(`1970-01-01T${record.lunch_end_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-            const marker = L.marker([record.lunch_end_lat, record.lunch_end_lon], { icon: createEmojiIcon('��') }).addTo(map).bindPopup(`<b>Lunch End</b><br>${timeStr}`);
-            markers.push(marker);
-        }
-
         // 4. Check Out
         if (record.check_out_location) {
             try {
@@ -9914,6 +9719,7 @@ async function checkBirthday() {
     }
 
     try {
+        if (!currentUser.date_of_birth) return; // Add check here to prevent split on null
         const dobStr = currentUser.date_of_birth; // YYYY-MM-DD
         const parts = dobStr.split('-');
         if (parts.length < 3) return;
