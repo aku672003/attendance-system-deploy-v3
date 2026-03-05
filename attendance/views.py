@@ -234,9 +234,16 @@ def register(request):
             department=data['department'],
             primary_office=data['primary_office'],
             role=data.get('role', 'employee'),
-            manager_id=data.get('manager_id') if data.get('manager_id') != 'none' else None,
             is_active=True
         )
+        
+        # Handle multiple managers if provided as list, or single manager_id
+        manager_ids = data.get('manager_ids') or []
+        if not manager_ids and data.get('manager_id') and data.get('manager_id') != 'none':
+            manager_ids = [data.get('manager_id')]
+            
+        if manager_ids:
+            employee.managers.set(Employee.objects.filter(id__in=manager_ids))
         return Response({
             'success': True,
             'message': 'Account created successfully',
@@ -691,7 +698,7 @@ def attendance_records(request):
 
         if is_manager:
             from django.db.models import Q
-            records_qs = records_qs.filter(Q(employee__manager=user) | Q(employee=user))
+            records_qs = records_qs.filter(Q(employee__managers=user) | Q(employee=user))
 
         if employee_id:
             records_qs = records_qs.filter(employee_id=employee_id)
@@ -1116,7 +1123,7 @@ def admin_profiles_list(request):
     try:
         employees_qs = Employee.objects.filter(is_active=True)
         if is_manager:
-            employees_qs = employees_qs.filter(manager=user)
+            employees_qs = employees_qs.filter(managers=user)
 
         employees = employees_qs.select_related('profile')\
             .annotate(docs_count=Count('documents'))\
@@ -1163,7 +1170,7 @@ def admin_users(request):
     try:
         users = Employee.objects.all().order_by('-id').prefetch_related('profile')
         if is_manager:
-            users = users.filter(manager=user)
+            users = users.filter(managers=user)
         
         users_data = []
         for u in users:
@@ -1181,7 +1188,7 @@ def admin_users(request):
                 'phone': u.phone,
                 'department': u.department,
                 'role': u.role,
-                'manager_name': u.manager.name if u.manager else None,
+                'manager_name': ", ".join([m.name for m in u.managers.all()]) if u.managers.all() else None,
                 'is_active': u.is_active,
                 'date_of_birth': dob,
                 'gender': gender
@@ -1221,8 +1228,10 @@ def admin_user_detail(request, user_id):
                 'phone': employee.phone,
                 'department': employee.department,
                 'role': employee.role,
-                'manager_id': employee.manager.id if employee.manager else None,
-                'manager_name': employee.manager.name if employee.manager else None,
+                'manager_ids': [m.id for m in employee.managers.all()],
+                'manager_names': [m.name for m in employee.managers.all()],
+                'manager_id': employee.managers.all()[0].id if employee.managers.exists() else None,
+                'manager_name': employee.managers.all()[0].name if employee.managers.exists() else None,
                 'is_active': employee.is_active,
             }
         })
@@ -1249,17 +1258,24 @@ def admin_user_detail(request, user_id):
             employee.department = data['department']
         if data.get('role'):
             employee.role = data['role']
-        if data.get('manager_id'):
+        if data.get('manager_ids'):
+            manager_ids = data.get('manager_ids')
+            if isinstance(manager_ids, list):
+                if 'none' in manager_ids:
+                    employee.managers.clear()
+                else:
+                    employee.managers.set(Employee.objects.filter(id__in=manager_ids))
+        elif data.get('manager_id'):
             if data['manager_id'] == 'none':
-                employee.manager = None
+                employee.managers.clear()
             else:
                 try:
                     manager_emp = Employee.objects.get(id=data['manager_id'])
-                    employee.manager = manager_emp
+                    employee.managers.set([manager_emp])
                 except Employee.DoesNotExist:
                     pass
         elif 'manager_id' in data and not data.get('manager_id'):
-            employee.manager = None
+            employee.managers.clear()
 
         if 'is_active' in data:
             employee.is_active = bool(data['is_active'])
@@ -1698,8 +1714,8 @@ def admin_summary(request):
         records_qs = AttendanceRecord.objects.filter(date=today)
         
         if is_manager:
-            employees_qs = employees_qs.filter(manager=user)
-            records_qs = records_qs.filter(employee__manager=user)
+            employees_qs = employees_qs.filter(managers=user)
+            records_qs = records_qs.filter(employee__managers=user)
 
         # Total employees
         total_employees = employees_qs.count()
@@ -2357,7 +2373,7 @@ def pending_requests(request):
             ).select_related('employee').order_by('start_date')
 
         if is_manager:
-            requests_obj = requests_obj.filter(employee__manager=user)
+            requests_obj = requests_obj.filter(employee__managers=user)
 
         requests_data = []
         for req in requests_obj:
@@ -2440,7 +2456,7 @@ def active_tasks(request):
             try:
                 emp = Employee.objects.get(id=employee_id)
                 if emp.role.lower() == 'manager':
-                    query = query.filter(Q(assignees__manager=emp) | Q(manager=emp) | Q(created_by=emp) | Q(assignees=emp)).distinct()
+                    query = query.filter(Q(assignees__managers=emp) | Q(manager=emp) | Q(created_by=emp) | Q(assignees=emp)).distinct()
                 elif emp.role.lower() != 'admin':
                     try:
                         query = query.filter(Q(assignees=emp) | Q(manager=emp)).distinct()
@@ -2477,7 +2493,7 @@ def _get_employee_my_tasks_data(employee):
 def _get_manager_employees_tasks_data(manager):
     """Helper: Get tasks for employees reporting to this manager + tasks explicitly managed by them"""
     tasks = Task.objects.filter(
-        Q(assignees__manager=manager) | Q(manager=manager)
+        Q(assignees__managers=manager) | Q(manager=manager)
     ).distinct().select_related('created_by', 'manager').prefetch_related('assignees').order_by('-created_at')
     return _serialize_tasks(tasks)
 

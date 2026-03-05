@@ -26,9 +26,14 @@ class EmployeeAdminForm(forms.ModelForm):
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
     form = EmployeeAdminForm
-    list_display = ['id', 'username', 'name', 'email', 'department', 'role', 'is_active']
+    list_display = ['id', 'username', 'name', 'email', 'department', 'role', 'get_managers', 'is_active']
     list_filter = ['department', 'role', 'is_active']
     search_fields = ['username', 'name', 'email']
+    filter_horizontal = ('managers',)
+
+    def get_managers(self, obj):
+        return ", ".join([m.username for m in obj.managers.all()])
+    get_managers.short_description = 'Managers'
 
 
 @admin.register(EmployeeProfile)

@@ -42,7 +42,7 @@ class Employee(models.Model):
     department = models.CharField(max_length=20, choices=DEPARTMENT_CHOICES)
     primary_office = models.CharField(max_length=10)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='employee')
-    manager = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='subordinates')
+    managers = models.ManyToManyField('self', symmetrical=False, blank=True, related_name='subordinates')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
