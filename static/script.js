@@ -6584,6 +6584,16 @@ async function uploadProfileDocuments() {
         if (!s) return '';
         return s.toLowerCase().replace(/[^a-z0-9]+/g, '');
     };
+
+    const MAX_SIZE = 3 * 1024 * 1024; // 3MB
+    const validateFileSize = (file, label) => {
+        if (file && file.size > MAX_SIZE) {
+            msg.textContent = `${label} exceeds 3MB limit.`;
+            msg.style.color = 'var(--error-color)';
+            return false;
+        }
+        return true;
+    };
     // Identity Documents
     if (document.getElementById('chkDocIdentity').checked) {
 
@@ -6597,10 +6607,12 @@ async function uploadProfileDocuments() {
         }
 
         if (photoFile) {
+            if (!validateFileSize(photoFile, 'User Photo')) return;
             formData.append('user_photo', photoFile);
             anySelected = true;
         }
         if (signFile) {
+            if (!validateFileSize(signFile, 'Signature')) return;
             formData.append('user_signature', signFile);
             anySelected = true;
         }
@@ -6616,6 +6628,8 @@ async function uploadProfileDocuments() {
             hasErrors = true;
             return;
         }
+
+        if (!validateFileSize(file, 'Aadhaar PDF')) return;
 
         anySelected = true;
         formData.append('doc[aadhar][name]', 'Aadhaar Card');
@@ -6635,6 +6649,8 @@ async function uploadProfileDocuments() {
             hasErrors = true;
             return;
         }
+
+        if (!validateFileSize(file, 'PAN PDF')) return;
 
         anySelected = true;
         formData.append('doc[pan][name]', 'PAN Card');
@@ -6676,6 +6692,8 @@ async function uploadProfileDocuments() {
             hasErrors = true;
             return;
         }
+
+        if (!validateFileSize(file, 'Qualification Certificate')) return;
 
         anySelected = true;
         const shortName = 'highestqualification';
