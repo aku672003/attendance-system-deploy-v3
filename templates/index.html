@@ -335,6 +335,39 @@
                     <div class="stat-card-value" id="locationStatus">Checking...</div>
                     <div class="stat-card-timing" id="locationDistance"></div>
                 </div>
+
+                <!-- Intelligence Hub Card (Employee Version) -->
+                <div class="stat-card intelligence-hub-card hidden" id="intelligenceHubCardEmployee"
+                    style="grid-column: span 1; min-height: 250px;">
+                    <div class="intelligence-hub-header">
+                        <div class="intelligence-hub-title-group">
+                            <span class="intelligence-hub-icon">🧠</span>
+                            <span class="intelligence-hub-title">INTELLIGENCE HUB</span>
+                        </div>
+                    </div>
+
+                    <div class="intelligence-hub-content-row"
+                        style="flex-direction: column; gap: 16px; align-items: flex-start;">
+                        <div class="intelligence-hub-main">
+                            <div class="intelligence-hub-percentage">
+                                <span id="hubRegularityEmployee">--%</span>
+                            </div>
+                            <div class="intelligence-hub-subtitle">Regularity Percentage</div>
+                        </div>
+
+                        <div class="intelligence-hub-actions"
+                            style="width: 100%; justify-content: flex-start; gap: 8px;">
+                            <button class="intelligence-hub-btn" style="flex: 1;"
+                                onclick="event.stopPropagation(); viewTrends();">
+                                <span class="btn-icon">📊</span> Analysis
+                            </button>
+                            <button class="intelligence-hub-btn" style="flex: 1;"
+                                onclick="event.stopPropagation(); viewMyStats();">
+                                <span class="btn-icon">👤</span> Personnel
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Admin Stats Grid (shown only for admin users) -->
@@ -405,12 +438,10 @@
                                 </button>
                                 <button id="hubMyStatsBtn" class="intelligence-hub-btn"
                                     onclick="event.stopPropagation(); viewMyStats();">
-                                    <span class="btn-icon">👤</span> My Stats
-                                </button>
-                                <button class="intelligence-hub-btn"
-                                    onclick="event.stopPropagation(); searchPersonnel();">
-                                    <span class="btn-icon">🔍</span> Search Personnel
-                                </button>
+                                    <button class="intelligence-hub-btn"
+                                        onclick="event.stopPropagation(); searchPersonnel();">
+                                        <span class="btn-icon">🔍</span> Search Personnel
+                                    </button>
                             </div>
                         </div>
                     </div>
@@ -418,17 +449,7 @@
             </div>
 
             <div class="actions-grid">
-                <div class="action-card hidden" onclick="trainPredictionModel()" id="trainModelCard">
-                    <span class="action-card-icon">⚙️</span>
-                    <div class="action-card-title">Train Forecast Model</div>
-                    <div class="action-card-description">Calibrate prediction engine using full history</div>
-                    <div id="trainModelStatus"
-                        style="font-size: 11px; margin-top: 8px; color: var(--primary-color); font-weight: 500;">
-                        <span id="lastTrainedText">Checking model status...</span>
-                        <span id="trainSpinner" class="loading-spinner hidden"
-                            style="display:inline-block; width:10px; height:10px; vertical-align:middle; margin-left:5px;"></span>
-                    </div>
-                </div>
+
                 <div class="action-card" onclick="startAttendanceFlow()" id="checkInCard">
                     <span class="action-card-icon">📍</span>
                     <div class="action-card-title">Check In</div>
@@ -527,11 +548,6 @@
                     <div class="action-card-title">My Tasks</div>
                     <div class="action-card-description">View and manage your assigned tasks</div>
                 </div>
-                <div class="action-card" onclick="viewMyStats()" id="myStatsCard">
-                    <span class="action-card-icon">📈</span>
-                    <div class="action-card-title">My Stats</div>
-                    <div class="action-card-description">View your attendance trends and performance analysis</div>
-                </div>
                 <div class="action-card" onclick="showScreen('recordsScreen')">
                     <span class="action-card-icon">📋</span>
                     <div class="action-card-title">Records</div>
@@ -564,6 +580,19 @@
                     <div class="action-card-description">Assign temporary department/role for a fixed period (Admin
                         only)</div>
                 </div>
+                <div class="action-card hidden" onclick="trainPredictionModel()" id="trainModelCard">
+                    <span class="action-card-icon">🧠</span>
+                    <div class="action-card-title">Train Forecast Model</div>
+                    <div class="action-card-description">Retrain the prediction model with recent data (Admin only)
+                    </div>
+                    <div id="trainModelStatus"
+                        style="font-size: 11px; margin-top: 8px; color: var(--primary-color); font-weight: 500;">
+                        <span id="lastTrainedText">Checking model status...</span>
+                        <span id="trainSpinner" class="loading-spinner hidden"
+                            style="display:inline-block; width:10px; height:10px; vertical-align:middle; margin-left:5px;"></span>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
@@ -1403,63 +1432,89 @@
     <!-- Export Attendance Modal -->
     <div id="exportModal" class="modal">
         <div class="modal-content">
-            <div class="text-center">
-                <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
-                <h3 style="margin-bottom: 16px;">Export Attendance</h3>
-                <p style="margin-bottom: 24px; color: var(--gray-600);">
-                    Select date range to export attendance records
-                </p>
+            <div class="modal-header-premium">
+                <button class="modal-close-btn" onclick="closeModal('exportModal')">&times;</button>
+                <span class="modal-header-icon">📊</span>
+                <h3>Export Attendance</h3>
+                <p>Select date range to export attendance records</p>
+            </div>
 
-                <div class="form-group">
-                    <label class="form-label">From Date</label>
-                    <input type="date" id="exportFromDate" class="form-control">
-                </div>
+            <div class="modal-body-premium">
+                <div class="export-date-grid">
+                    <div class="form-group">
+                        <label class="form-label">From Date</label>
+                        <input type="date" id="exportFromDate" class="form-control">
+                    </div>
 
-                <div class="form-group">
-                    <label class="form-label">To Date</label>
-                    <input type="date" id="exportToDate" class="form-control">
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Include</label>
-                    <div class="export-options-grid">
-                        <div class="export-checkbox-wrapper">
-                            <label class="export-checkbox-label">
-                                <input type="checkbox" id="exportIncludePhotos" checked>
-                                Photos
-                            </label>
-                        </div>
-
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label class="form-label">Employee</label>
-                            <select id="exportUserSelect" class="form-control">
-                                <option value="all">All Employees</option>
-                                <!-- populated dynamically -->
-                            </select>
-                        </div>
-
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label class="form-label">Attendance Type</label>
-                            <select id="exportTypeSelect" class="form-control">
-                                <option value="all">All</option>
-                                <option value="office">Office</option>
-                                <option value="wfh">WFH</option>
-                                <option value="client">Client</option>
-                            </select>
-                        </div>
-
+                    <div class="form-group">
+                        <label class="form-label">To Date</label>
+                        <input type="date" id="exportToDate" class="form-control">
                     </div>
                 </div>
 
-                <div id="exportError" style="color: var(--error-color); margin: 16px 0; display: none;"></div>
+                <div class="export-filters-grid">
+                    <div class="export-checkbox-container">
+                        <label class="export-checkbox-label">
+                            <input type="checkbox" id="exportIncludePhotos" checked>
+                            Photos
+                        </label>
+                    </div>
 
-                <div style="display: flex; gap: 12px; justify-content: center; margin-top: 20px;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label">Employee</label>
+                        <select id="exportUserSelect" class="form-control">
+                            <option value="all">All Employees</option>
+                            <!-- populated dynamically -->
+                        </select>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label">Attendance Type</label>
+                        <select id="exportTypeSelect" class="form-control">
+                            <option value="all">All</option>
+                            <option value="office">Office</option>
+                            <option value="wfh">WFH</option>
+                            <option value="client">Client</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="exportError"
+                    style="color: var(--error-color); margin: 16px 0; display: none; text-align: center; font-weight: 600;">
+                </div>
+
+                <div class="modal-footer-premium">
                     <button onclick="closeModal('exportModal')" class="btn btn-secondary">Cancel</button>
                     <button onclick="confirmExport()" class="btn btn-primary" id="confirmExportBtn">
                         <span id="exportBtnText">Export to Excel</span>
                         <span id="exportSpinner" class="loading-spinner hidden"></span>
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Progress Modal -->
+    <div id="exportProgressModal" class="modal">
+        <div class="modal-content" style="max-width: 450px; padding: 32px; text-align: center; border-radius: 20px;">
+            <div id="exportProgressIcon" style="font-size: 48px; margin-bottom: 20px;">⏳</div>
+            <h3 id="exportProgressTitle" style="margin-bottom: 12px; font-weight: 800;">Generating Export</h3>
+            <p id="exportProgressStatus" style="color: var(--gray-600); margin-bottom: 24px; font-size: 15px;">
+                Preparing profiles for export...
+            </p>
+
+            <div class="progress-container-premium">
+                <div id="exportProgressBar" class="progress-bar-premium" style="width: 0%;"></div>
+            </div>
+
+            <div id="exportProgressCount"
+                style="margin-top: 12px; font-weight: 700; color: var(--primary-color); font-size: 14px;">
+                0 / 0 Profiles
+            </div>
+
+            <div style="margin-top: 24px;">
+                <button id="cancelExportBtn" onclick="cancelExportAll()" class="btn btn-secondary btn-sm"
+                    style="height: 36px; padding: 0 20px;">Cancel Export</button>
             </div>
         </div>
     </div>
@@ -2275,12 +2330,40 @@
                     </div>
 
                     <div id="trainingHistoryTab" class="tab-content hidden">
+                        <div style="text-align: right; margin-bottom: 8px;">
+                            <button class="btn btn-subtle btn-sm" onclick="clearTrainingHistory()"
+                                style="font-size: 11px; color: var(--error-color);">
+                                <span class="btn-icon">🗑️</span> Clear History
+                            </button>
+                        </div>
                         <div id="trainingHistoryItems" class="history-list"
                             style="max-height: 200px; overflow-y: auto;">
                             <!-- History populated by JS -->
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Clear History Confirmation Modal -->
+    <div id="clearHistoryModal" class="modal" style="z-index: 99999;">
+        <div class="modal-content" style="max-width: 400px; text-align: center;">
+            <div style="font-size: 48px; margin-bottom: 12px;">🗑️</div>
+            <h3 style="color: var(--gray-900); margin-bottom: 8px;">Clear Training History?</h3>
+            <p style="color: var(--gray-500); font-size: 14px; margin-bottom: 24px; line-height: 1.5;">
+                This will permanently delete all past AI model training records. This action <strong>cannot be
+                    undone</strong>.
+            </p>
+            <div style="display: flex; gap: 12px; justify-content: center;">
+                <button class="btn btn-secondary" onclick="closeModal('clearHistoryModal')" style="flex: 1;">
+                    Cancel
+                </button>
+                <button class="btn btn-primary" onclick="confirmClearHistory()" id="confirmClearBtn"
+                    style="flex: 1; background: var(--error-color); border-color: var(--error-color);">
+                    <span id="confirmClearText">Yes, Clear All</span>
+                    <span id="confirmClearSpinner" class="loading-spinner hidden"></span>
+                </button>
             </div>
         </div>
     </div>

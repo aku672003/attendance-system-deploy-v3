@@ -84,6 +84,7 @@ urlpatterns = [
     path('intelligence-hub-search', views.intelligence_hub_search, name='intelligence_hub_search'),
     path('intelligence-hub-train', views.intelligence_hub_train, name='intelligence_hub_train'),
     path('intelligence-hub-training-history', views.intelligence_hub_training_history, name='intelligence_hub_training_history'),
+    path('clear-training-history', views.clear_training_history, name='clear_training_history'),
     path('employee-performance-analysis/<int:employee_id>', views.employee_performance_analysis, name='employee_performance_analysis'),
     path('temporary-tags', views.temporary_tags_api, name='temporary_tags_api'),
 

@@ -720,10 +720,11 @@ def attendance_records(request):
     # Include de-facto managers (any user who has subordinates)
     is_manager = user and (user.role == 'manager' or (user.role != 'admin' and user.subordinates.exists()))
 
-    # Auto-mark absentees for today after 12:00pm
+    # Auto-mark absentees for today
     now = timezone.localtime(timezone.now())
     today = now.date()
-    if now.hour >= 18:
+    # Trigger for admins/managers always, or for everyone after 6 PM
+    if (user and user.role == 'admin') or is_manager or now.hour >= 18:
         mark_absentees_for_date(today)
 
     try:
@@ -793,12 +794,6 @@ def attendance_records(request):
 
 def mark_absentees_for_date(target_date):
     try:
-        # Check if absentees already marked
-        if AttendanceRecord.objects.filter(
-            date=target_date,
-            status='absent'
-        ).exists():
-            return  # Already processed
 
         all_employees = Employee.objects.filter(is_active=True).values_list('id', flat=True)
         existing_records = AttendanceRecord.objects.filter(date=target_date).values_list('employee_id', flat=True)
@@ -869,6 +864,10 @@ def monthly_stats(request):
 
         stats = {
             'total_working_days': records.filter(Q(status='present') | Q(status='half_day') | Q(status='wfh') | Q(status='client')).count(),
+            'weekday_present_days': records.filter(
+                Q(status='present') | Q(status='half_day') | Q(status='wfh') | Q(status='client'),
+                date__week_day__in=[2, 3, 4, 5, 6]
+            ).count(),
             'total_hours': float(records.aggregate(Sum('total_hours'))['total_hours__sum'] or 0),
             'half_days': total_half_days,
             'wfh_days': records.filter(type='wfh').count(),
@@ -1969,6 +1968,20 @@ def employee_performance_analysis(request, employee_id):
         num_days = (end_date - start_date).days + 1
         num_weeks = max(num_days / 7.0, 0.1) # Avoid division by zero, min 0.1 weeks
         
+        # Calculate working days passed for regularity
+        calc_end_date = min(end_date, today)
+        if start_date <= calc_end_date:
+            passed_days = (calc_end_date - start_date).days + 1
+            working_days_passed = sum(1 for d in range(passed_days) if (start_date + timedelta(days=d)).weekday() < 5)
+        else:
+            working_days_passed = 0
+
+        weekday_present_days = records.filter(
+            date__week_day__in=[2, 3, 4, 5, 6],
+            status__in=['present', 'half_day', 'wfh', 'client']
+        ).count()
+
+        
         # Calculate Mon-Fri Avg
         weekday_records = records.filter(
             date__week_day__in=[2, 3, 4, 5, 6] # Mon-Fri (1=Sun, 2=Mon... 7=Sat)
@@ -2042,7 +2055,7 @@ def employee_performance_analysis(request, employee_id):
             
             if out_seconds:
                 avg_out_sec = sum(out_seconds) / len(out_seconds)
-        avg_check_out = f"{int(avg_out_sec // 3600):02d}:{int((avg_out_sec % 3600) // 60):02d}"
+                avg_check_out = f"{int(avg_out_sec // 3600):02d}:{int((avg_out_sec % 3600) // 60):02d}"
         
         # Task Management Performance (for filtered period)
         tasks_base = Task.objects.filter(assignees=employee, created_at__date__range=[start_date, end_date]).distinct()
@@ -2159,7 +2172,9 @@ def employee_performance_analysis(request, employee_id):
                 'total_ot_h': round(total_ot_h, 1),
                 'weekly_avg_hours': round(weekly_avg_hours, 1),
                 'avg_check_in': avg_check_in,
-                'avg_check_out': avg_check_out
+                'avg_check_out': avg_check_out,
+                'working_days_passed': working_days_passed,
+                'weekday_present_days': weekday_present_days
             },
             'tasks': task_stats,
             'prediction': {
@@ -2709,7 +2724,7 @@ def _update_task_admin(task, data, user=None):
     # Manager check: user manages at least one of the assignees
     is_reporting_manager = False
     if user:
-        is_reporting_manager = task.assignees.filter(manager=user).exists()
+        is_reporting_manager = task.assignees.filter(managers=user).exists()
 
     if task.status == 'completed' and not (is_admin or is_overseer or is_reporting_manager):
         # We allow Admins and the Overseer to bypass this for correction/reopening
@@ -2832,7 +2847,7 @@ def task_detail_api(request, task_id):
             # Update Logic
             role = str(requesting_user.role).lower()
             is_assignee = task.assignees.filter(id=requesting_user.id).exists()
-            is_manager_of_assignee = task.assignees.filter(manager=requesting_user).exists()
+            is_manager_of_assignee = task.assignees.filter(managers=requesting_user).exists()
 
             if role == 'admin':
                 _update_task_admin(task, data, requesting_user)
@@ -3452,6 +3467,43 @@ def intelligence_hub_training_history(request):
             'success': False,
             'message': f'Failed to fetch history: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+def clear_training_history(request):
+    """Clear all model training history"""
+    try:
+        # Use token-based auth: extract user_id from Authorization header
+        auth_header = request.headers.get('Authorization', '')
+        token = auth_header.replace('Bearer ', '').strip()
+        
+        if not token:
+            return Response({'success': False, 'message': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        try:
+            import jwt
+            from django.conf import settings
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+            user_id = payload.get('user_id')
+        except Exception:
+            return Response({'success': False, 'message': 'Invalid token'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        user = Employee.objects.filter(id=user_id).first()
+        if not user or user.role != 'admin':
+            return Response({'success': False, 'message': 'Unauthorized to clear history'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Delete all training logs
+        TrainingLog.objects.all().delete()
+        
+        return Response({
+            'success': True,
+            'message': 'Training history cleared successfully'
+        })
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'Failed to clear history: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 @api_view(['GET', 'POST', 'DELETE'])
