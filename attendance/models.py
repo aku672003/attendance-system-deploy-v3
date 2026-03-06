@@ -227,6 +227,7 @@ class EmployeeRequest(models.Model):
         ('wfh', 'Work From Home'),
         ('full_day', 'Full Day Leave'),
         ('half_day', 'Half Day Leave'),
+        ('unblock_attendance', 'Unblock Attendance'),
     ]
 
     STATUS_CHOICES = [
@@ -319,6 +320,7 @@ class Task(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     assignees = models.ManyToManyField(Employee, related_name='assigned_tasks')
+    overseers = models.ManyToManyField(Employee, related_name='overseeing_tasks', blank=True)
     started_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     

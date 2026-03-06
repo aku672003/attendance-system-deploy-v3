@@ -335,7 +335,7 @@ function resetAttendanceFlow() {
 
 function showScreen(screenId) {
     // Prevent non-admins from opening adminScreen
-    if (screenId === 'adminScreen' && (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'manager'))) {
+    if (screenId === 'adminScreen' && (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'manager' && !currentUser.has_subordinates))) {
         showNotification('Admins only.', 'warning');
         screenId = 'dashboardScreen';
         return;
@@ -924,7 +924,7 @@ async function handleNotificationClick(type, id) {
     } else if (type === 'birthday') {
         openBirthdayCalendar();
     } else if (type === 'task') {
-        if (currentUser.role === 'admin' || currentUser.role === 'manager') {
+        if (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.has_subordinates) {
             openTaskManager();
         } else {
             openMyTasks();
@@ -1025,7 +1025,7 @@ async function loadDashboardData() {
         document.getElementById('myTasksCard')?.classList.remove('hidden');
         document.getElementById('myStatsCard')?.classList.remove('hidden');
         document.getElementById('temporaryTagsCard')?.classList.remove('hidden');
-        document.getElementById('trainModelCard')?.classList.remove('hidden');
+        // Admin always uses the full Admin Panel card, not Manage Employees
         document.getElementById('manageEmployeesCard')?.classList.add('hidden');
         document.getElementById('adminExportNote')?.classList.remove('hidden');
 
@@ -1048,7 +1048,7 @@ async function loadDashboardData() {
         document.getElementById('adminExportNote')?.classList.add('hidden');
         document.getElementById('myStatsCard')?.classList.remove('hidden');
 
-        if (currentUser.role === 'manager') {
+        if (currentUser.role === 'manager' || currentUser.has_subordinates) {
             document.getElementById('manageEmployeesCard')?.classList.remove('hidden');
         } else {
             document.getElementById('manageEmployeesCard')?.classList.add('hidden');
@@ -1185,6 +1185,10 @@ async function loadActiveTasks() {
 
 // Admin Card Click Handlers
 async function showEmployeeSummary() {
+    if (!(currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.has_subordinates)) {
+        showNotification('Access denied', 'error');
+        return;
+    }
     try {
         const res = await apiCall('admin-summary', 'GET', { user_id: currentUser.id });
         if (res && res.success) {
@@ -2234,7 +2238,7 @@ async function openTaskManager() {
     // Hide Add Task button for non-admins
     const addTaskBtn = document.querySelector('#taskManagerModal .modal-actions .btn-primary');
     if (addTaskBtn) {
-        if (typeof currentUser !== 'undefined' && currentUser && currentUser.role !== 'admin' && currentUser.role !== 'manager') {
+        if (typeof currentUser !== 'undefined' && currentUser && currentUser.role !== 'admin' && currentUser.role !== 'manager' && !currentUser.has_subordinates) {
             addTaskBtn.style.display = 'none';
         } else {
             addTaskBtn.style.display = 'inline-block';
@@ -2337,7 +2341,7 @@ function renderTaskBoard() {
                         <span class="premium-priority-badge ${priorityClass}" style="border-radius: 6px; padding: 4px 10px;">${task.priority || 'Medium'}</span>
                         ${dueBadge}
                         <div style="display:flex; gap:8px;">
-                            ${typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager') ? `
+                            ${typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.has_subordinates) ? `
                             <button class="btn-icon-sm" onclick="event.stopPropagation(); editTask(${task.id})" style="background:#f1f5f9; border:none; color:#64748b; cursor:pointer; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; transition:all 0.2s;" title="Edit">✎</button>
                             <button class="btn-icon-sm" onclick="event.stopPropagation(); deleteTask(${task.id})" style="background:#fef2f2; border:none; color:#ef4444; cursor:pointer; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; transition:all 0.2s;" title="Delete">🗑</button>
                             ` : ''}
@@ -2538,10 +2542,11 @@ function addNewTask() {
 
     // Multi-Select Reset
     selectedEmployeeIds = [];
+    selectedOverseerIds = [];
     updateSelectedTags('multiSelectDisplay', [], window.allEmployeesSimple || [], 'taskAssigneeIds');
+    updateSelectedTags('overseerDisplay', [], window.allEmployeesSimple || [], 'taskOverseerIds');
 
     if (document.getElementById('teamSelector')) document.getElementById('teamSelector').value = '';
-    if (document.getElementById('taskManager')) document.getElementById('taskManager').value = 'none';
 
     // Reset button text and state
     document.getElementById('saveTaskText').textContent = 'Save Task';
@@ -2588,12 +2593,17 @@ async function editTask(taskId) {
     selectedEmployeeIds = task.assignees ? task.assignees.map(a => a.id) : [];
     updateSelectedTags('multiSelectDisplay', selectedEmployeeIds, window.allEmployeesSimple || [], 'taskAssigneeIds');
 
-    if (document.getElementById('taskManager')) {
-        document.getElementById('taskManager').value = task.manager_id || 'none';
+    // For overseer multi-select
+    selectedOverseerIds = task.overseers ? task.overseers.map(o => o.id) : [];
+    if (selectedOverseerIds.length === 0 && task.manager_id) {
+        selectedOverseerIds = [task.manager_id];
     }
+    updateSelectedTags('overseerDisplay', selectedOverseerIds, window.allEmployeesSimple || [], 'taskOverseerIds');
 
     openModal('addTaskModal');
 }
+
+// Task state variables are further down near multi-select logic
 
 async function populateTaskAssigneeDropdown() {
     try {
@@ -2610,6 +2620,8 @@ async function populateTaskAssigneeDropdown() {
                 managerSelect.innerHTML = '<option value="none">Optional: Select Manager...</option>' +
                     res.employees.map(emp => `<option value="${emp.id}">${emp.name} (${emp.role})</option>`).join('');
             }
+            // Populate Overseer Multi-Select
+            populateOverseerListInDropdown('overseerOptionsList');
         }
     } catch (error) {
         console.error('Error loading users for task assignment:', error);
@@ -2666,7 +2678,7 @@ async function saveNewTask() {
             priority,
             due_date: dueDate || null,
             assignees: selectedEmployeeIds,
-            manager_id: document.getElementById('taskManager') ? document.getElementById('taskManager').value : null,
+            overseer_ids: selectedOverseerIds,
             user_id: typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null,
             employee_id: typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null,
             created_by: typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null
@@ -2707,6 +2719,9 @@ async function openTaskDetail(taskId) {
     const assignees = task.assignees || [];
     const assigneeNames = assignees.map(a => a.name).join(', ') || 'Unassigned';
 
+    const overseers = task.overseers || [];
+    const overseerNames = overseers.map(o => o.name).join(', ') || 'None';
+
     document.getElementById('detailTaskMeta').innerHTML = `
         <div style="display: flex; flex-direction: column; gap: 8px;">
             <div style="display: flex; align-items: center; gap: 8px;">
@@ -2714,7 +2729,7 @@ async function openTaskDetail(taskId) {
                 <span style="font-weight: 600; color: #1e293b;">${assigneeNames}</span>
             </div>
             <div style="display: flex; gap: 12px; font-size: 0.85rem; color: #64748b;">
-                ${task.manager_name ? `<span>👁 Overseer: ${task.manager_name}</span>` : ''}
+                ${overseerNames !== 'None' ? `<span>👁 Overseer: ${overseerNames}</span>` : ''}
                 <span>🚩 ${task.priority}</span>
                 <span>📅 ${task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No date'}</span>
             </div>
@@ -4930,11 +4945,80 @@ async function markAttendance() {
             }
             showScreen('dashboardScreen');
         }
+        else if (r && r.error_code === 'ATTENDANCE_BLOCKED') {
+            const container = document.getElementById('cameraSection');
+            if (container) {
+                container.innerHTML = `
+                    <div class="text-center" style="padding: 24px; background: #fff3f3; border: 1px solid #ffcdd2; border-radius: 12px;">
+                        <span class="material-icons" style="font-size: 48px; color: #d32f2f; margin-bottom: 16px;">block</span>
+                        <h3 style="color: #d32f2f; margin-bottom: 8px;">Attendance Blocked</h3>
+                        <p style="color: #5f6368; margin-bottom: 16px;">You have checked in but not checked out for 3 consecutive days.</p>
+                        <button class="btn btn-primary w-100" onclick="submitUnblockRequest()">Request Admin to Mark Attendance</button>
+                    </div>
+                `;
+            } else {
+                showNotification(r.message || 'Attendance blocked due to missed check-outs.', 'error');
+            }
+        }
+        else if (r && r.error_code === 'ATTENDANCE_BLOCKED_PENDING') {
+            const container = document.getElementById('cameraSection');
+            if (container) {
+                container.innerHTML = `
+                    <div class="text-center" style="padding: 24px; background: #fff8e1; border: 1px solid #ffecb3; border-radius: 12px;">
+                        <span class="material-icons" style="font-size: 48px; color: #f57f17; margin-bottom: 16px;">pending_actions</span>
+                        <h3 style="color: #f57f17; margin-bottom: 8px;">Request Pending</h3>
+                        <p style="color: #5f6368; margin-bottom: 0;">Your request to unblock attendance is pending Admin approval. Please wait or contact your administrator.</p>
+                    </div>
+                `;
+            } else {
+                showNotification(r.message || 'Your unblock request is pending.', 'error');
+            }
+        }
         else {
             showNotification((r && r.message) || 'Failed to mark attendance', 'error');
         }
     } finally {
         markBtn.disabled = false; markBtnText.classList.remove('hidden'); markSpinner.classList.add('hidden');
+    }
+}
+
+async function submitUnblockRequest() {
+    const btn = document.querySelector('#cameraSection button');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Submitting...';
+    }
+
+    try {
+        const payload = { employee_id: currentUser.id };
+        const res = await apiCall('unblock-attendance', 'POST', payload);
+
+        if (res && res.success) {
+            showNotification(res.message);
+            // Re-render the pending UI
+            const container = document.getElementById('cameraSection');
+            if (container) {
+                container.innerHTML = `
+                    <div class="text-center" style="padding: 24px; background: #fff8e1; border: 1px solid #ffecb3; border-radius: 12px;">
+                        <span class="material-icons" style="font-size: 48px; color: #f57f17; margin-bottom: 16px;">pending_actions</span>
+                        <h3 style="color: #f57f17; margin-bottom: 8px;">Request Pending</h3>
+                        <p style="color: #5f6368; margin-bottom: 0;">Your request to unblock attendance is pending Admin approval. Please wait or contact your administrator.</p>
+                    </div>
+                `;
+            }
+        } else {
+            showNotification(res.message || 'Failed to submit request', 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Request Admin to Mark Attendance';
+            }
+        }
+    } catch (e) {
+        showNotification('Error submitting request', 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Request Admin to Mark Attendance';
+        }
     }
 }
 
@@ -5237,8 +5321,8 @@ async function loadAttendanceRecords(isMore = false) {
             days_offset: attendanceDaysOffset
         };
 
-        // For non-admin users (employees), fetch last 6 months of data
-        if (currentUser.role !== 'admin' && currentUser.role !== 'manager') {
+        // For non-admin, non-manager, non-de-facto-manager employees, fetch only their last 6 months of data
+        if (currentUser.role !== 'admin' && currentUser.role !== 'manager' && !currentUser.has_subordinates) {
             params.employee_id = currentUser.id;
             // No strict 6-month limit here if we want true pagination, but we can keep it as a safety
             const today = getCurrentISTDate();
@@ -5249,8 +5333,8 @@ async function loadAttendanceRecords(isMore = false) {
         } else if (overrideRecordsEmployeeId) {
             // If an Admin/Manager clicked "Records" on a specific user
             params.employee_id = overrideRecordsEmployeeId;
-        } else if (currentUser.role === 'manager') {
-            // If manager clicked "Records" from main dashboard, show their personal records
+        } else if (currentUser.role === 'manager' || currentUser.has_subordinates) {
+            // If manager clicked "Records" from main dashboard (not via Manage Employees), show their personal records
             params.employee_id = currentUser.id;
         }
 
@@ -5325,7 +5409,7 @@ function renderAttendanceTable(records) {
 
     const listContainer = document.getElementById('attendanceListContainer');
 
-    if (currentUser.role === 'admin' || currentUser.role === 'manager') {
+    if (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.has_subordinates) {
         renderAdminDayWiseView(records, listContainer);
     } else {
         renderUserMonthWiseView(records, listContainer);
@@ -5510,7 +5594,7 @@ function applyAttendanceSearch() {
         return;
     }
 
-    if (currentUser.role === 'admin' || currentUser.role === 'manager') {
+    if (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.has_subordinates) {
         renderAdminDayWiseView(filtered, listContainer);
     } else {
         renderUserMonthWiseView(filtered, listContainer);
@@ -5764,7 +5848,7 @@ let allAdminProfiles = [];
 /* Open Admin Panel and ALWAYS pull fresh data from DB */
 // === ADMIN: open panel and load everything ===
 async function openAdminPanel() {
-    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'manager')) {
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'manager' && !currentUser.has_subordinates)) {
         showNotification('Admins only.', 'warning');
         return;
     }
@@ -5778,7 +5862,7 @@ async function openAdminPanel() {
         refreshAdminProfiles()          // 🔹 load extended user details
     ];
 
-    if (currentUser.role === 'manager') {
+    if (currentUser.role !== 'admin' && (currentUser.role === 'manager' || currentUser.has_subordinates)) {
         document.getElementById('adminAddOfficeCard')?.classList.add('hidden');
         document.getElementById('adminAddUserCard')?.classList.add('hidden');
         document.getElementById('adminOfficesListCard')?.classList.add('hidden');
@@ -9252,9 +9336,16 @@ function checkDueTomorrowReminders() {
 /* Multi-Select & Teams Logic */
 let selectedEmployeeIds = [];
 let selectedTeamMemberIds = [];
+let selectedOverseerIds = []; // Added for overseer selection
 
+// Multi-select for tasks
 function toggleMultiSelect() {
     const dropdown = document.getElementById('multiSelectDropdown');
+    dropdown.classList.toggle('show');
+}
+
+function toggleOverseerSelect() {
+    const dropdown = document.getElementById('overseerDropdown');
     dropdown.classList.toggle('show');
 }
 
@@ -9291,6 +9382,15 @@ function filterTeamMemberSelect(val) {
     });
 }
 
+function filterOverseerSelect(val) {
+    const query = val.toLowerCase();
+    const options = document.querySelectorAll('#overseerOptionsList .multi-select-item');
+    options.forEach(opt => {
+        const text = opt.innerText.toLowerCase();
+        opt.style.display = text.includes(query) ? 'flex' : 'none';
+    });
+}
+
 function updateSelectedTags(containerId, ids, allEmployees, hiddenInputId, displayLabelId) {
     const display = document.getElementById(containerId);
     if (!ids.length) {
@@ -9309,7 +9409,10 @@ function updateSelectedTags(containerId, ids, allEmployees, hiddenInputId, displ
     document.getElementById(hiddenInputId).value = JSON.stringify(ids);
 
     // Update checkboxes in dropdown
-    updateCheckboxesInDropdown(containerId === 'multiSelectDisplay' ? 'multiSelectOptionsList' : 'teamMemberOptionsList', ids);
+    let listId = 'multiSelectOptionsList';
+    if (containerId === 'teamMemberDisplay') listId = 'teamMemberOptionsList';
+    if (containerId === 'overseerDisplay') listId = 'overseerOptionsList';
+    updateCheckboxesInDropdown(listId, ids);
 }
 
 function updateCheckboxesInDropdown(listId, ids) {
@@ -9323,21 +9426,31 @@ function removeEmployeeTag(containerId, id) {
     if (containerId === 'multiSelectDisplay') {
         selectedEmployeeIds = selectedEmployeeIds.filter(x => x != id);
         updateSelectedTags('multiSelectDisplay', selectedEmployeeIds, window.allEmployeesSimple || [], 'taskAssigneeIds');
+    } else if (containerId === 'overseerDisplay') {
+        selectedOverseerIds = selectedOverseerIds.filter(x => x != id);
+        updateSelectedTags('overseerDisplay', selectedOverseerIds, window.allEmployeesSimple || [], 'taskOverseerIds');
     } else {
         selectedTeamMemberIds = selectedTeamMemberIds.filter(x => x != id);
         updateSelectedTags('teamMemberDisplay', selectedTeamMemberIds, window.allEmployeesSimple || [], 'newTeamMemberIds');
     }
 }
 
-function selectEmployee(id, isTeamMember = false) {
+function selectEmployee(id, type = 'assignee') {
     id = parseInt(id);
-    if (isTeamMember) {
+    if (type === 'team') {
         if (selectedTeamMemberIds.includes(id)) {
             selectedTeamMemberIds = selectedTeamMemberIds.filter(x => x != id);
         } else {
             selectedTeamMemberIds.push(id);
         }
         updateSelectedTags('teamMemberDisplay', selectedTeamMemberIds, window.allEmployeesSimple || [], 'newTeamMemberIds');
+    } else if (type === 'overseer') {
+        if (selectedOverseerIds.includes(id)) {
+            selectedOverseerIds = selectedOverseerIds.filter(x => x != id);
+        } else {
+            selectedOverseerIds.push(id);
+        }
+        updateSelectedTags('overseerDisplay', selectedOverseerIds, window.allEmployeesSimple || [], 'taskOverseerIds');
     } else {
         if (selectedEmployeeIds.includes(id)) {
             selectedEmployeeIds = selectedEmployeeIds.filter(x => x != id);
@@ -9512,19 +9625,26 @@ async function deleteTeam() {
     }
 }
 
-function populateEmployeeListInDropdown(listId, isTeamMember = false) {
+function populateEmployeeListInDropdown(listId, type = 'assignee') {
     const list = document.getElementById(listId);
     if (!list || !window.allEmployeesSimple) return;
 
     list.innerHTML = window.allEmployeesSimple.map(emp => `
-        <div class="multi-select-item" onclick="selectEmployee(${emp.id}, ${isTeamMember})">
-            <input type="checkbox" value="${emp.id}" onclick="event.stopPropagation(); selectEmployee(${emp.id}, ${isTeamMember})">
+        <div class="multi-select-item" onclick="selectEmployee(${emp.id}, '${type}')">
+            <input type="checkbox" value="${emp.id}" onclick="event.stopPropagation(); selectEmployee(${emp.id}, '${type}')">
             <span>${emp.name} (${emp.role})</span>
         </div>
     `).join('');
 
     // Update checkboxes based on current selection
-    updateCheckboxesInDropdown(listId, isTeamMember ? selectedTeamMemberIds : selectedEmployeeIds);
+    let ids = selectedEmployeeIds;
+    if (type === 'team') ids = selectedTeamMemberIds;
+    if (type === 'overseer') ids = selectedOverseerIds;
+    updateCheckboxesInDropdown(listId, ids);
+}
+
+function populateOverseerListInDropdown(listId) {
+    populateEmployeeListInDropdown(listId, 'overseer');
 }
 
 // Map Modal Functions
@@ -9751,6 +9871,7 @@ async function checkBirthday() {
 
     try {
         const dobStr = currentUser.date_of_birth; // YYYY-MM-DD
+        if (!dobStr) return; // Skip if DOB not set
         const parts = dobStr.split('-');
         if (parts.length < 3) return;
 

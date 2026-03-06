@@ -822,7 +822,7 @@
                         </div>
                         <div class="form-group">
                             <label class="form-label">Aadhaar PDF</label>
-                             <input type="file" id="docAadharFile" class="form-control" accept="application/pdf"
+                            <input type="file" id="docAadharFile" class="form-control" accept="application/pdf"
                                 disabled>
                             <div style="font-size: 11px; color: var(--gray-500); margin-top: 4px;">
                                 <span style="color: red;">*</span> Max size of uploadation is 3mb
@@ -847,7 +847,7 @@
                         </div>
                         <div class="form-group">
                             <label class="form-label">PAN PDF</label>
-                             <input type="file" id="docPanFile" class="form-control" accept="application/pdf" disabled>
+                            <input type="file" id="docPanFile" class="form-control" accept="application/pdf" disabled>
                             <div style="font-size: 11px; color: var(--gray-500); margin-top: 4px;">
                                 <span style="color: red;">*</span> Max size of uploadation is 3mb
                             </div>
@@ -906,7 +906,7 @@
                         </div>
                         <div class="form-group">
                             <label class="form-label">Certificate PDF</label>
-                             <input type="file" id="qualHighestFile" class="form-control" accept="application/pdf"
+                            <input type="file" id="qualHighestFile" class="form-control" accept="application/pdf"
                                 disabled>
                             <div style="font-size: 11px; color: var(--gray-500); margin-top: 4px;">
                                 <span style="color: red;">*</span> Max size of uploadation is 3mb
@@ -1721,9 +1721,23 @@
 
                 <div class="premium-field-group">
                     <label class="premium-label">Assigned Manager (Overseer)</label>
-                    <select id="taskManager" class="form-control" style="height: 48px; border-radius: 12px;">
-                        <option value="none">Optional: No Overseer</option>
-                    </select>
+                    <div class="multi-select-container">
+                        <div id="overseerDisplay" class="multi-select-display" onclick="toggleOverseerSelect()"
+                            style="min-height: 48px; border-radius: 12px;">
+                            <span class="text-muted" style="font-size:0.9rem;">Select Overseers...</span>
+                        </div>
+                        <div id="overseerDropdown" class="multi-select-dropdown" style="z-index: 105;">
+                            <div style="padding: 10px; border-bottom: 1px solid #f1f5f9;">
+                                <input type="text" id="overseerSearch" class="form-control"
+                                    placeholder="Search overseers..." style="height: 32px; font-size: 0.85rem;"
+                                    onkeyup="filterOverseerSelect(this.value)">
+                            </div>
+                            <div id="overseerOptionsList" style="max-height: 200px; overflow-y: auto;">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="taskOverseerIds" value="[]">
                 </div>
 
                 <div class="premium-card-section">
