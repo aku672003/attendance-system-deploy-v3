@@ -36,7 +36,7 @@ def generate_gated_token(user_id=1):
     print(f"\nGENERATED TOKEN:\n{token}")
     print("-" * 60)
     print(f"\nGATED URL PREVIEW (Valid for 1h):")
-    print(f"http://attendance.hanuai.com/api/gated-dashboard?token={token}")
+    print(f"http://127.0.0.1:8000/api/gated-dashboard?token={token}")
     print("-" * 60)
 
 if __name__ == "__main__":

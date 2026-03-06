@@ -27,6 +27,7 @@ urlpatterns = [
     path('leave-request-approve', views.leave_request_approve, name='leave_request_approve'),
     path('wfh-request-approve', views.wfh_request_approve, name='wfh_request_approve'),
     path('my-requests', views.my_requests, name='my_requests'),
+    path('unblock-attendance', views.unblock_attendance, name='unblock_attendance'),
     
     # Profile
     path('employee-profile', views.employee_profile, name='employee_profile'),  # GET and POST

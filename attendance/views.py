@@ -166,6 +166,7 @@ def login(request):
                 'primary_office': employee.primary_office,
                 'role': assignment['role'],
                 'is_temporary': assignment['is_temporary'],
+                'has_subordinates': employee.subordinates.exists(),
                 'gender': profile.gender if profile else None,
                 'date_of_birth': str(profile.date_of_birth) if profile and profile.date_of_birth else None,
             }
@@ -367,6 +368,37 @@ def mark_attendance(request):
                 }, status=status.HTTP_400_BAD_REQUEST)
     except Employee.DoesNotExist:
         return Response({'success': False, 'message': 'Employee not found'}, status=404)
+
+    # 0.5 Missed Check-outs Penalty Check
+    # Check the last 3 days where the user had a check-in
+    past_3_records = list(AttendanceRecord.objects.filter(
+        employee_id=employee_id,
+        date__lt=att_date,
+        check_in_time__isnull=False
+    ).exclude(status__in=['absent', 'leave']).order_by('-date')[:3])
+
+    if len(past_3_records) == 3 and all(r.check_out_time is None for r in past_3_records):
+        last_missed_date = past_3_records[0].date
+        # Check if an unblock request exists that was created AFTER the last missed checkout
+        unblock_req = EmployeeRequest.objects.filter(
+            employee_id=employee_id,
+            request_type='unblock_attendance',
+            created_at__date__gte=last_missed_date
+        ).order_by('-created_at').first()
+        
+        if not unblock_req or unblock_req.status == 'rejected':
+            return Response({
+                'success': False,
+                'error_code': 'ATTENDANCE_BLOCKED',
+                'message': 'You have checked in but not checked out for 3 consecutive days. Please send a request to the Admin to unblock your attendance.'
+            }, status=status.HTTP_403_FORBIDDEN)
+        elif unblock_req.status == 'pending':
+            return Response({
+                'success': False,
+                'error_code': 'ATTENDANCE_BLOCKED_PENDING',
+                'message': 'Your request to unblock attendance is pending Admin approval.'
+            }, status=status.HTTP_403_FORBIDDEN)
+        # If unblock_req.status == 'approved', we allow check-in!
 
     # 1. Check if they already have a SUCCESSFUL check-in TODAY
     # We look for a record that HAS a check-in time and matches TODAY's date
@@ -685,7 +717,8 @@ def attendance_records(request):
 
     user_id = request.GET.get('user_id')
     user = Employee.objects.filter(id=user_id).first() if user_id else None
-    is_manager = user and user.role == 'manager'
+    # Include de-facto managers (any user who has subordinates)
+    is_manager = user and (user.role == 'manager' or (user.role != 'admin' and user.subordinates.exists()))
 
     # Auto-mark absentees for today after 12:00pm
     now = timezone.localtime(timezone.now())
@@ -1118,7 +1151,8 @@ def admin_profiles_list(request):
     """List all employee profiles (admin)"""
     user_id = request.GET.get('user_id')
     user = Employee.objects.filter(id=user_id).first() if user_id else None
-    is_manager = user and user.role == 'manager'
+    # Include de-facto managers (any user who has subordinates)
+    is_manager = user and (user.role == 'manager' or (user.role != 'admin' and user.subordinates.exists()))
 
     try:
         employees_qs = Employee.objects.filter(is_active=True)
@@ -1165,7 +1199,8 @@ def admin_users(request):
     """Get all users (admin)"""
     user_id = request.GET.get('user_id')
     user = Employee.objects.filter(id=user_id).first() if user_id else None
-    is_manager = user and user.role == 'manager'
+    # Include de-facto managers (any user who has subordinates)
+    is_manager = user and (user.role == 'manager' or (user.role != 'admin' and user.subordinates.exists()))
 
     try:
         users = Employee.objects.all().order_by('-id').prefetch_related('profile')
@@ -1705,7 +1740,8 @@ def admin_summary(request):
     """Get admin dashboard summary"""
     user_id = request.GET.get('user_id')
     user = Employee.objects.filter(id=user_id).first() if user_id else None
-    is_manager = user and user.role == 'manager'
+    # Include de-facto managers (any user who has subordinates)
+    is_manager = user and (user.role == 'manager' or (user.role != 'admin' and user.subordinates.exists()))
 
     try:
         today = date.today()
@@ -2356,7 +2392,8 @@ def pending_requests(request):
     """Get pending or history (approved/rejected) WFH and leave requests"""
     user_id = request.GET.get('user_id')
     user = Employee.objects.filter(id=user_id).first() if user_id else None
-    is_manager = user and user.role == 'manager'
+    # Include de-facto managers (any user who has subordinates)
+    is_manager = user and (user.role == 'manager' or (user.role != 'admin' and user.subordinates.exists()))
 
     try:
         status_param = request.GET.get('status', 'pending')
@@ -2455,7 +2492,9 @@ def active_tasks(request):
         if employee_id:
             try:
                 emp = Employee.objects.get(id=employee_id)
-                if emp.role.lower() == 'manager':
+                # Treat de-facto managers (employees with subordinates) like official managers
+                is_emp_manager = emp.role.lower() == 'manager' or (emp.role.lower() != 'admin' and emp.subordinates.exists())
+                if is_emp_manager:
                     query = query.filter(Q(assignees__managers=emp) | Q(manager=emp) | Q(created_by=emp) | Q(assignees=emp)).distinct()
                 elif emp.role.lower() != 'admin':
                     try:
@@ -2526,6 +2565,7 @@ def _serialize_tasks(tasks):
             'status': task.status,
             'priority': task.priority,
             'assignees': assignees_info,
+            'overseers': [{'id': o.id, 'name': o.name} for o in task.overseers.all()],
             'manager_id': task.manager.id if task.manager else None,
             'manager_name': task.manager.name if task.manager else None,
             'created_by': task.created_by.id,
@@ -2548,9 +2588,21 @@ def _create_task_admin(data, creator):
     assigned_ids = assigned_input if isinstance(assigned_input, list) else [assigned_input] if assigned_input else []
     
     manager_id = data.get('manager_id')
+    overseer_ids = data.get('overseer_ids') or []
+    if not overseer_ids and manager_id and manager_id != 'none':
+        overseer_ids = [manager_id]
+
     manager_employee = None
     if manager_id and manager_id != 'none':
-        manager_employee = Employee.objects.get(id=manager_id)
+        try:
+            manager_employee = Employee.objects.get(id=manager_id)
+        except:
+            pass
+    elif overseer_ids:
+        try:
+            manager_employee = Employee.objects.get(id=overseer_ids[0])
+        except:
+            pass
 
     task = Task.objects.create(
         title=data['title'],
@@ -2563,6 +2615,8 @@ def _create_task_admin(data, creator):
     )
     
     task.assignees.set(Employee.objects.filter(id__in=assigned_ids))
+    if overseer_ids:
+        task.overseers.set(Employee.objects.filter(id__in=overseer_ids))
     return task
 
 @api_view(['GET', 'POST'])
@@ -2682,15 +2736,30 @@ def _update_task_admin(task, data, user=None):
         assigned_ids = assigned_input if isinstance(assigned_input, list) else [assigned_input] if assigned_input else []
         task.assignees.set(Employee.objects.filter(id__in=assigned_ids))
 
-    if 'manager_id' in data:
-        if data['manager_id'] == 'none':
-            task.manager = None
-        else:
-            try:
-                manager_emp = Employee.objects.get(id=data['manager_id'])
-                task.manager = manager_emp
-            except:
-                pass
+    if 'manager_id' in data or 'overseer_ids' in data:
+        overseer_ids = data.get('overseer_ids')
+        manager_id = data.get('manager_id')
+        
+        if overseer_ids is not None:
+            # Multi-overseer update
+            overseer_qs = Employee.objects.filter(id__in=overseer_ids)
+            task.overseers.set(overseer_qs)
+            # Sync backward compatibility field 'manager'
+            if overseer_qs.exists():
+                task.manager = overseer_qs.first()
+            else:
+                task.manager = None
+        elif manager_id:
+            if manager_id == 'none':
+                task.manager = None
+                task.overseers.clear()
+            else:
+                try:
+                    manager_emp = Employee.objects.get(id=manager_id)
+                    task.manager = manager_emp
+                    task.overseers.set([manager_emp])
+                except:
+                    pass
     task.save()
     return True
 
@@ -2904,10 +2973,19 @@ def wfh_request_reject(request):
 def employees_simple_list(request):
     """Get simple list of employees for dropdowns"""
     try:
-        employees = Employee.objects.filter(is_active=True).values('id', 'name', 'role', 'manager_id').order_by('name')
+        employees_qs = Employee.objects.filter(is_active=True).order_by('name')
+        employees_data = []
+        for emp in employees_qs:
+            employees_data.append({
+                'id': emp.id,
+                'name': emp.name,
+                'role': emp.role,
+                'manager_id': emp.managers.all()[0].id if emp.managers.exists() else None
+            })
+            
         return Response({
             'success': True,
-            'employees': list(employees)
+            'employees': employees_data
         })
     except Exception as e:
         return Response({
@@ -3007,6 +3085,48 @@ def wfh_request_approve(request):
 
 @api_view(['POST'])
 @parser_classes([JSONParser])
+def unblock_attendance(request):
+    """Create a request to unblock attendance after 3 consecutive missed checkouts"""
+    try:
+        data = request.data
+        employee_id = data.get('employee_id')
+        
+        if not employee_id:
+            return Response({'success': False, 'message': 'Missing employee ID'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            employee = Employee.objects.get(id=employee_id)
+        except Employee.DoesNotExist:
+            return Response({'success': False, 'message': 'Employee not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Check if an active pending/approved request already exists
+        now_local = timezone.localtime(timezone.now()).date()
+        recent_req = EmployeeRequest.objects.filter(
+            employee=employee,
+            request_type='unblock_attendance'
+        ).order_by('-created_at').first()
+
+        if recent_req and recent_req.status == 'pending':
+            return Response({'success': False, 'message': 'An unblock request is already pending.'}, status=status.HTTP_400_BAD_REQUEST)
+        if recent_req and recent_req.status == 'approved' and recent_req.created_at.date() == now_local:
+            return Response({'success': False, 'message': 'Attendance is already unblocked for today.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Create request using today's date for start and end date as placeholders
+        EmployeeRequest.objects.create(
+            employee=employee,
+            request_type='unblock_attendance',
+            start_date=now_local,
+            end_date=now_local,
+            reason='Automated request: 3 consecutive missed check-outs.',
+            status='pending'
+        )
+
+        return Response({'success': True, 'message': 'Unblock request submitted to Admin successfully.'})
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@parser_classes([JSONParser])
 def leave_request(request):
     """Create a new leave request (Full Day or Half Day)"""
     try:
@@ -3096,36 +3216,38 @@ def leave_request_approve(request):
 
         # If approved, create or update AttendanceRecord to reflect in calendar
         if status_val == 'approved':
-            # Determine the status to set based on request type
             req_type = req.request_type
-            if req_type == 'wfh':
-                attendance_status = 'wfh'
-                attendance_type = 'wfh'
-            elif req_type == 'full_day':
-                attendance_status = 'leave'  # Full day leave shows as leave
-                attendance_type = 'office'
-            elif req_type == 'half_day':
-                attendance_status = 'half_day'
-                attendance_type = 'office'
-            else:
-                attendance_status = 'leave'
-                attendance_type = 'office'
+            
+            # Unblock requests do not create attendance records, they just lift the check-in block
+            if req_type != 'unblock_attendance':
+                if req_type == 'wfh':
+                    attendance_status = 'wfh'
+                    attendance_type = 'wfh'
+                elif req_type == 'full_day':
+                    attendance_status = 'leave'  # Full day leave shows as leave
+                    attendance_type = 'office'
+                elif req_type == 'half_day':
+                    attendance_status = 'half_day'
+                    attendance_type = 'office'
+                else:
+                    attendance_status = 'leave'
+                    attendance_type = 'office'
 
-            # Create or update attendance record for each day in the request date range
-            from datetime import timedelta
-            current_date = req.start_date
-            while current_date <= req.end_date:
-                AttendanceRecord.objects.update_or_create(
-                    employee=req.employee,
-                    date=current_date,
-                    defaults={
-                        'type': attendance_type,
-                        'status': attendance_status,
-                        'is_half_day': (req_type == 'half_day'),
-                        'notes': f'Approved {req_type} request',
-                    }
-                )
-                current_date += timedelta(days=1)
+                # Create or update attendance record for each day in the request date range
+                from datetime import timedelta
+                current_date = req.start_date
+                while current_date <= req.end_date:
+                    AttendanceRecord.objects.update_or_create(
+                        employee=req.employee,
+                        date=current_date,
+                        defaults={
+                            'type': attendance_type,
+                            'status': attendance_status,
+                            'is_half_day': (req_type == 'half_day'),
+                            'notes': f'Approved {req_type} request',
+                        }
+                    )
+                    current_date += timedelta(days=1)
 
         return Response({'success': True, 'message': f'Request {status_val}'})
     except Exception as e:
