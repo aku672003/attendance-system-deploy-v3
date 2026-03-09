@@ -2236,6 +2236,7 @@ function applyRequestFilters() {
 
 async function openTaskManager() {
     await refreshTasks();
+    await populateTaskExportEmployeeFilter();
 
     // Hide Add Task button for non-admins
     const addTaskBtn = document.querySelector('#taskManagerModal .modal-actions .btn-primary');
@@ -2248,6 +2249,28 @@ async function openTaskManager() {
     }
 
     openModal('taskManagerModal');
+}
+
+async function populateTaskExportEmployeeFilter() {
+    const select = document.getElementById('taskExportEmployeeFilter');
+    if (!select) return;
+
+    // Keep the "All Employees" option
+    select.innerHTML = '<option value="all">All Employees</option>';
+
+    try {
+        const res = await apiCall('admin-profiles', 'GET', { user_id: currentUser.id });
+        const profiles = (res && res.success && Array.isArray(res.profiles)) ? res.profiles : [];
+
+        profiles.forEach(p => {
+            const option = document.createElement('option');
+            option.value = p.id;
+            option.textContent = p.name || p.username;
+            select.appendChild(option);
+        });
+    } catch (e) {
+        console.error('Failed to populate employee filter', e);
+    }
 }
 
 // Task Management Functions
@@ -2269,8 +2292,132 @@ async function refreshTasks() {
     }
 }
 
+async function exportTasksToExcel() {
+    // Open the filter modal instead of exporting immediately
+    await populateTaskExportModalEmployees();
+    openModal('taskExportModal');
+}
 
+async function populateTaskExportModalEmployees() {
+    const select = document.getElementById('exportTaskEmployeeSelect');
+    if (!select) return;
 
+    // Keep the "All Employees" option
+    select.innerHTML = '<option value="all">All Employees</option>';
+
+    try {
+        const res = await apiCall('admin-profiles', 'GET', { user_id: currentUser.id });
+        const profiles = (res && res.success && Array.isArray(res.profiles)) ? res.profiles : [];
+
+        profiles.forEach(p => {
+            const option = document.createElement('option');
+            option.value = p.id;
+            option.textContent = p.name || p.username;
+            select.appendChild(option);
+        });
+    } catch (e) {
+        console.error('Failed to populate employee export filter', e);
+    }
+}
+
+async function confirmTaskExport() {
+    if (typeof ExcelJS === 'undefined') {
+        showNotification('Excel library not loaded. Please refresh.', 'error');
+        return;
+    }
+
+    if (!tasks || tasks.length === 0) {
+        showNotification('No tasks to export.', 'warning');
+        return;
+    }
+
+    const filterId = document.getElementById('exportTaskEmployeeSelect')?.value || 'all';
+    let tasksToExport = tasks;
+
+    if (filterId !== 'all') {
+        const empId = parseInt(filterId);
+        tasksToExport = tasks.filter(t => (t.assignees || []).some(a => a.id === empId));
+    }
+
+    if (tasksToExport.length === 0) {
+        showNotification('No tasks found for the selected employee.', 'warning');
+        return;
+    }
+
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('Tasks Report');
+
+        // Define columns
+        sheet.columns = [
+            { header: 'ID', key: 'id', width: 10 },
+            { header: 'Title', key: 'title', width: 30 },
+            { header: 'Description', key: 'description', width: 40 },
+            { header: 'Status', key: 'status', width: 15 },
+            { header: 'Priority', key: 'priority', width: 15 },
+            { header: 'Assignees', key: 'assignees', width: 30 },
+            { header: 'Overseers', key: 'overseers', width: 30 },
+            { header: 'Manager', key: 'manager', width: 25 },
+            { header: 'Created By', key: 'created_by', width: 25 },
+            { header: 'Due Date', key: 'due_date', width: 15 },
+            { header: 'In Progress At', key: 'started_at', width: 25 },
+            { header: 'Completed At', key: 'completed_at', width: 25 },
+            { header: 'Created At', key: 'created_at', width: 25 }
+        ];
+
+        // Format and add rows
+        tasksToExport.forEach(task => {
+            sheet.addRow({
+                id: task.id,
+                title: task.title,
+                description: task.description || '',
+                status: task.status,
+                priority: task.priority,
+                assignees: (task.assignees || []).map(a => a.name).join(', '),
+                overseers: (task.overseers || []).map(o => o.name).join(', '),
+                manager: task.manager_name || '',
+                created_by: task.created_by_name || '',
+                due_date: task.due_date || 'N/A',
+                started_at: task.started_at ? new Date(task.started_at).toLocaleString() : 'N/A',
+                completed_at: task.completed_at ? new Date(task.completed_at).toLocaleString() : 'N/A',
+                created_at: new Date(task.created_at).toLocaleString()
+            });
+        });
+
+        // Style the header row
+        sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        sheet.getRow(1).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FF4F46E5' } // Indigo-600
+        };
+        sheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+        // Auto-filter and freeze header (A1 to M1 for 13 columns)
+        sheet.autoFilter = 'A1:M1';
+        sheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+        // Generate buffer and download
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const timestamp = new Date().toISOString().split('T')[0];
+
+        a.href = url;
+        a.download = `Tasks_Report_${timestamp}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        closeModal('taskExportModal');
+        showNotification('Tasks exported successfully', 'success');
+    } catch (error) {
+        console.error('Export error:', error);
+        showNotification('Error exporting tasks', 'error');
+    }
+}
 
 function renderTaskBoard() {
     const todoList = document.getElementById('todoList');

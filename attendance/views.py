@@ -2587,6 +2587,8 @@ def _serialize_tasks(tasks):
             'created_by': task.created_by.id,
             'created_by_name': task.created_by.name,
             'due_date': str(task.due_date) if task.due_date else None,
+            'started_at': task.started_at.isoformat() if task.started_at else None,
+            'completed_at': task.completed_at.isoformat() if task.completed_at else None,
             'created_at': task.created_at.isoformat(),
             'updated_at': task.updated_at.isoformat(),
             'comments': comments
