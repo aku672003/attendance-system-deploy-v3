@@ -719,11 +719,8 @@ def attendance_records(request):
     # Include de-facto managers (any user who has subordinates)
     is_manager = user and (user.role == 'manager' or (user.role != 'admin' and user.subordinates.exists()))
 
-    # Auto-mark absentees for today
-    now = timezone.localtime(timezone.now())
-    today = now.date()
-    # Trigger for admins/managers always, or for everyone after 6 PM
-    if (user and user.role == 'admin') or is_manager or now.hour >= 18:
+    # Auto-mark absentees only after 6 PM (scheduler handles the main trigger)
+    if now.hour >= 18:
         mark_absentees_for_date(today)
 
     try:
