@@ -4128,6 +4128,201 @@ body {
     }
 }
 
+/* --- Task Export Premium UI --- */
+.glass-modal {
+    backdrop-filter: blur(8px);
+    background: rgba(15, 23, 42, 0.4) !important;
+}
+
+.premium-export-card {
+    background: #ffffff !important;
+    border-radius: 24px !important;
+    max-width: 480px !important;
+    width: 90% !important;
+    overflow: hidden !important;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+    border: 1px solid rgba(255, 255, 255, 0.8) !important;
+    padding: 0 !important;
+    transform: scale(1);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.export-header {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
+    padding: 24px 30px !important;
+    border: none !important;
+    position: relative;
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between !important;
+}
+
+.export-header-content {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.export-icon-wrapper {
+    width: 48px;
+    height: 48px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.premium-export-title {
+    color: #ffffff !important;
+    font-size: 1.25rem !important;
+    font-weight: 700 !important;
+    margin: 0 !important;
+}
+
+.premium-export-subtitle {
+    color: rgba(255, 255, 255, 0.8) !important;
+    font-size: 0.85rem !important;
+    margin: 2px 0 0 0 !important;
+}
+
+.export-close-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: #ffffff;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.export-close-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: rotate(90deg);
+}
+
+.export-body {
+    padding: 30px !important;
+}
+
+.export-form-group {
+    margin-bottom: 25px;
+}
+
+.premium-export-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 12px;
+    font-size: 0.95rem;
+}
+
+.premium-select-wrapper {
+    position: relative;
+    display: block;
+}
+
+.premium-select {
+    width: 100% !important;
+    height: 50px !important;
+    background: #f8fafc !important;
+    border: 2px solid #e2e8f0 !important;
+    border-radius: 14px !important;
+    padding: 0 20px !important;
+    font-size: 1rem !important;
+    font-weight: 500 !important;
+    color: #1e293b !important;
+    appearance: none !important;
+    transition: all 0.3s ease !important;
+}
+
+.premium-select:focus {
+    border-color: #4f46e5 !important;
+    background: #ffffff !important;
+    box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1) !important;
+    outline: none !important;
+}
+
+.select-chevron {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #64748b;
+    pointer-events: none;
+}
+
+.premium-export-hint {
+    margin-top: 10px;
+    font-size: 0.8rem;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+}
+
+.export-footer {
+    display: flex;
+    gap: 15px;
+}
+
+.premium-btn {
+    height: 50px;
+    border-radius: 14px;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    flex: 1;
+}
+
+.btn-export-now {
+    background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+}
+
+.btn-export-now:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 15px rgba(79, 70, 229, 0.3);
+}
+
+.btn-export-now:active {
+    transform: translateY(0);
+}
+
+.btn-export-cancel {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.btn-export-cancel:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+
+@media (max-width: 500px) {
+    .export-footer {
+        flex-direction: column;
+    }
+
+    .premium-export-card {
+        margin: 10px;
+    }
+}
+
 /* --- Premium Task Manager Styles --- */
 
 .premium-task-board {
