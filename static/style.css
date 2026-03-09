@@ -3553,6 +3553,11 @@ body {
     box-shadow: 2px 0 10px rgba(245, 158, 11, 0.2);
 }
 
+.req-card-tech.tech-blocked::after {
+    background: linear-gradient(to bottom, #ef4444, #f87171);
+    box-shadow: 2px 0 10px rgba(239, 68, 68, 0.2);
+}
+
 .req-avatar-tech {
     width: 50px;
     height: 50px;
@@ -3610,6 +3615,11 @@ body {
 .badge-tech-leave {
     background: rgba(245, 158, 11, 0.1);
     color: #d97706;
+}
+
+.badge-tech-blocked {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
 }
 
 .req-actions-tech {
@@ -7593,4 +7603,45 @@ body.birthday-mode-active .status-badge {
         width: 100% !important;
         padding: 12px 20px !important;
     }
+}
+/* Bulk Manager Assignment Styles */
+.assign-manager-row {
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.assign-manager-row:last-child {
+    border-bottom: none;
+}
+
+.bulk-manager-chips {
+    transition: all 0.2s ease;
+}
+
+.bulk-manager-chips:hover {
+    border-color: var(--primary-color) !important;
+}
+
+.manager-option:hover {
+    background: #f1f5f9;
+}
+
+.manager-select-container .hidden {
+    display: none !important;
+}
+
+#assignManagerList::-webkit-scrollbar {
+    width: 6px;
+}
+
+#assignManagerList::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+
+#assignManagerList::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+#assignManagerList::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
 }

@@ -1021,6 +1021,7 @@ async function loadDashboardData() {
         document.getElementById('checkInCard').classList.add('hidden'); // Hide check-in for admin
         document.getElementById('checkOutCard').classList.add('hidden'); // Hide check-out for admin
         document.getElementById('adminCard').classList.remove('hidden');
+        document.getElementById('assignManagerDashboardCard').classList.remove('hidden');
         document.getElementById('exportCard').classList.remove('hidden');
         document.getElementById('trainModelCard')?.classList.remove('hidden');
         document.getElementById('profileCard').classList.add('hidden');
@@ -1045,6 +1046,7 @@ async function loadDashboardData() {
         document.getElementById('employeeStatsGrid').classList.remove('hidden');
         document.getElementById('profileCard').classList.remove('hidden');
         document.getElementById('adminCard').classList.add('hidden');
+        document.getElementById('assignManagerDashboardCard').classList.add('hidden');
         document.getElementById('exportCard').classList.add('hidden');
         document.getElementById('trainModelCard')?.classList.add('hidden');
         document.getElementById('adminExportNote')?.classList.add('hidden');
@@ -2006,6 +2008,7 @@ async function openRequestsModal() {
             const total = requests.length;
             const wfhCount = requests.filter(r => r.type === 'wfh').length;
             const leaveCount = requests.filter(r => r.type === 'full_day' || r.type === 'half_day').length;
+            const blockedCount = requests.filter(r => r.type === 'unblock_attendance').length;
 
             let html = `
                 <div class="premium-calendar-wrap">
@@ -2027,6 +2030,7 @@ async function openRequestsModal() {
                                 <button class="btn-premium-toggle active filter-tab" data-type="all" onclick="filterRequestsByType('all', this)">All</button>
                                 <button class="btn-premium-toggle filter-tab" data-type="wfh" onclick="filterRequestsByType('wfh', this)">WFH</button>
                                 <button class="btn-premium-toggle filter-tab" data-type="leave" onclick="filterRequestsByType('leave', this)">Leave</button>
+                                <button class="btn-premium-toggle filter-tab" data-type="blocked" onclick="filterRequestsByType('blocked', this)">Blocked</button>
                             </div>
                             <button class="btn-premium-close" onclick="closeModal('requestsModal')">Close</button>
                         </div>
@@ -2059,6 +2063,10 @@ async function openRequestsModal() {
                                 <div class="premium-stat-card">
                                     <span class="premium-stat-val" style="color:#f59e0b;">${leaveCount}</span>
                                     <span class="premium-stat-label">Leave</span>
+                                </div>
+                                <div class="premium-stat-card">
+                                    <span class="premium-stat-val" style="color:#ef4444;">${blockedCount}</span>
+                                    <span class="premium-stat-label">Blocked</span>
                                 </div>
                             </div>
                             
@@ -2101,9 +2109,10 @@ function renderRequestCards(requests) {
         if (req.type === 'wfh') typeLabel = 'Work from Home';
         else if (req.type === 'full_day') typeLabel = 'Full Day Leave';
         else if (req.type === 'half_day') typeLabel = 'Half Day Leave';
+        else if (req.type === 'unblock_attendance') typeLabel = 'Unblock Attendance';
 
-        const typeClass = req.type === 'wfh' ? 'tech-wfh' : 'tech-leave';
-        const badgeClass = req.type === 'wfh' ? 'badge-tech-wfh' : 'badge-tech-leave';
+        const typeClass = req.type === 'wfh' ? 'tech-wfh' : (req.type === 'unblock_attendance' ? 'tech-blocked' : 'tech-leave');
+        const badgeClass = req.type === 'wfh' ? 'badge-tech-wfh' : (req.type === 'unblock_attendance' ? 'badge-tech-blocked' : 'badge-tech-leave');
         const initials = req.employee_name ? req.employee_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : '??';
 
         // Staggered animation
@@ -2128,7 +2137,10 @@ function renderRequestCards(requests) {
                                 <button class="btn-tech btn-tech-approve" onclick="approveRequest(${req.id}, '${req.type}')" title="Approve" style="width: 48px; height: 48px; border-radius: 14px;">✓</button>
                                 <button class="btn-tech btn-tech-reject" onclick="rejectRequest(${req.id}, '${req.type}')" title="Reject" style="width: 48px; height: 48px; border-radius: 14px;">✕</button>
                             ` : `
-                                <span class="premium-badge" style="background: ${req.status === 'approved' ? '#dcfce7' : '#fee2e2'}; color: ${req.status === 'approved' ? '#166534' : '#991b1b'}; border-radius: 8px; padding: 6px 14px; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em;">${req.status}</span>
+                                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+                                    <span class="premium-badge" style="background: ${req.status === 'approved' ? '#dcfce7' : '#fee2e2'}; color: ${req.status === 'approved' ? '#166534' : '#991b1b'}; border-radius: 8px; padding: 6px 14px; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em;">${req.status}</span>
+                                    ${req.reviewed_by_name ? `<span style="font-size:0.7rem; color:#94a3b8; font-weight:600;">By ${req.is_manager ? 'Manager: ' : ''}${req.reviewed_by_name}</span>` : ''}
+                                </div>
                             `}
                         </div>
                     </div>
@@ -2183,6 +2195,7 @@ async function switchRequestMode(mode) {
             const total = res.requests.length;
             const wfhCount = res.requests.filter(r => r.type === 'wfh').length;
             const leaveCount = res.requests.filter(r => r.type === 'full_day' || r.type === 'half_day').length;
+            const blockedCount = res.requests.filter(r => r.type === 'unblock_attendance').length;
 
             const stats = document.querySelector('.premium-stats');
             if (stats) {
@@ -2198,6 +2211,10 @@ async function switchRequestMode(mode) {
                     <div class="premium-stat-card">
                         <span class="premium-stat-val" style="color:#f59e0b;">${leaveCount}</span>
                         <span class="premium-stat-label">Leave</span>
+                    </div>
+                    <div class="premium-stat-card">
+                        <span class="premium-stat-val" style="color:#ef4444;">${blockedCount}</span>
+                        <span class="premium-stat-label">Blocked</span>
                     </div>
                 `;
             }
@@ -2226,6 +2243,8 @@ function applyRequestFilters() {
             matchesType = req.type === 'wfh';
         } else if (type === 'leave') {
             matchesType = req.type === 'full_day' || req.type === 'half_day';
+        } else if (type === 'blocked') {
+            matchesType = req.type === 'unblock_attendance';
         }
 
         return matchesSearch && matchesType;
@@ -3028,7 +3047,10 @@ async function deleteTask(taskId) {
 async function approveRequest(requestId, type) {
     try {
         const endpoint = type === 'wfh' ? 'wfh-request-approve' : 'leave-request-approve';
-        const res = await apiCall(endpoint, 'POST', { request_id: requestId });
+        const res = await apiCall(endpoint, 'POST', {
+            request_id: requestId,
+            reviewed_by: typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null
+        });
 
         if (res && res.success) {
             showNotification(`${type.toUpperCase()} request approved`);
@@ -3053,7 +3075,8 @@ async function rejectRequest(requestId, type) {
         const res = await apiCall(endpoint, 'POST', {
             request_id: requestId,
             status: 'rejected',
-            admin_response: reason
+            admin_response: reason,
+            reviewed_by: typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null
         });
 
         if (res && res.success) {
@@ -3242,7 +3265,7 @@ async function loadMyRequests() {
                             </div>
                         </div>
 
-                        <div style="flex-shrink: 0;">
+                        <div style="flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
                             <span style="
                                 display: inline-block;
                                 padding: 6px 12px;
@@ -3254,6 +3277,7 @@ async function loadMyRequests() {
                                 color: ${statusColor};
                                 background: ${statusBg};
                             ">${statusText}</span>
+                            ${req.reviewed_by_name ? `<div style="font-size: 10px; color: var(--gray-400); font-weight: 500;">By ${req.is_manager ? 'Manager: ' : ''}${req.reviewed_by_name}</div>` : ''}
                         </div>
                     </div>
                 `;
@@ -3450,21 +3474,31 @@ async function buildAttendanceCalendar(year, month) {
         // Add tooltip details for past dates/records
         if (record) {
             let tooltipLines = [];
-            if (record.check_in_time) tooltipLines.push(`In: ${record.check_in_time}`);
-            if (record.check_out_time) tooltipLines.push(`Out: ${record.check_out_time}`);
 
-            if (record.total_hours) {
-                const h = Number(record.total_hours);
-                if (!isNaN(h) && h > 0) {
-                    tooltipLines.push(`Hrs: ${Math.floor(h)}h ${Math.round((h % 1) * 60)}m`);
+            // If it's a request (WFH/Leave), show its status and who approved it
+            if (record.source === 'request') {
+                const typeLabel = record.status === 'wfh' ? 'WFH' : (record.is_half_day ? 'Half Day' : 'Full Day');
+                tooltipLines.push(`Status: ${typeLabel} (${record.request_status || record.status})`);
+                if (record.reviewed_by_name) {
+                    tooltipLines.push(`${record.is_manager ? 'Manager: ' : 'Admin: '}${record.reviewed_by_name}`);
+                }
+            } else {
+                // Regular attendance record
+                if (record.check_in_time) tooltipLines.push(`In: ${record.check_in_time}`);
+                if (record.check_out_time) tooltipLines.push(`Out: ${record.check_out_time}`);
+                if (record.total_hours) {
+                    const h = Number(record.total_hours);
+                    if (!isNaN(h) && h > 0) {
+                        tooltipLines.push(`Hrs: ${Math.floor(h)}h ${Math.round((h % 1) * 60)}m`);
+                    }
                 }
             }
+
             if (tooltipLines.length > 0) {
-                // Remove native title
                 cell.removeAttribute('title');
                 const tooltipText = tooltipLines.join('\n');
                 cell.onmouseenter = (e) => showCalendarTooltip(e, tooltipText);
-                cell.onmousemove = (e) => showCalendarTooltip(e, tooltipText); // Follow mouse
+                cell.onmousemove = (e) => showCalendarTooltip(e, tooltipText);
                 cell.onmouseleave = () => hideCalendarTooltip();
             }
         }
@@ -6459,6 +6493,204 @@ function filterAdminUsers() {
     renderAdminUsers(filtered);
 }
 
+/* Bulk Manager Assignment */
+let bulkManagerEmployees = [];
+let bulkManagerPotentials = []; // Admins/Managers
+
+async function openAssignManagerModal() {
+    openModal('assignManagerModal');
+    const listEl = document.getElementById('assignManagerList');
+    listEl.innerHTML = `
+        <div style="display:flex; align-items:center; justify-content:center; padding:40px; color:#64748b;">
+            <span class="loading-spinner" style="border-top-color:#1e293b; margin-right:12px;"></span>
+            <span style="margin-left:12px;">Fetching employee data...</span>
+        </div>
+    `;
+
+    try {
+        const res = await apiCall('employees-simple', 'GET');
+        if (res && res.success && Array.isArray(res.employees)) {
+            bulkManagerEmployees = res.employees;
+            bulkManagerPotentials = res.employees; // 🔹 Populate ALL employees as potential managers
+            renderAssignManagerList(bulkManagerEmployees);
+        } else {
+            listEl.innerHTML = `<div style="padding:40px;text-align:center;color:#991b1b;">Failed to load employees.</div>`;
+        }
+    } catch (e) {
+        console.error('Fetch error', e);
+        listEl.innerHTML = `<div style="padding:40px;text-align:center;color:#991b1b;">Error loading data.</div>`;
+    }
+}
+
+function renderAssignManagerList(employees) {
+    const listEl = document.getElementById('assignManagerList');
+    if (!listEl) return;
+
+    if (employees.length === 0) {
+        listEl.innerHTML = `<div style="padding:40px;text-align:center;color:#64748b;">No employees found matching your search.</div>`;
+        return;
+    }
+
+    listEl.innerHTML = employees.map(emp => `
+        <div class="assign-manager-row" style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #f1f5f9; background:white; transition:background 0.2s;">
+            <div style="flex:1; min-width:0; margin-right:20px;">
+                <div style="font-weight:600; color:#1e293b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${emp.name}</div>
+                <div style="font-size:0.8rem; color:#64748b; text-transform:uppercase; letter-spacing:0.5px;">${emp.role}</div>
+            </div>
+            
+            <div style="flex:2; display:flex; gap:12px; align-items:center;">
+                <div class="manager-select-container" style="flex:1; position:relative;">
+                    <div class="bulk-manager-chips" id="chips-${emp.id}" style="display:flex; flex-wrap:wrap; gap:4px; min-height:42px; padding:6px 12px; border:1px solid #e2e8f0; border-radius:8px; cursor:pointer; background:white; align-items:center;" onclick="toggleManagerDropdown(${emp.id})">
+                        ${renderManagerChips(emp.manager_ids || [])}
+                        <span style="margin-left:auto; color:#94a3b8; font-size:10px;">▼</span>
+                    </div>
+                    <div class="bulk-manager-dropdown hidden" id="dropdown-${emp.id}" style="position:absolute; top:100%; left:0; width:100%; max-height:250px; overflow-y:auto; background:white; border:1px solid #e2e8f0; border-radius:8px; box-shadow:0 10px 15px -3px rgba(0,0,0,0.1); z-index:100; margin-top:4px; padding:4px;">
+                        <input type="text" class="form-control" placeholder="Search managers..." style="height:34px; font-size:0.85rem; margin-bottom:8px; border-radius:6px; padding:0 8px;" oninput="filterManagerOptions(this, ${emp.id})" onclick="event.stopPropagation()">
+                        <div class="manager-options" id="options-${emp.id}">
+                            ${renderManagerOptions(emp.id, emp.manager_ids || [])}
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-primary btn-sm" id="btn-save-${emp.id}" onclick="saveManagersForEmployee(${emp.id})" style="height:42px; padding:0 16px; border-radius:8px; font-size:14px; min-width:80px;">
+                    💾 Save
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderManagerChips(managerIds) {
+    if (!managerIds || managerIds.length === 0) return `<span style="color:#94a3b8; font-size:0.85rem;">No managers</span>`;
+    return managerIds.map(id => {
+        const mgr = bulkManagerPotentials.find(m => m.id === id);
+        if (!mgr) return '';
+        return `
+            <div style="background:#eff6ff; color:#1e40af; padding:2px 8px; border-radius:4px; font-size:0.75rem; display:flex; align-items:center; gap:4px; border:1px solid #dbeafe; font-weight:500;">
+                ${mgr.name}
+            </div>
+        `;
+    }).join('');
+}
+
+function renderManagerOptions(empId, currentManagerIds, filter = '') {
+    const managers = !filter ? bulkManagerPotentials : bulkManagerPotentials.filter(m => m.name.toLowerCase().includes(filter.toLowerCase()));
+
+    if (managers.length === 0) return `<div style="padding:10px; text-align:center; color:#94a3b8; font-size:0.85rem;">No managers found</div>`;
+
+    return managers.map(mgr => {
+        const isChecked = currentManagerIds.includes(mgr.id);
+        return `
+            <div class="manager-option" style="display:flex; align-items:center; padding:8px 10px; cursor:pointer; border-radius:6px; transition:background 0.2s;" onclick="toggleManagerSelection(event, ${empId}, ${mgr.id})">
+                <input type="checkbox" style="margin-right:10px; width:16px; height:16px; cursor:pointer;" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleManagerSelection(event, ${empId}, ${mgr.id})">
+                <span style="font-size:0.85rem; color:#334155; user-select:none;">${mgr.name}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function filterAssignManagerList() {
+    const query = document.getElementById('assignManagerSearch').value.toLowerCase();
+    const filtered = bulkManagerEmployees.filter(emp =>
+        emp.name.toLowerCase().includes(query) ||
+        emp.role.toLowerCase().includes(query)
+    );
+    renderAssignManagerList(filtered);
+}
+
+function filterManagerOptions(input, empId) {
+    const emp = bulkManagerEmployees.find(e => e.id === empId);
+    if (!emp) return;
+    const optionsEl = document.getElementById(`options-${empId}`);
+    if (optionsEl) {
+        optionsEl.innerHTML = renderManagerOptions(empId, emp.manager_ids || [], input.value);
+    }
+}
+
+function toggleManagerDropdown(empId) {
+    const dropdown = document.getElementById(`dropdown-${empId}`);
+    if (!dropdown) return;
+
+    const isHidden = dropdown.classList.contains('hidden');
+
+    // Close other dropdowns
+    document.querySelectorAll('.bulk-manager-dropdown').forEach(d => d.classList.add('hidden'));
+
+    if (isHidden) {
+        dropdown.classList.remove('hidden');
+        const searchInput = dropdown.querySelector('input');
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.focus();
+        }
+    }
+}
+
+// Global click handler to close dropdowns
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.manager-select-container')) {
+        document.querySelectorAll('.bulk-manager-dropdown').forEach(d => d.classList.add('hidden'));
+    }
+});
+
+function toggleManagerSelection(event, empId, managerId) {
+    event.stopPropagation();
+    const emp = bulkManagerEmployees.find(e => e.id === empId);
+    if (!emp) return;
+
+    if (!emp.manager_ids) emp.manager_ids = [];
+
+    if (emp.manager_ids.includes(managerId)) {
+        emp.manager_ids = emp.manager_ids.filter(id => id !== managerId);
+    } else {
+        emp.manager_ids.push(managerId);
+    }
+
+    // Update chips
+    const chipsEl = document.getElementById(`chips-${empId}`);
+    if (chipsEl) {
+        chipsEl.innerHTML = renderManagerChips(emp.manager_ids) + '<span style="margin-left:auto; color:#94a3b8; font-size:10px;">▼</span>';
+    }
+
+    // Update options list (to sync checkboxes)
+    const optionsEl = document.getElementById(`options-${empId}`);
+    if (optionsEl) {
+        const searchInput = document.getElementById(`dropdown-${empId}`).querySelector('input');
+        optionsEl.innerHTML = renderManagerOptions(empId, emp.manager_ids, searchInput ? searchInput.value : '');
+    }
+}
+
+async function saveManagersForEmployee(empId) {
+    const emp = bulkManagerEmployees.find(e => e.id === empId);
+    if (!emp) return;
+
+    const btn = document.getElementById(`btn-save-${empId}`);
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span class="loading-spinner" style="width:14px; height:14px; border-width:2px; border-top-color:white;"></span>`;
+    }
+
+    try {
+        const res = await apiCall(`admin-user/${empId}`, 'POST', {
+            manager_ids: emp.manager_ids.length > 0 ? emp.manager_ids : ['none']
+        });
+
+        if (res && res.success) {
+            showNotification(`Updated managers for ${emp.name}`, 'success');
+            refreshAdminUsers(); // Update background tables
+        } else {
+            showNotification(res.message || 'Update failed', 'error');
+        }
+    } catch (e) {
+        console.error('Save error', e);
+        showNotification('An error occurred while saving', 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `💾 Save`;
+        }
+    }
+}
+
 async function refreshManagerDropdown() {
     const sel = document.getElementById('newUserReportingManager');
     if (!sel) return;
@@ -8208,7 +8440,15 @@ function selectRequest(requestId) {
             <div style="display:flex; flex-direction:column; gap:16px; flex: 1;">
                  <div style="background: #f8fafc; padding: 16px; border-radius: 16px;">
                     <span style="font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 8px;">Request Type</span>
-                    <span class="req-badge ${req.type === 'wfh' ? 'badge-tech-wfh' : 'badge-tech-leave'}" style="padding: 8px 16px; border-radius: 10px; font-size: 0.9rem; font-weight: 700;">${typeLabel}</span>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span class="req-badge ${req.type === 'wfh' ? 'badge-tech-wfh' : (req.type === 'unblock_attendance' ? 'badge-tech-blocked' : 'badge-tech-leave')}" style="padding: 8px 16px; border-radius: 10px; font-size: 0.9rem; font-weight: 700;">${typeLabel}</span>
+                        ${req.status !== 'pending' ? `
+                            <div style="text-align:right;">
+                                <span class="premium-badge" style="background: ${req.status === 'approved' ? '#dcfce7' : '#fee2e2'}; color: ${req.status === 'approved' ? '#166534' : '#991b1b'}; border-radius: 8px; padding: 6px 14px; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; display:inline-block; margin-bottom:4px;">${req.status}</span>
+                                ${req.reviewed_by_name ? `<div style="font-size:0.7rem; color:#94a3b8; font-weight:600;">By ${req.is_manager ? 'Manager: ' : ''}${req.reviewed_by_name}</div>` : ''}
+                            </div>
+                        ` : ''}
+                    </div>
                 </div>
 
                 <div style="background: #f8fafc; padding: 16px; border-radius: 16px;">
