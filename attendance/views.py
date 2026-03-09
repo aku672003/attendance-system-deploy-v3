@@ -2441,6 +2441,8 @@ def pending_requests(request):
                 'end_date': str(req.end_date),
                 'reason': req.reason,
                 'status': req.status,
+                'reviewed_by_name': req.reviewed_by.name if req.reviewed_by else None,
+                'is_manager': req.reviewed_by in req.employee.managers.all() if req.reviewed_by else False,
                 'created_at': req.created_at.isoformat()
             })
 
@@ -2483,6 +2485,8 @@ def my_requests(request):
                 'reason': req.reason,
                 'status': req.status,
                 'admin_response': req.admin_response,
+                'reviewed_by_name': req.reviewed_by.name if req.reviewed_by else None,
+                'is_manager': req.reviewed_by in req.employee.managers.all() if req.reviewed_by else False,
                 'created_at': req.created_at.isoformat()
             })
 
@@ -2999,7 +3003,7 @@ def employees_simple_list(request):
                 'id': emp.id,
                 'name': emp.name,
                 'role': emp.role,
-                'manager_id': emp.managers.all()[0].id if emp.managers.exists() else None
+                'manager_ids': [m.id for m in emp.managers.all()]
             })
             
         return Response({
@@ -3222,6 +3226,7 @@ def leave_request_approve(request):
         request_id = data.get('request_id')
         status_val = data.get('status', 'approved') # approved or rejected
         admin_response = data.get('admin_response', '')
+        reviewer_id = data.get('reviewed_by')
 
         try:
             req = EmployeeRequest.objects.get(id=request_id)
@@ -3231,6 +3236,18 @@ def leave_request_approve(request):
         req.status = status_val
         req.admin_response = admin_response
         req.reviewed_at = timezone.now()
+        
+        if reviewer_id:
+            try:
+                req.reviewed_by = Employee.objects.get(id=reviewer_id)
+            except:
+                pass
+
+        if not req.reviewed_by:
+            admin_user = Employee.objects.filter(role='admin').first()
+            if admin_user:
+                req.reviewed_by = admin_user
+
         req.save()
 
         # If approved, create or update AttendanceRecord to reflect in calendar
