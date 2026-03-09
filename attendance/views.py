@@ -2841,8 +2841,9 @@ def task_detail_api(request, task_id):
         if request.method == 'POST':
             # Check for DELETE method simulation
             if data.get('_method') == 'DELETE':
-                if requesting_user.role != 'admin': # Only Admin deletes
-                    return Response({'success': False, 'message': 'Only Admin can delete tasks'}, status=status.HTTP_403_FORBIDDEN)
+                is_task_manager = task.manager and task.manager.id == requesting_user.id
+                if requesting_user.role != 'admin' and not is_task_manager:
+                    return Response({'success': False, 'message': 'Unauthorized to delete this task'}, status=status.HTTP_403_FORBIDDEN)
 
                 task.delete()
                 return Response({'success': True, 'message': 'Task deleted'})

@@ -2490,7 +2490,7 @@ function renderTaskBoard() {
                         <span class="premium-priority-badge ${priorityClass}" style="border-radius: 6px; padding: 4px 10px;">${task.priority || 'Medium'}</span>
                         ${dueBadge}
                         <div style="display:flex; gap:8px;">
-                            ${typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.has_subordinates) ? `
+                            ${typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || task.manager_id === currentUser.id || currentUser.role === 'manager' || currentUser.has_subordinates) ? `
                             <button class="btn-icon-sm" onclick="event.stopPropagation(); editTask(${task.id})" style="background:#f1f5f9; border:none; color:#64748b; cursor:pointer; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; transition:all 0.2s;" title="Edit">✎</button>
                             <button class="btn-icon-sm" onclick="event.stopPropagation(); deleteTask(${task.id})" style="background:#fef2f2; border:none; color:#ef4444; cursor:pointer; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; transition:all 0.2s;" title="Delete">🗑</button>
                             ` : ''}
@@ -2616,8 +2616,14 @@ function renderMyTaskBoard() {
                     <div class="premium-card-header" style="margin-bottom: 0;">
                         <span class="premium-priority-badge ${priorityClass}" style="border-radius: 6px; padding: 4px 10px;">${task.priority || 'Medium'}</span>
                         ${dueBadge}
+                        <div style="display:flex; gap:8px; margin-left: auto;">
+                            ${typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || task.manager_id === currentUser.id) ? `
+                            <button class="btn-icon-sm" onclick="event.stopPropagation(); editTask(${task.id})" style="background:#f1f5f9; border:none; color:#64748b; cursor:pointer; width:28px; height:28px; border-radius:6px; display:flex; align-items:center; justify-content:center; transition:all 0.2s; font-size: 10px;" title="Edit">✎</button>
+                            <button class="btn-icon-sm" onclick="event.stopPropagation(); deleteTask(${task.id})" style="background:#fef2f2; border:none; color:#ef4444; cursor:pointer; width:28px; height:28px; border-radius:6px; display:flex; align-items:center; justify-content:center; transition:all 0.2s; font-size: 10px;" title="Delete">🗑</button>
+                            ` : ''}
+                        </div>
                         ${task.comments && task.comments.length > 0 ? `
-                            <span style="font-size:0.75rem; color:#3b82f6; font-weight: 600;">💬 ${task.comments.length}</span>
+                            <span style="font-size:0.75rem; color:#3b82f6; font-weight: 600; margin-left:8px;">💬 ${task.comments.length}</span>
                         ` : ''}
                     </div>
                     
@@ -2717,12 +2723,10 @@ function addNewTask() {
  * Populate Edit Task Modal
  */
 async function editTask(taskId) {
-    if (!tasks || !Array.isArray(tasks)) {
-        showNotification('Task data not loaded', 'error');
-        return;
-    }
+    // Check both global task arrays (Task Manager and My Tasks)
+    const task = (tasks && Array.isArray(tasks) ? tasks.find(t => t.id === taskId) : null) ||
+        (myTasks && Array.isArray(myTasks) ? myTasks.find(t => t.id === taskId) : null);
 
-    const task = tasks.find(t => t.id === taskId);
     if (!task) {
         showNotification('Task not found', 'error');
         return;
@@ -3010,6 +3014,7 @@ async function deleteTask(taskId) {
         if (res && res.success) {
             showNotification('Task deleted');
             await refreshTasks();
+            if (typeof refreshMyTasks === 'function') await refreshMyTasks();
             await loadActiveTasks(); // Update dashboard count
         } else {
             showNotification('Failed to delete task: ' + (res?.message || 'Unauthorized'), 'error');
