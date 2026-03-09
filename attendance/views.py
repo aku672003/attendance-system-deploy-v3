@@ -625,16 +625,13 @@ def check_out(request):
     now_local = timezone.localtime(timezone.now())
     
     try:
-        # Find the latest record that is NOT checked out
-        # This handles the case where they forgot to check out yesterday
+        # Find the latest record that has a check-in but no check-out
         record = AttendanceRecord.objects.filter(
             employee_id=employee_id, 
+            check_in_time__isnull=False,
             check_out_time__isnull=True
-        ).exclude(status='absent').latest('date')
+        ).exclude(status__in=['absent', 'leave']).latest('date')
 
-        # Logic to handle if the session is too old (e.g., from yesterday)
-        # You can choose to auto-close it or allow the checkout now.
-        
         check_in_t = datetime.strptime(str(record.check_in_time), '%H:%M:%S').time()
         check_in_dt = timezone.make_aware(datetime.combine(record.date, check_in_t))
         
@@ -651,6 +648,8 @@ def check_out(request):
         return Response({'success': True, 'message': 'Checked out successfully'})
     except AttendanceRecord.DoesNotExist:
         return Response({'success': False, 'message': 'No active session found.'}, status=404)
+    except Exception as e:
+        return Response({'success': False, 'message': f'Check-out failed: {str(e)}'}, status=500)
 
 @api_view(['GET'])
 def today_attendance(request):
@@ -740,6 +739,9 @@ def attendance_records(request):
             records_qs = records_qs.filter(date__gte=start_date)
         if end_date:
             records_qs = records_qs.filter(date__lte=end_date)
+        else:
+            # Default: only show records up to today (hide future-dated records)
+            records_qs = records_qs.filter(date__lte=today)
         if att_type:
             records_qs = records_qs.filter(type=att_type)
 
@@ -3469,23 +3471,13 @@ def intelligence_hub_training_history(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
+@parser_classes([JSONParser])
 def clear_training_history(request):
     """Clear all model training history"""
     try:
-        # Use token-based auth: extract user_id from Authorization header
-        auth_header = request.headers.get('Authorization', '')
-        token = auth_header.replace('Bearer ', '').strip()
-        
-        if not token:
-            return Response({'success': False, 'message': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
-        
-        try:
-            import jwt
-            from django.conf import settings
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
-            user_id = payload.get('user_id')
-        except Exception:
-            return Response({'success': False, 'message': 'Invalid token'}, status=status.HTTP_401_UNAUTHORIZED)
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({'success': False, 'message': 'User ID required'}, status=status.HTTP_400_BAD_REQUEST)
         
         user = Employee.objects.filter(id=user_id).first()
         if not user or user.role != 'admin':

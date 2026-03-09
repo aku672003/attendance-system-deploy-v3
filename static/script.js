@@ -8455,7 +8455,7 @@ async function confirmClearHistory() {
     const container = document.getElementById('trainingHistoryItems');
 
     try {
-        const result = await apiCall('clear-training-history', 'POST');
+        const result = await apiCall('clear-training-history', 'POST', { user_id: currentUser?.id });
         closeModal('clearHistoryModal');
         if (result.success) {
             showNotification('Training history cleared successfully', 'success');
