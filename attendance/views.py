@@ -720,6 +720,8 @@ def attendance_records(request):
     is_manager = user and (user.role == 'manager' or (user.role != 'admin' and user.subordinates.exists()))
 
     # Auto-mark absentees only after 6 PM (scheduler handles the main trigger)
+    now = timezone.localtime(timezone.now())
+    today = now.date()
     if now.hour >= 18:
         mark_absentees_for_date(today)
 
