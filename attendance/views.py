@@ -804,16 +804,19 @@ def mark_absentees_for_date(target_date):
 
         absentees = set(all_employees) - set(existing_records)
 
-        for emp_id in absentees:
-            AttendanceRecord.objects.create(
-                employee_id=emp_id,
-                date=target_date,
-                status='absent',
-                type='office',
-                total_hours=0
-            )
-    except:
-        pass
+        if absentees:
+            new_records = [
+                AttendanceRecord(
+                    employee_id=emp_id,
+                    date=target_date,
+                    status='absent',
+                    type='office',
+                    total_hours=0
+                ) for emp_id in absentees
+            ]
+            AttendanceRecord.objects.bulk_create(new_records, ignore_conflicts=True)
+    except Exception as e:
+        print(f"Error marking absentees: {e}")
 
 
 @api_view(['GET'])
@@ -845,38 +848,30 @@ def monthly_stats(request):
             start_date__month=month
         ).count()
 
-        # Count records with status 'leave' in AttendanceRecord (standard fallback)
-        leave_records = records.filter(status='leave').count()
-        
-        # Use simple addition or max? Frontend overrides absent with request.
-        # Most accurate: take total from requests if they are the primary source.
-        total_leave_days = max(leave_records, leave_requests)
+        from django.db.models import Count, Case, When, Sum, Q
 
-        # Count approved half-day requests from EmployeeRequest table
-        half_day_requests = EmployeeRequest.objects.filter(
-            employee_id=employee_id,
-            request_type='half_day',
-            status='approved',
-            start_date__year=year,
-            start_date__month=month
-        ).count()
+        stats_data = records.aggregate(
+            total_working_days=Count(Case(When(status__in=['present', 'half_day', 'wfh', 'client'], then=1))),
+            weekday_present_days=Count(Case(When(Q(status__in=['present', 'half_day', 'wfh', 'client']) & Q(date__week_day__in=[2, 3, 4, 5, 6]), then=1))),
+            total_hours_sum=Sum('total_hours'),
+            half_day_records=Count(Case(When(is_half_day=True, then=1))),
+            wfh_days=Count(Case(When(type='wfh', then=1))),
+            office_days=Count(Case(When(type='office', status='present', then=1))),
+            client_days=Count(Case(When(type='client', then=1))),
+            leave_records=Count(Case(When(status='leave', then=1))),
+        )
 
-        # Count records with is_half_day=True in AttendanceRecord
-        half_day_records = records.filter(is_half_day=True).count()
-        
-        total_half_days = max(half_day_records, half_day_requests)
+        total_leave_days = max(stats_data['leave_records'], leave_requests)
+        total_half_days = max(stats_data['half_day_records'], half_day_requests)
 
         stats = {
-            'total_working_days': records.filter(Q(status='present') | Q(status='half_day') | Q(status='wfh') | Q(status='client')).count(),
-            'weekday_present_days': records.filter(
-                Q(status='present') | Q(status='half_day') | Q(status='wfh') | Q(status='client'),
-                date__week_day__in=[2, 3, 4, 5, 6]
-            ).count(),
-            'total_hours': float(records.aggregate(Sum('total_hours'))['total_hours__sum'] or 0),
+            'total_working_days': stats_data['total_working_days'],
+            'weekday_present_days': stats_data['weekday_present_days'],
+            'total_hours': float(stats_data['total_hours_sum'] or 0),
             'half_days': total_half_days,
-            'wfh_days': records.filter(type='wfh').count(),
-            'office_days': records.filter(type='office', status='present').count(),
-            'client_days': records.filter(type='client').count(),
+            'wfh_days': stats_data['wfh_days'],
+            'office_days': stats_data['office_days'],
+            'client_days': stats_data['client_days'],
             'leave_days': total_leave_days,
         }
 

@@ -153,6 +153,7 @@ document.addEventListener("dblclick", e => {
 function openModal(id) {
     const el = document.getElementById(id);
     if (!el) return;
+    if (el.classList.contains('active')) return; // Guard against multiple opens
     el.classList.add('active');
     document.body.style.overflow = 'hidden';
 }
@@ -1093,24 +1094,29 @@ async function loadDashboardData() {
             document.getElementById('btnMyStats') && (document.getElementById('btnMyStats').style.display = '');
         }
 
-        // 1. Run location check first and get its status
+        // 1. Kick off location check in the background (non-blocking)
         let isUserInRange = false;
-        try {
-            const locationStatus = await updateLocationStatus(false);
-            isUserInRange = locationStatus ? locationStatus.inRange : false;
-        } catch (e) {
+        const locationPromise = updateLocationStatus(false).then(status => {
+            isUserInRange = status ? status.inRange : false;
+            // Re-trigger attendance load if location actually mattered
+            loadTodayAttendance(isUserInRange);
+            return isUserInRange;
+        }).catch(e => {
             console.error("Error updating location status:", e);
-        }
+            return false;
+        });
 
         // Check location permission and gate the Check In card
         checkLocationPermission();
-
-        // 2. Now run other checks, passing the location status
-        try { await loadTodayAttendance(isUserInRange); } catch (e) { console.error(e); }
-        try { await loadMonthlyStats(); } catch (e) { console.error(e); }
-        try { await loadWFHEligibility(); } catch (e) { console.error(e); }
-        try { await loadIntelligenceHubData(); } catch (e) { console.error(e); }
-        try { await loadMentorStatus(); } catch (e) { console.error(e); }
+        
+        // Parallelized Loading for secondary dashboard cards
+        await Promise.all([
+            (async () => { try { await loadTodayAttendance(isUserInRange); } catch (e) { console.error(e); } })(),
+            (async () => { try { await loadMonthlyStats(); } catch (e) { console.error(e); } })(),
+            (async () => { try { await loadWFHEligibility(); } catch (e) { console.error(e); } })(),
+            (async () => { try { await loadIntelligenceHubData(); } catch (e) { console.error(e); } })(),
+            (async () => { try { await loadMentorStatus(); } catch (e) { console.error(e); } })()
+        ]);
 
         // Check profile completeness for non-admin users
         if (currentUser.role !== 'admin') {
@@ -3344,17 +3350,28 @@ function hideCalendarTooltip() {
     }
 }
 
+let isCalendarBuilding = false;
 async function openAttendanceCalendar() {
     if (!currentUser) {
         showNotification('Please login first', 'error');
         return;
     }
+    
+    if (isCalendarBuilding) return; // Guard against multiple builds
 
-    const now = getCurrentISTDate();
-    currentCalendarMonth = now.getMonth();
-    currentCalendarYear = now.getFullYear();
-    await buildAttendanceCalendar(currentCalendarYear, currentCalendarMonth);
-    openModal('calendarModal');
+    const modal = document.getElementById('calendarModal');
+    if (modal && modal.classList.contains('active')) return;
+
+    isCalendarBuilding = true;
+    try {
+        const now = getCurrentISTDate();
+        currentCalendarMonth = now.getMonth();
+        currentCalendarYear = now.getFullYear();
+        await buildAttendanceCalendar(currentCalendarYear, currentCalendarMonth);
+        openModal('calendarModal');
+    } finally {
+        isCalendarBuilding = false;
+    }
 }
 
 async function changeCalendarMonth(offset) {
@@ -5563,8 +5580,11 @@ async function loadAttendanceRecords(isMore = false) {
             }
         }
 
+        const isAdminOrManager = currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.has_subordinates;
+        const batchSize = isAdminOrManager ? 1 : 10;
+
         const params = {
-            days_limit: 1,
+            days_limit: batchSize,
             days_offset: attendanceDaysOffset
         };
 
@@ -5617,7 +5637,9 @@ async function loadAttendanceRecords(isMore = false) {
 }
 
 async function loadMoreAttendanceRecords() {
-    attendanceDaysOffset++;
+    const isAdminOrManager = currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.has_subordinates;
+    const batchSize = isAdminOrManager ? 1 : 10;
+    attendanceDaysOffset += batchSize;
     await loadAttendanceRecords(true);
 }
 
@@ -5650,7 +5672,7 @@ function renderAttendanceTable(records) {
         ${attendanceHasMore ? `
             <div class="text-center" style="margin-top: 24px; margin-bottom: 40px;">
                 <button id="loadMoreAttendanceBtn" class="btn btn-primary" onclick="loadMoreAttendanceRecords()" style="padding: 12px 32px; font-weight: 600; border-radius: 12px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);">
-                    Load Previous Day
+                    ${(currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.has_subordinates) ? 'Load Previous Day' : 'Load Previous 10 Days'}
                 </button>
             </div>
         ` : ''}
