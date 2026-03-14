@@ -16,9 +16,183 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
+    <!-- Three.js for 3D Avatar Rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/controls/OrbitControls.js"></script>
+
     <!-- External Stylesheet -->
     {% load static %}
     <link rel="stylesheet" href="{% static 'style.css' %}">
+    <style>
+        /* Apple-Style Emoji/Avatar Picker Refinements */
+        .emoji-picker-container {
+            background: #000000;
+            color: #fff;
+            border-radius: 20px;
+            box-shadow: 0 40px 100px rgba(0,0,0,0.8);
+            border: 1px solid rgba(255,255,255,0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .emoji-picker-header {
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .emoji-picker-header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        .emoji-picker-body {
+            display: flex;
+            height: 400px;
+        }
+        .emoji-sidebar-wrapper {
+            width: 220px;
+            background: rgba(255,255,255,0.02);
+            border-right: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            flex-direction: column;
+        }
+        .emoji-sidebar {
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+            overflow-y: auto;
+        }
+        .emoji-cat {
+            padding: 10px 14px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 14px;
+        }
+        .emoji-cat:hover { background: rgba(255,255,255,0.05); }
+        .emoji-cat.active { background: var(--primary-color); color: white; }
+        
+        .emoji-preview-section {
+            padding: 20px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+        .emoji-preview-circle {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: 3px solid rgba(255,255,255,0.1);
+            background: #000;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .apple-range-slider {
+            width: 100%;
+            height: 4px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+        }
+        .apple-range-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #fff;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+
+        .emoji-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .emoji-segmented-control {
+            padding: 12px 16px;
+            display: flex;
+            background: rgba(0,0,0,0.1);
+            gap: 4px;
+        }
+        .emoji-segmented-control button {
+            flex: 1;
+            background: rgba(255,255,255,0.05);
+            border: none;
+            color: rgba(255,255,255,0.6);
+            padding: 6px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .emoji-segmented-control button.segment-active {
+            background: #444;
+            color: #fff;
+        }
+        
+        #avatarGrid::-webkit-scrollbar { width: 6px; }
+        #avatarGrid::-webkit-scrollbar-track { background: transparent; }
+        #avatarGrid::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        
+        .emoji-picker-footer {
+            padding: 16px 20px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            background: rgba(0,0,0,0.1);
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+
+        /* New Avatar Features Styles */
+        .photo-upload-zone {
+            border: 2px dashed rgba(255,255,255,0.2);
+            border-radius: 12px;
+            padding: 30px;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: rgba(255,255,255,0.03);
+        }
+        .photo-upload-zone:hover {
+            border-color: var(--primary-color);
+            background: rgba(255,255,255,0.05);
+        }
+        .color-preset {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: transform 0.2s;
+        }
+        .color-preset:hover { transform: scale(1.1); }
+        .color-preset.active { border-color: #fff; transform: scale(1.1); }
+        
+        .progress-bar-container {
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            margin-bottom: 4px;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            background: var(--primary-color);
+            transition: width 0.3s ease;
+        }
+    </style>
 </head>
 
 <body>
@@ -118,6 +292,211 @@
             </div>
         </div>
     </div>
+
+    <!-- Appearance / Personalization Modal -->
+    <div id="appearanceModal" class="modal">
+        <div class="modal-content appearance-modal-box">
+            <div class="appearance-modal-header">
+                <div id="prefAvatarPreview" class="appearance-avatar-preview-circle">👤</div>
+                <div style="text-align:left; min-width:0; flex:1;">
+                    <h3 style="margin:0; color:white; font-size:1.2rem;">Personalize Dashboard</h3>
+                    <p style="margin:4px 0 0; opacity:0.8; font-size:0.8rem;">Express yourself and customize your view</p>
+                </div>
+                <button class="close-btn" onclick="closeModal('appearanceModal')" style="color:white; font-size:24px; background:none; border:none; cursor:pointer;">&times;</button>
+            </div>
+
+            <div class="appearance-modal-scroll-body">
+                <div class="appearance-section-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:20px;">
+                    <!-- Avatar Section -->
+                    <div class="appearance-section-card" style="margin-bottom:0;">
+                        <label class="appearance-section-title">👤 Your Avatar</label>
+                        <div class="appearance-avatar-options">
+                            <div style="text-align:center;">
+                                <button type="button" id="customAvatarBtn" class="appearance-avatar-btn" onclick="openEmojiPicker()">😀</button>
+                                <p class="appearance-avatar-label">Emoji/Icon</p>
+                            </div>
+                            <div style="text-align:center;">
+                                <button type="button" id="create3DAvatarBtn" class="appearance-avatar-btn" disabled style="cursor: not-allowed; opacity: 0.6;">👤</button>
+                                <p class="appearance-avatar-label">3D Avatar</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Theme Section -->
+                    <div class="appearance-section-card" style="margin-bottom:0;">
+                        <label class="appearance-section-title">🌓 Theme</label>
+                        <div class="appearance-theme-toggle-row">
+                            <span style="font-size:16px;">☀️</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="darkModeToggle" onchange="toggleDarkModePreview()">
+                                <span class="slider round"></span>
+                            </label>
+                            <span style="font-size:16px;">🌙</span>
+                        </div>
+                        <p style="font-size:11px; color:var(--gray-500); margin-top:12px;">Toggle between light and dark mode</p>
+                    </div>
+                </div>
+
+                <!-- Background Section -->
+                <div class="appearance-section-card" style="margin-top:24px;">
+                    <label class="appearance-section-title">🎨 Dashboard Background</label>
+                    <p style="font-size:11px; color:var(--gray-500); margin-bottom:16px;">Customize your gradient by selecting corners and choosing colors.</p>
+                    
+                    <div class="appearance-gradient-controls" style="display:flex; align-items: center; gap:20px;">
+                        <div class="corner-selector-premium">
+                            <button class="corner-btn-premium tl active" onclick="setActiveCorner('tl')" title="Top Left">TL</button>
+                            <button class="corner-btn-premium tr" onclick="setActiveCorner('tr')" title="Top Right">TR</button>
+                            <button class="corner-btn-premium bl" onclick="setActiveCorner('bl')" title="Bottom Left">BL</button>
+                            <button class="corner-btn-premium br" onclick="setActiveCorner('br')" title="Bottom Right">BR</button>
+                        </div>
+                        <div id="hexColorGridTrigger" style="flex:1;">
+                            <button class="spectrum-trigger-premium" onclick="toggleAdvancedColorPicker(true)">
+                                <span style="display:flex; align-items:center; gap:10px;">🌈 Spectrum Picker</span>
+                                <span style="opacity:0.6; font-size:11px;">Open &rsaquo;</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="live-preview-premium" id="gradientPreviewSmall">
+                        <div class="preview-label">Live Preview</div>
+                    </div>
+                </div>
+
+                <div id="appearanceMsg" style="margin-top:12px; font-size:13px; min-height:18px; text-align:center; font-weight:600;"></div>
+            </div>
+
+            <div class="appearance-footer">
+                <button id="editDashboardBtn" onclick="toggleEditMode(); closeModal('appearanceModal');" class="btn btn-subtle btn-full-width" style="height:46px; border-radius:14px; font-weight:600;">
+                    ✏️ Edit Dashboard Layout
+                </button>
+                <div class="appearance-save-row">
+                    <button class="btn btn-secondary" style="flex:1; height:46px; border-radius:14px; font-weight:600;" onclick="closeModal('appearanceModal')">Cancel</button>
+                    <button class="btn btn-primary" style="flex:2; height:46px; border-radius:14px; font-weight:600;" onclick="saveAppearanceSettings()">Apply & Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Apple-style Emoji Picker Modal -->
+    <div id="emojiPickerModal" class="modal">
+        <div class="modal-content emoji-picker-container">
+            <div class="emoji-picker-header">
+                <h3>Personalize Avatar</h3>
+                <button class="close-btn" onclick="closeEmojiPicker()">&times;</button>
+            </div>
+            <div class="emoji-picker-body">
+                <div class="emoji-sidebar-wrapper">
+                    <div class="emoji-sidebar" id="emojiSidebar">
+                        <!-- Categories will be rendered here -->
+                    </div>
+                    <div class="emoji-preview-section">
+                        <div class="emoji-preview-circle" id="emojiPreviewCircle">
+                            <!-- Preview injected here -->
+                        </div>
+                        <input type="range" class="apple-range-slider" id="emojiZoomSlider" value="50" min="0" max="100">
+                    </div>
+                </div>
+                <div class="emoji-main">
+                    <div class="emoji-segmented-control" id="emojiSegmentedControl">
+                        <button class="segment-active" onclick="selectAvatarSegment('emoji')">Emoji</button>
+                        <button onclick="selectAvatarSegment('photo')">Photo</button>
+                        <button onclick="selectAvatarSegment('text')">Text</button>
+                    </div>
+                    
+                    <!-- Emoji Grid (Existing) -->
+                    <div id="emojiGrid">
+                        <!-- Emojis will be rendered here -->
+                    </div>
+
+                    <!-- Photo Upload Interface -->
+                    <div id="photoAvatarSection" class="hidden" style="padding: 20px; text-align: center;">
+                        <input type="file" id="avatarPhotoInput" hidden accept="image/*" onchange="previewAvatarPhoto(this)">
+                        <div class="photo-upload-zone" onclick="document.getElementById('avatarPhotoInput').click()">
+                            <span style="font-size: 40px; display: block; margin-bottom: 10px;">📸</span>
+                            <p>Tap to choose a photo</p>
+                            <small class="text-muted">Max 2MB. JPG or PNG</small>
+                        </div>
+                        <div id="photoUploadProgress" class="hidden" style="margin-top: 15px;">
+                            <div class="progress-bar-container">
+                                <div class="progress-bar" id="avatarUploadBar" style="width: 0%"></div>
+                            </div>
+                            <small id="photoUploadStatus">Uploading...</small>
+                        </div>
+                    </div>
+
+                    <!-- Text/Emoji Input Interface -->
+                    <div id="textAvatarSection" class="hidden" style="padding: 20px;">
+                        <div class="form-group">
+                            <label class="form-label">Type 1-2 characters or an emoji</label>
+                            <input type="text" id="avatarTextInput" class="form-control" maxlength="2" placeholder="Aa" oninput="updateTextAvatarPreview()" style="font-size: 24px; text-align: center; height: 60px;">
+                        </div>
+                        <div class="form-group" style="margin-top: 15px;">
+                            <label class="form-label">Background Color</label>
+                            <div class="color-presets" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                <div class="color-preset" style="background:#ef4444" onclick="setTextAvatarBg('#ef4444')"></div>
+                                <div class="color-preset" style="background:#f59e0b" onclick="setTextAvatarBg('#f59e0b')"></div>
+                                <div class="color-preset" style="background:#10b981" onclick="setTextAvatarBg('#10b981')"></div>
+                                <div class="color-preset" style="background:#3b82f6" onclick="setTextAvatarBg('#3b82f6')"></div>
+                                <div class="color-preset" style="background:#6366f1" onclick="setTextAvatarBg('#6366f1')"></div>
+                                <div class="color-preset" style="background:#8b5cf6" onclick="setTextAvatarBg('#8b5cf6')"></div>
+                                <div class="color-preset" style="background:#ec4899" onclick="setTextAvatarBg('#ec4899')"></div>
+                                <div class="color-preset" style="background:#000000" onclick="setTextAvatarBg('#000000')"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="emoji-picker-footer">
+                <button class="btn btn-secondary" onclick="closeEmojiPicker()">Cancel</button>
+                <button class="btn btn-primary" onclick="confirmEmojiSelection()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Avatar Picker Modal (Apple Account style) -->
+    <div id="createMemojiModal" class="modal">
+        <div class="modal-content emoji-picker-container" style="width: 690px;">
+            <!-- Header -->
+            <div class="emoji-picker-header">
+                <h3>Select Avatar</h3>
+                <button class="close-btn" onclick="closeCreateMemoji()">&times;</button>
+            </div>
+
+            <!-- Body: sidebar + grid -->
+            <div class="emoji-picker-body">
+                <!-- Left sidebar: preview -->
+                <div class="emoji-sidebar-wrapper">
+                    <div class="emoji-sidebar" id="avatarStyleSidebar">
+                        <!-- Style categories injected by JS -->
+                    </div>
+                    <div class="emoji-preview-section">
+                        <div class="emoji-preview-circle" id="avatarPreviewCircle" style="overflow:hidden; border-radius:50%; background:#1a1a2e;">
+                            <!-- Selected avatar preview -->
+                        </div>
+                        <input type="range" class="apple-range-slider" id="avatarZoomSlider" value="50" min="0" max="100">
+                    </div>
+                </div>
+
+                <!-- Main: segmented control + avatar grid -->
+                <div class="emoji-main">
+                    <div class="emoji-segmented-control" id="avatarSegmentedControl">
+                        <!-- Segments injected by JS -->
+                    </div>
+                    <div id="avatarGrid" style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; padding:8px; overflow-y:auto; max-height:330px;">
+                        <!-- Avatar cards injected by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="emoji-picker-footer">
+                <button class="btn btn-secondary" onclick="closeCreateMemoji()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveGenerated3DAvatar()">Save</button>
+            </div>
+        </div>
+    </div>
+
+
 
     <!-- Map Modal -->
     <div id="mapModal" class="map-modal">
@@ -223,8 +602,22 @@
             <div class="header">
                 <div class="header-title">Attendance Dashboard</div>
                 <div class="header-user">
-                    <span class="user-welcome">Welcome, <span id="userName">User</span></span>
+                    <!-- Edit Dashboard button moved to Personalize Dashboard modal -->
+                    <span class="user-welcome" onclick="openAppearanceModal()"
+                        style="cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'"
+                        onmouseout="this.style.opacity='1'">
+                        Welcome, <span id="userAvatar">👤</span> <span id="userName"
+                            style="text-decoration: underline; text-underline-offset: 4px; color: var(--primary-color);">User</span>
+                    </span>
                     <button onclick="logout()" class="btn btn-secondary">Logout</button>
+                </div>
+            </div>
+
+            <!-- Edit Actions Bar (Floating) -->
+            <div class="edit-actions-bar" id="editActionsBar">
+                <div class="edit-btn-group">
+                    <button class="btn btn-secondary btn-sm" onclick="cancelLayoutChanges()">Cancel</button>
+                    <button class="btn btn-primary btn-sm" onclick="saveDashboardLayout()">Save Layout</button>
                 </div>
             </div>
 
@@ -255,24 +648,45 @@
                 </div>
             </div>
 
+            <!-- Mentor Status Banner -->
+            <div id="mentorStatusSection" style="display: none; margin-bottom: 24px;">
+                <h4 style="font-size: 0.85rem; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Your Mentor</h4>
+                <div id="mentorStatusContainer">
+                    <!-- Filled in via JS -->
+                </div>
+            </div>
+
             <!-- Profile Completion Alert -->
             <div id="profileCompletionAlert" class="hidden" style="margin-bottom: 20px;"></div>
 
             <!-- Employee Stats Grid (shown for non-admin users) -->
             <div class="stats-grid" id="employeeStatsGrid">
-                <div class="stat-card">
+                <!-- Each widget must have a unique ID and data-size for layout persistence -->
+                <div class="stat-card" id="widget-today-status" draggable="false">
                     <div class="stat-card-title">Today's Status</div>
                     <div class="stat-card-value" id="todayStatus">Not Marked</div>
                     <div class="stat-card-timing" id="todayTiming"></div>
+                    <div id="todayMapPreview" style="height: 60px; margin-top: 10px; border-radius: 8px; overflow: hidden; display: none;"></div>
+                    <div class="widget-resize-controls">
+                        <button class="resize-btn" onclick="resizeWidget('widget-today-status', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-today-status', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-today-status', 'lg')">L</button>
+                    </div>
                 </div>
-                <div class="stat-card calendar-card" onclick="openAttendanceCalendar()"
-                    style="padding: 12px; display: flex; flex-direction: column; justify-content: center; cursor: pointer;">
+                
+                <div class="stat-card calendar-card" id="widget-mini-calendar" onclick="openAttendanceCalendar()"
+                    style="padding: 12px; display: flex; flex-direction: column; justify-content: center; cursor: pointer;" draggable="false">
                     <div id="miniCalendarContainer"
                         style="width: 100%; height: 100%; display: flex; flex-direction: column;"></div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('widget-mini-calendar', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-mini-calendar', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-mini-calendar', 'lg')">L</button>
+                    </div>
                 </div>
 
                 <!-- Premium Status Card -->
-                <div class="stat-card status-card premium-glass" onclick="openMyRequests()">
+                <div class="stat-card status-card premium-glass" id="widget-requests" onclick="openMyRequests()" draggable="false">
                     <div class="card-glow"></div>
 
                     <!-- SVG Gradient Definitions -->
@@ -296,11 +710,11 @@
                         <!-- WFH Section -->
                         <div class="status-metric">
                             <div class="progress-ring-container">
-                                <svg class="progress-ring" width="80" height="80">
+                                <svg class="progress-ring" width="60" height="60">
                                     <circle class="progress-ring-bg" stroke="rgba(0,0,0,0.05)" stroke-width="6"
-                                        fill="transparent" r="32" cx="40" cy="40" />
+                                        fill="transparent" r="26" cx="30" cy="30" />
                                     <circle class="progress-ring-fill" id="wfhRing" stroke="url(#gradientWFH)"
-                                        stroke-width="6" fill="transparent" r="32" cx="40" cy="40" />
+                                        stroke-width="6" fill="transparent" r="26" cx="30" cy="30" />
                                 </svg>
                                 <div class="metric-icon">🏠</div>
                             </div>
@@ -315,11 +729,11 @@
                         <!-- Leaves Section -->
                         <div class="status-metric">
                             <div class="progress-ring-container">
-                                <svg class="progress-ring" width="80" height="80">
+                                <svg class="progress-ring" width="60" height="60">
                                     <circle class="progress-ring-bg" stroke="rgba(0,0,0,0.05)" stroke-width="6"
-                                        fill="transparent" r="32" cx="40" cy="40" />
+                                        fill="transparent" r="26" cx="30" cy="30" />
                                     <circle class="progress-ring-fill" id="leavesRing" stroke="url(#gradientLeaves)"
-                                        stroke-width="6" fill="transparent" r="32" cx="40" cy="40" />
+                                        stroke-width="6" fill="transparent" r="26" cx="30" cy="30" />
                                 </svg>
                                 <div class="metric-icon">✈️</div>
                             </div>
@@ -329,16 +743,25 @@
                             </div>
                         </div>
                     </div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('widget-requests', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-requests', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-requests', 'lg')">L</button>
+                    </div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" id="widget-location" draggable="false">
                     <div class="stat-card-title">Location Status</div>
                     <div class="stat-card-value" id="locationStatus">Checking...</div>
                     <div class="stat-card-timing" id="locationDistance"></div>
+                    <div class="widget-resize-controls">
+                        <button class="resize-btn" onclick="resizeWidget('widget-location', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-location', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-location', 'lg')">L</button>
+                    </div>
                 </div>
 
                 <!-- Intelligence Hub Card (Employee Version) -->
-                <div class="stat-card intelligence-hub-card hidden" id="intelligenceHubCardEmployee"
-                    style="grid-column: span 1; min-height: 250px;">
+                <div class="stat-card intelligence-hub-card hidden" id="intelligenceHubCardEmployee" draggable="false">
                     <div class="intelligence-hub-header">
                         <div class="intelligence-hub-title-group">
                             <span class="intelligence-hub-icon">🧠</span>
@@ -346,17 +769,14 @@
                         </div>
                     </div>
 
-                    <div class="intelligence-hub-content-row"
-                        style="flex-direction: column; gap: 16px; align-items: flex-start;">
+                    <div class="intelligence-hub-content-row">
                         <div class="intelligence-hub-main">
                             <div class="intelligence-hub-percentage">
                                 <span id="hubRegularityEmployee">--%</span>
                             </div>
                             <div class="intelligence-hub-subtitle">Regularity Percentage</div>
                         </div>
-
-                        <div class="intelligence-hub-actions"
-                            style="width: 100%; justify-content: flex-start; gap: 8px;">
+<div class="intelligence-hub-actions">
                             <button class="intelligence-hub-btn" style="flex: 1;"
                                 onclick="event.stopPropagation(); viewTrends();">
                                 <span class="btn-icon">📊</span> Analysis
@@ -367,35 +787,60 @@
                             </button>
                         </div>
                     </div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCardEmployee', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCardEmployee', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCardEmployee', 'lg')">L</button>
+                    </div>
                 </div>
             </div>
 
             <!-- Admin Stats Grid (shown only for admin users) -->
             <div class="stats-grid hidden" id="adminStatsGrid">
-                <div class="stat-card" onclick="showEmployeeSummary()">
+                <div class="stat-card" id="widget-admin-summary" onclick="showEmployeeSummary()" draggable="false">
                     <div class="stat-card-title">📊 Employee Summary</div>
                     <div class="stat-card-value" id="totalEmployees">0</div>
                     <div class="stat-card-timing" id="presentToday">0 present today</div>
                     <div class="stat-card-subtext" id="surveyorsPresent">0 surveyors present</div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('widget-admin-summary', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-admin-summary', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-admin-summary', 'lg')">L</button>
+                    </div>
                 </div>
 
-                <div class="stat-card" onclick="openBirthdayCalendar()">
+                <div class="stat-card" id="widget-admin-birthdays" onclick="openBirthdayCalendar()" draggable="false">
                     <div class="stat-card-title">🎂 Birthday Calendar</div>
                     <div class="stat-card-value" id="upcomingBirthdays">0</div>
                     <div class="stat-card-timing">Upcoming this month</div>
                     <div class="stat-card-subtext">Click to view calendar</div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('widget-admin-birthdays', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-admin-birthdays', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-admin-birthdays', 'lg')">L</button>
+                    </div>
                 </div>
-                <div class="stat-card" onclick="openRequestsModal()">
+                <div class="stat-card" id="widget-admin-requests" onclick="openRequestsModal()" draggable="false">
                     <div class="stat-card-title">📋 Requests</div>
                     <div class="stat-card-value" id="pendingRequests">0</div>
                     <div class="stat-card-timing">Pending approvals</div>
                     <div class="stat-card-subtext">WFH & Leave requests</div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('widget-admin-requests', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-admin-requests', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-admin-requests', 'lg')">L</button>
+                    </div>
                 </div>
-                <div class="stat-card" onclick="openTaskManager()" id="taskManagerCard">
+                <div class="stat-card" onclick="openTaskManager()" id="widget-admin-tasks" draggable="false">
                     <div class="stat-card-title">📝 Task Manager</div>
                     <div class="stat-card-value" id="activeTasks">0</div>
                     <div class="stat-card-timing">Active tasks</div>
                     <div class="stat-card-subtext">Trello-style board</div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('widget-admin-tasks', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-admin-tasks', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-admin-tasks', 'lg')">L</button>
+                    </div>
                 </div>
 
                 <!-- Intelligence Hub Card (Triple Width) -->
@@ -432,161 +877,136 @@
                                 </div>
                             </div>
 
-                            <div class="intelligence-hub-actions">
+                        <div class="intelligence-hub-actions">
                                 <button class="intelligence-hub-btn" onclick="event.stopPropagation(); viewTrends();">
                                     <span class="btn-icon">📊</span> View Analysis
                                 </button>
                                 <button id="hubMyStatsBtn" class="intelligence-hub-btn"
                                     onclick="event.stopPropagation(); viewMyStats();">
-                                    <button class="intelligence-hub-btn"
-                                        onclick="event.stopPropagation(); searchPersonnel();">
-                                        <span class="btn-icon">🔍</span> Search Personnel
-                                    </button>
+                                    <span class="btn-icon">👤</span> My Stats
+                                </button>
+                                <button class="intelligence-hub-btn"
+                                    onclick="event.stopPropagation(); searchPersonnel();">
+                                    <span class="btn-icon">🔍</span> Search Personnel
+                                </button>
                             </div>
                         </div>
+                    </div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCard', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCard', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCard', 'lg')">L</button>
                     </div>
                 </div>
             </div>
 
-            <div class="actions-grid">
+            <div class="actions-grid" id="actionsGrid">
 
-                <div class="action-card" onclick="startAttendanceFlow()" id="checkInCard">
+                <div class="action-card" onclick="startAttendanceFlow()" id="checkInCard" draggable="false">
                     <span class="action-card-icon">📍</span>
                     <div class="action-card-title">Check In</div>
                     <div class="action-card-description">Mark your attendance with location and photo</div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('checkInCard', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('checkInCard', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('checkInCard', 'lg')">L</button>
+                    </div>
                 </div>
-                <div class="action-card hidden" onclick="showCheckOut()" id="checkOutCard">
+                <div class="action-card hidden" onclick="showCheckOut()" id="checkOutCard" draggable="false">
                     <span class="action-card-icon">🏃</span>
                     <div class="action-card-title">Check Out</div>
                     <div class="action-card-description">Complete your work day</div>
-                </div>
-                <div id="calendarModal" class="modal">
-                    <div class="modal-content calendar-modal-content">
-                        <div
-                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                            <div style="display: flex; align-items: center; gap: 12px;">
-                                <h3 style="margin: 0;">Attendance Calendar – <span id="calendarMonthLabel"></span></h3>
-                                <div class="calendar-nav-controls">
-                                    <button onclick="changeCalendarMonth(-1)" class="btn-calendar-nav"
-                                        title="Previous Month">❮</button>
-                                    <button onclick="changeCalendarMonth(1)" class="btn-calendar-nav"
-                                        title="Next Month">❯</button>
-                                </div>
-                            </div>
-                            <button onclick="closeModal('calendarModal')"
-                                style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--gray-500); padding: 4px 8px; line-height: 1;"
-                                title="Close">&times;</button>
-                        </div>
-
-                        <div class="calendar-items-legend">
-                            <div class="legend-chip cal-present"><span class="calendar-dot"></span> Office</div>
-                            <div class="legend-chip cal-client"><span class="calendar-dot"></span> Client</div>
-                            <div class="legend-chip cal-absent"><span class="calendar-dot"></span> Absent</div>
-                            <div class="legend-chip cal-wfh"><span class="calendar-dot"></span> WFH</div>
-                            <div class="legend-chip cal-half"><span class="calendar-dot"></span> Half Day</div>
-                            <div class="legend-chip cal-leave"><span class="calendar-dot cal-leave"></span> Leave</div>
-                        </div>
-
-                        <div class="multi-select-toggle-container">
-                            <div style="flex: 1;">
-                                <span style="font-size: 14px; font-weight: 600; color: var(--gray-700);">Enable
-                                    Multi-date Selection</span>
-                                <p style="font-size: 11px; color: var(--gray-500); margin: 2px 0 0 0;">Select multiple
-                                    days for bulk requests</p>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="multiSelectToggle" onchange="toggleMultiSelectMode()">
-                                <span class="slider round"></span>
-                            </label>
-                        </div>
-
-                        <div id="calendarGrid" class="calendar-grid" style="margin-top:12px;"></div>
-
-                        <div id="multiSelectActions" class="multi-select-actions">
-                            <button id="multiRequestBtn" class="btn btn-primary btn-full-width"
-                                onclick="openMultiRequestModal()">
-                                Request for Selected Dates (0)
-                            </button>
-                        </div>
-
-                        <div style="text-align:center;margin-top:24px;">
-                            <button class="btn btn-subtle" onclick="closeModal('calendarModal')">Close Calendar</button>
-                        </div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('checkOutCard', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('checkOutCard', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('checkOutCard', 'lg')">L</button>
                     </div>
                 </div>
 
-                <!-- NEW: Date Request Modal -->
-                <div id="dateRequestModal" class="modal">
-                    <div class="modal-content" style="max-width:350px;">
-                        <h3>Request for <span id="requestDateLabel"></span></h3>
-                        <p style="font-size:13px; color:var(--gray-500); margin-bottom:16px;">Select request type:</p>
-
-                        <button class="btn btn-secondary btn-full-width mb-2" onclick="submitDateRequest('wfh')">🏠 Work
-                            From Home</button>
-                        <button class="btn btn-secondary btn-full-width mb-2" onclick="submitDateRequest('full_day')">📅
-                            Full Day Leave</button>
-
-                        <div style="margin-top:12px; border-top:1px solid #e5e7eb; padding-top:12px;">
-                            <label style="font-size:13px; font-weight:600; margin-bottom:8px; display:block;">Half Day
-                                Leave:</label>
-                            <div style="display:flex; gap:8px;">
-                                <button class="btn btn-secondary" style="flex:1;"
-                                    onclick="submitDateRequest('half_day', 'first_half')">🌅 Morning</button>
-                                <button class="btn btn-secondary" style="flex:1;"
-                                    onclick="submitDateRequest('half_day', 'second_half')">🌇 Afternoon</button>
-                            </div>
-                        </div>
-
-                        <div style="margin-top:20px; text-align:right;">
-                            <button class="btn btn-secondary" onclick="closeModal('dateRequestModal')">Cancel</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="action-card" onclick="openMyTasks()" id="myTasksCard">
+                <div class="action-card" onclick="openMyTasks()" id="myTasksCard" draggable="false">
                     <span class="action-card-icon">📝</span>
                     <div class="action-card-title">My Tasks</div>
                     <div class="action-card-description">View and manage your assigned tasks</div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('myTasksCard', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('myTasksCard', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('myTasksCard', 'lg')">L</button>
+                    </div>
                 </div>
-                <div class="action-card" onclick="showScreen('recordsScreen')">
+                <div class="action-card" onclick="showScreen('recordsScreen')" id="recordsCard" draggable="false">
                     <span class="action-card-icon">📋</span>
                     <div class="action-card-title">Records</div>
                     <div class="action-card-description">View your attendance history</div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('recordsCard', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('recordsCard', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('recordsCard', 'lg')">L</button>
+                    </div>
                 </div>
-                <div class="action-card hidden" onclick="openAdminPanel()" id="adminCard">
+                <div class="action-card hidden" onclick="openAdminPanel()" id="adminCard" draggable="false">
                     <span class="action-card-icon">✍️</span>
                     <div class="action-card-title">Admin Panel</div>
                     <div class="action-card-description">Add/Edit Users/Offices (Admin only)</div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('adminCard', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('adminCard', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('adminCard', 'lg')">L</button>
+                    </div>
                 </div>
-                <div class="action-card hidden" onclick="openAdminPanel()" id="manageEmployeesCard">
+                <div class="action-card hidden" onclick="openAdminPanel()" id="manageEmployeesCard" draggable="false">
                     <span class="action-card-icon">👥</span>
                     <div class="action-card-title">Manage Employees</div>
                     <div class="action-card-description">View and manage your team</div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('manageEmployeesCard', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('manageEmployeesCard', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('manageEmployeesCard', 'lg')">L</button>
+                    </div>
                 </div>
-                <div class="action-card hidden" onclick="openProfile()" id="profileCard">
+                <div class="action-card hidden" onclick="openProfile()" id="profileCard" draggable="false">
                     <span class="action-card-icon">🧑‍💻</span>
                     <div class="action-card-title">Edit Your Details</div>
                     <div class="action-card-description">Update your name, email, phone, password</div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('profileCard', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('profileCard', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('profileCard', 'lg')">L</button>
+                    </div>
                 </div>
-                <div class="action-card" onclick="openExportModal()" id="exportCard">
+                <div class="action-card" onclick="openExportModal()" id="exportCard" draggable="false">
                     <span class="action-card-icon">📊</span>
                     <div class="action-card-title">Export Attendance</div>
                     <div class="action-card-description">Select date range to export attendance records (Admin only)
                     </div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('exportCard', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('exportCard', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('exportCard', 'lg')">L</button>
+                    </div>
                 </div>
-                <div class="action-card hidden" onclick="openTemporaryTagsModal()" id="temporaryTagsCard">
+                <div class="action-card hidden" onclick="openTemporaryTagsModal()" id="temporaryTagsCard" draggable="false">
                     <span class="action-card-icon">🏷️</span>
                     <div class="action-card-title">Role Rotation</div>
                     <div class="action-card-description">Assign temporary department/role for a fixed period (Admin
                         only)</div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('temporaryTagsCard', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('temporaryTagsCard', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('temporaryTagsCard', 'lg')">L</button>
+                    </div>
                 </div>
-                <div class="action-card hidden" onclick="openAssignManagerModal()" id="assignManagerDashboardCard">
+                <div class="action-card hidden" onclick="openAssignManagerModal()" id="assignManagerDashboardCard" draggable="false">
                     <span class="action-card-icon">🔗</span>
                     <div class="action-card-title">Assign Manager</div>
                     <div class="action-card-description">Link employees to their reporting supervisors (Admin only)
                     </div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('assignManagerDashboardCard', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('assignManagerDashboardCard', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('assignManagerDashboardCard', 'lg')">L</button>
+                    </div>
                 </div>
-                <div class="action-card hidden" onclick="trainPredictionModel()" id="trainModelCard">
+                <div class="action-card hidden" onclick="trainPredictionModel()" id="trainModelCard" draggable="false">
                     <span class="action-card-icon">🧠</span>
                     <div class="action-card-title">Train Forecast Model</div>
                     <div class="action-card-description">Retrain the prediction model with recent data (Admin only)
@@ -596,6 +1016,11 @@
                         <span id="lastTrainedText">Checking model status...</span>
                         <span id="trainSpinner" class="loading-spinner hidden"
                             style="display:inline-block; width:10px; height:10px; vertical-align:middle; margin-left:5px;"></span>
+                    </div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('trainModelCard', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('trainModelCard', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('trainModelCard', 'lg')">L</button>
                     </div>
                 </div>
 
@@ -764,7 +1189,8 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label">Reporting Manager / Lead</label>
-                        <input id="profileReportingMgr" class="form-control">
+                        <input id="profileReportingMgr" class="form-control" readonly
+                            style="background-color: #f8fafc; cursor: default;">
                     </div>
                 </div>
                 <div class="form-group">
@@ -2491,6 +2917,75 @@
         </div>
     </div>
 
+    <div id="calendarModal" class="modal">
+        <div class="modal-content calendar-modal-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <h3 style="margin: 0; font-size: 1.2rem;">Attendance Calendar – <span id="calendarMonthLabel"></span></h3>
+                    <div class="calendar-nav-controls">
+                        <button onclick="changeCalendarMonth(-1)" class="btn-calendar-nav">❮</button>
+                        <button onclick="changeCalendarMonth(1)" class="btn-calendar-nav">❯</button>
+                    </div>
+                </div>
+                <button onclick="closeModal('calendarModal')" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--gray-500);">&times;</button>
+            </div>
+
+            <div class="calendar-items-legend">
+                <div class="legend-chip cal-present"><span class="calendar-dot"></span> Office</div>
+                <div class="legend-chip cal-client"><span class="calendar-dot"></span> Client</div>
+                <div class="legend-chip cal-absent"><span class="calendar-dot"></span> Absent</div>
+                <div class="legend-chip cal-wfh"><span class="calendar-dot"></span> WFH</div>
+                <div class="legend-chip cal-half"><span class="calendar-dot"></span> Half Day</div>
+                <div class="legend-chip cal-leave"><span class="calendar-dot"></span> Leave</div>
+            </div>
+
+            <div class="multi-select-toggle-container">
+                <div style="flex: 1;">
+                    <span style="font-size: 14px; font-weight: 600; color: var(--gray-700);">Multi-date Selection</span>
+                    <p style="font-size: 11px; color: var(--gray-500); margin: 2px 0 0 0;">Select days for bulk requests</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="multiSelectToggle" onchange="toggleMultiSelectMode()">
+                    <span class="slider round"></span>
+                </label>
+            </div>
+
+            <div id="calendarGrid" class="calendar-grid"></div>
+
+            <div id="multiSelectActions" class="multi-select-actions">
+                <button id="multiRequestBtn" class="btn btn-primary btn-full-width" onclick="openMultiRequestModal()">
+                    Request for Selected Dates (0)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="dateRequestModal" class="modal">
+        <div class="modal-content" style="max-width:400px; padding: 24px;">
+            <h3 style="margin-bottom: 8px;">Request for <span id="requestDateLabel" style="color: var(--primary-color);"></span></h3>
+            <p style="font-size:14px; color:var(--gray-500); margin-bottom:24px;">Select the type of request you want to submit:</p>
+
+            <button class="btn btn-secondary btn-full-width" style="margin-bottom: 12px; height: 50px; justify-content: flex-start; padding: 0 20px;" onclick="submitDateRequest('wfh')">
+                <span style="font-size: 20px; margin-right: 12px;">🏠</span> Work From Home
+            </button>
+            <button class="btn btn-secondary btn-full-width" style="margin-bottom: 24px; height: 50px; justify-content: flex-start; padding: 0 20px;" onclick="submitDateRequest('full_day')">
+                <span style="font-size: 20px; margin-right: 12px;">📅</span> Full Day Leave
+            </button>
+
+            <div style="padding-top: 20px; border-top: 1px solid var(--gray-100);">
+                <label style="font-size:13px; font-weight:700; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom:12px; display:block;">Half Day Leave Options</label>
+                <div style="display:flex; gap:12px;">
+                    <button class="btn btn-secondary" style="flex:1; height: 45px;" onclick="submitDateRequest('half_day', 'first_half')">🌅 Morning</button>
+                    <button class="btn btn-secondary" style="flex:1; height: 45px;" onclick="submitDateRequest('half_day', 'second_half')">🌇 Afternoon</button>
+                </div>
+            </div>
+
+            <div style="margin-top:32px; display: flex; gap: 12px;">
+                <button class="btn btn-subtle" style="flex: 1;" onclick="closeModal('dateRequestModal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Notification -->
     <div id="notification" class="notification"></div>
 
@@ -2501,6 +2996,19 @@
 
     <!-- Birthday Special Effects Container -->
     <div id="birthdayFXContainer"></div>
+
+    <!-- Advanced Color Picker Side Popup -->
+    <div id="advancedColorPickerPopup" class="acp-popup">
+        <div class="acp-header">
+            <div class="acp-title">
+                <span class="acp-icon">🌈</span> Advanced Spectrum
+            </div>
+            <button class="acp-close" onclick="toggleAdvancedColorPicker(false)">&times;</button>
+        </div>
+        <div id="advancedColorPickerContainer">
+            <!-- Rendered by JS -->
+        </div>
+    </div>
     <!-- Gated Access Initialization -->
     {% if is_gated %}
     <!-- Gated token validated. Displaying login screen. -->

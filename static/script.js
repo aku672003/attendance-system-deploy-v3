@@ -51,6 +51,13 @@ document.addEventListener('DOMContentLoaded', async function () {
     if (storedUser) {
         try {
             currentUser = JSON.parse(storedUser);
+            // Apply personalization on reload
+            if (currentUser.avatar_emoji) {
+                renderAvatar(currentUser.avatar_emoji, document.getElementById('userAvatar'));
+            }
+            if (currentUser.theme_settings) {
+                applyUserTheme(currentUser.theme_settings);
+            }
             const loginTime = sessionStorage.getItem('attendanceLoginTime');
             const now = Date.now();
             const oneHour = 3600000;
@@ -184,6 +191,11 @@ function closeModal(id) {
         if (typeof loadWFHEligibility === 'function') {
             loadWFHEligibility();
         }
+    }
+
+    // Close advanced color picker if appearance modal is closed
+    if (id === 'appearanceModal') {
+        toggleAdvancedColorPicker(false);
     }
 }
 
@@ -344,6 +356,7 @@ function showScreen(screenId) {
 
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(screenId).classList.add('active');
+    if (screenId === 'dashboardScreen') updateHeaderAvatar();
 
     // Only keep override on records screen if it was explicitly set before showing
     // If we're entering dashboard, always clear. If we're entering records naturally, clear.
@@ -668,6 +681,14 @@ async function handleLogin(event) {
             currentUser = result.user;
             sessionStorage.setItem('attendanceUser', JSON.stringify(currentUser));
             sessionStorage.setItem('attendanceLoginTime', Date.now().toString());
+
+            // Apply personalization
+            if (currentUser.avatar_emoji) {
+                renderAvatar(currentUser.avatar_emoji, document.getElementById('userAvatar'));
+            }
+            if (currentUser.theme_settings) {
+                applyUserTheme(currentUser.theme_settings);
+            }
 
             // Sync server time FIRST — must happen before any time-sensitive operations
             await syncServerTime();
@@ -1011,6 +1032,9 @@ async function loadDashboardData() {
 
     document.getElementById('userName').textContent = currentUser.name;
 
+    // Load custom widget layout
+    initWidgetSizes();
+
     // Load notifications for all users
     loadNotifications();
 
@@ -1086,6 +1110,7 @@ async function loadDashboardData() {
         try { await loadMonthlyStats(); } catch (e) { console.error(e); }
         try { await loadWFHEligibility(); } catch (e) { console.error(e); }
         try { await loadIntelligenceHubData(); } catch (e) { console.error(e); }
+        try { await loadMentorStatus(); } catch (e) { console.error(e); }
 
         // Check profile completeness for non-admin users
         if (currentUser.role !== 'admin') {
@@ -3446,7 +3471,7 @@ async function buildAttendanceCalendar(year, month) {
     // Empty cells before first day
     for (let i = 0; i < firstDay; i++) {
         const empty = document.createElement('div');
-        empty.className = 'calendar-day';
+        empty.className = 'calendar-day empty';
         grid.appendChild(empty);
     }
 
@@ -3468,10 +3493,13 @@ async function buildAttendanceCalendar(year, month) {
         else if (status === 'half_day') cls += ' cal-half';
         else if (status === 'leave') cls += ' cal-leave';
 
-        // Add tooltip details for past dates/records
+        // Add structure
+        cell.innerHTML = `
+            <span class="calendar-day-number">${day}</span>
+            ${status ? '<div class="calendar-day-status-dot"></div>' : ''}
+        `;
 
-
-        // Add tooltip details for past dates/records
+        // Tooltip logic
         if (record) {
             let tooltipLines = [];
 
@@ -3524,7 +3552,6 @@ async function buildAttendanceCalendar(year, month) {
         }
 
         cell.className = cls;
-        cell.textContent = day;
         grid.appendChild(cell);
     }
 }
@@ -3641,8 +3668,8 @@ async function loadTodayAttendance(isUserInRange = false) {
                                 <div><span style="opacity:0.8; font-size:0.9em;">Check-in:</span> <span style="font-weight:600;">${checkInFormatted}</span></div>`;
 
                 // Add Mini Map Container
-                html += `<div id="statusMiniMap" onclick="openMapModal()" style="height: 180px; width: 100%; margin-top: 12px; border-radius: 8px; z-index: 1; cursor: pointer; position: relative;">
-                            <div style="position: absolute; bottom: 8px; right: 8px; background: rgba(255,255,255,0.9); padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 1000;">View Full Map ⤢</div>
+                html += `<div id="statusMiniMap" onclick="openMapModal()" style="height: 80px; width: 100%; margin-top: 6px; border-radius: 8px; z-index: 1; cursor: pointer; position: relative;">
+                            <div style="position: absolute; bottom: 4px; right: 4px; background: rgba(255,255,255,0.9); padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 1000;">View Full Map ⤢</div>
                          </div>`;
                 html += `</div>`;
                 timingElement.innerHTML = html;
@@ -6922,6 +6949,17 @@ async function loadEmployeeProfile() {
         setFieldValue('profileReportingMgr', p.reporting_manager);
 
         setFieldValue('profileSkillSet', p.skill_set);
+
+        // Sync personalization if returned (consistency check)
+        if (p.avatar_emoji) {
+            currentUser.avatar_emoji = p.avatar_emoji;
+            renderAvatar(p.avatar_emoji, document.getElementById('userAvatar'));
+        }
+        if (p.theme_settings) {
+            currentUser.theme_settings = p.theme_settings;
+            applyUserTheme(p.theme_settings);
+        }
+        sessionStorage.setItem('attendanceUser', JSON.stringify(currentUser));
         setFieldValue('profileProfessionalTraining', p.professional_training);
         setFieldValue('profileBankAccount', p.bank_account_number);
         setFieldValue('profileBankName', p.bank_name);
@@ -10848,5 +10886,1644 @@ async function deleteTemporaryTag(id) {
         await loadTemporaryTags();
     } else {
         showNotification('Failed to delete tag', 'error');
+    }
+}
+
+/* Dashboard Personalization / Appearance */
+
+function applyUserTheme(settings) {
+    if (!settings) return;
+    const root = document.documentElement;
+
+    if (settings.primaryColor) {
+        root.style.setProperty('--primary-color', settings.primaryColor);
+        // Derived darker variants for gradients
+        const dark = shadeColor(settings.primaryColor, -20);
+        const darker = shadeColor(settings.primaryColor, -40);
+
+        root.style.setProperty('--primary-dark', dark);
+        root.style.setProperty('--primary-darker', darker);
+
+        // Update background gradient
+        root.style.setProperty('--gradient-start', settings.primaryColor);
+        root.style.setProperty('--gradient-end', darker);
+    }
+
+    if (settings.gradientColors) {
+        root.style.setProperty('--corner-tl', settings.gradientColors.tl);
+        root.style.setProperty('--corner-tr', settings.gradientColors.tr);
+        root.style.setProperty('--corner-bl', settings.gradientColors.bl);
+        root.style.setProperty('--corner-br', settings.gradientColors.br);
+        // Ensure gradient end follows for base/fallback
+        root.style.setProperty('--gradient-end', settings.gradientColors.br);
+    }
+
+    if (settings.darkMode) {
+        document.body.classList.add('dark-mode');
+    } else {
+        document.body.classList.remove('dark-mode');
+    }
+}
+
+// Helper to darken/lighten hex colors
+function shadeColor(color, percent) {
+    let R = parseInt(color.substring(1, 3), 16);
+    let G = parseInt(color.substring(3, 5), 16);
+    let B = parseInt(color.substring(5, 7), 16);
+
+    R = parseInt(R * (100 + percent) / 100);
+    G = parseInt(G * (100 + percent) / 100);
+    B = parseInt(B * (100 + percent) / 100);
+
+    R = (R < 255) ? R : 255;
+    G = (G < 255) ? G : 255;
+    B = (B < 255) ? B : 255;
+
+    R = Math.round(R);
+    G = Math.round(G);
+    B = Math.round(B);
+
+    const RR = ((R.toString(16).length == 1) ? "0" + R.toString(16) : R.toString(16));
+    const GG = ((G.toString(16).length == 1) ? "0" + G.toString(16) : G.toString(16));
+    const BB = ((B.toString(16).length == 1) ? "0" + B.toString(16) : B.toString(16));
+
+    return "#" + RR + GG + BB;
+}
+
+// Render avatar (handles string emoji or URL)
+async function renderAvatar(avatarStr, container) {
+    if (!container) return;
+    
+    // 3D Avatar (GLB) URL
+    if (avatarStr && avatarStr.includes('.glb')) {
+        render3DAvatar(avatarStr, container, { width: container.clientWidth || 32, height: container.clientHeight || 32, interactive: false });
+        return;
+    }
+    
+    // Fallback to Image or Emoji
+    if (avatarStr && (avatarStr.startsWith('http') || avatarStr.startsWith('/'))) {
+        const isHeader = container.id === 'userAvatar';
+        const size = isHeader ? '24px' : '100px';
+        const zoom = (currentUser.theme_settings && currentUser.theme_settings.avatarZoom) || 1.0;
+        const transform = `scale(${0.85 * zoom})`;
+        container.innerHTML = `<img src="${avatarStr}" style="width:${size}; height:${size}; vertical-align:middle; border-radius:50%; display:inline-block; border:1px solid rgba(255,255,255,0.2); object-fit:cover; transform: ${transform};">`;
+    } else {
+        const zoom = (currentUser.theme_settings && currentUser.theme_settings.avatarZoom) || 1.0;
+        container.innerHTML = `<span style="display:inline-block; transform: scale(${zoom});">${avatarStr || "👤"}</span>`;
+    }
+}
+
+let selectedEmoji = "👤";
+let selectedColor = "#2563eb";
+let selectedDarkMode = false;
+
+async function openAppearanceModal() {
+    openModal('appearanceModal');
+    // Initial state from currentUser
+    selectedEmoji = currentUser.avatar_emoji || "👤";
+    selectedColor = (currentUser.theme_settings && currentUser.theme_settings.primaryColor) || "#2563eb";
+    selectedDarkMode = (currentUser.theme_settings && currentUser.theme_settings.darkMode) || false;
+    
+    // Load advanced gradient colors
+    if (currentUser.theme_settings && currentUser.theme_settings.gradientColors) {
+        gradientColors = { ...currentUser.theme_settings.gradientColors };
+    } else {
+        // Fallback to default primary based gradient
+        const darker = shadeColor(selectedColor, -40);
+        gradientColors = {
+            tl: selectedColor,
+            tr: selectedColor,
+            bl: darker,
+            br: darker
+        };
+    }
+
+    const dmToggle = document.getElementById('darkModeToggle');
+    if (dmToggle) dmToggle.checked = selectedDarkMode;
+
+    const avatarInput = document.getElementById('customAvatarInput');
+    if (avatarInput) {
+        avatarInput.value = (selectedEmoji !== "👤" && !selectedEmoji.startsWith('http')) ? selectedEmoji : "";
+    }
+
+    updateAppearancePreview();
+    
+    // Initialize Advanced Gradient UI
+    // initHexColorGrid(); // Replaced by Advanced Color Picker
+    refreshGradientPreview();
+    setActiveCorner('tl');
+}
+
+/* Advanced Gradient Logic */
+let activeCorner = 'tl';
+let gradientColors = { tl: '#2563eb', tr: '#2563eb', bl: '#1e40af', br: '#1e40af' };
+
+class AdvancedColorPicker {
+    constructor(containerId, initialColor, onColorChange) {
+        this.container = document.getElementById(containerId);
+        if (!this.container) return;
+        this.onColorChange = onColorChange;
+        this.color = initialColor || '#2563eb';
+        this.h = 227;
+        this.s = 100;
+        this.v = 100;
+        this.init();
+    }
+
+    init() {
+        this.render();
+        this.attachEvents();
+        this.updateFromHex(this.color);
+    }
+
+    render() {
+        this.container.innerHTML = `
+            <div class="acp-wrapper">
+                <div class="acp-spectrum" id="acpSpectrum">
+                    <div class="acp-sat-white"></div>
+                    <div class="acp-sat-black"></div>
+                    <div class="acp-cursor" id="acpCursor"></div>
+                </div>
+                <div class="acp-controls">
+                    <div class="acp-hue-slider">
+                        <input type="range" min="0" max="360" value="${this.h}" class="acp-range" id="acpHue">
+                    </div>
+                    <div class="acp-inputs">
+                        <div class="acp-hex-input">
+                            <input type="text" id="acpHex" value="${this.color.toUpperCase()}" spellcheck="false">
+                            <span class="acp-label">HEX</span>
+                        </div>
+                        <div class="acp-swatch" id="acpSwatch"></div>
+                    </div>
+                </div>
+                <div class="acp-palettes">
+                    <span class="acp-palette-label">SAVED PALETTES</span>
+                    <div class="acp-palette-grid" id="acpPalettes">
+                        <div class="acp-palette-item" style="background:#2563eb;"></div>
+                        <div class="acp-palette-item" style="background:#7c3aed;"></div>
+                        <div class="acp-palette-item" style="background:#10b981;"></div>
+                        <div class="acp-palette-item" style="background:#f59e0b;"></div>
+                        <div class="acp-palette-item" style="background:#ef4444;"></div>
+                        <div class="acp-palette-item" style="background:#ec4899;"></div>
+                        <div class="acp-palette-item" style="background:#1e293b;"></div>
+                        <div class="acp-palette-item" style="background:#f8fafc;"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    attachEvents() {
+        const spectrum = this.container.querySelector('#acpSpectrum');
+        const hueSlider = this.container.querySelector('#acpHue');
+        const hexInput = this.container.querySelector('#acpHex');
+        const palettes = this.container.querySelector('#acpPalettes');
+
+        spectrum.addEventListener('mousedown', e => this.handleSpectrumMove(e));
+        hueSlider.addEventListener('input', e => {
+            this.h = parseInt(e.target.value);
+            this.update();
+        });
+        hexInput.addEventListener('change', e => {
+            this.updateFromHex(e.target.value);
+        });
+
+        palettes.querySelectorAll('.acp-palette-item').forEach(item => {
+            item.onclick = () => {
+                const color = item.style.backgroundColor;
+                const hex = this.rgbToHex(color);
+                this.updateFromHex(hex);
+            };
+        });
+    }
+
+    handleSpectrumMove(e) {
+        const move = e => {
+            const rect = this.container.querySelector('#acpSpectrum').getBoundingClientRect();
+            let x = e.clientX - rect.left;
+            let y = e.clientY - rect.top;
+            x = Math.max(0, Math.min(x, rect.width));
+            y = Math.max(0, Math.min(y, rect.height));
+
+            this.s = (x / rect.width) * 100;
+            this.v = 100 - (y / rect.height) * 100;
+            this.update();
+        };
+
+        const stop = () => {
+            window.removeEventListener('mousemove', move);
+            window.removeEventListener('mouseup', stop);
+        };
+
+        window.addEventListener('mousemove', move);
+        window.addEventListener('mouseup', stop);
+        move(e);
+    }
+
+    update() {
+        const hex = this.hsvToHex(this.h, this.s, this.v);
+        this.color = hex;
+
+        const spectrum = this.container.querySelector('#acpSpectrum');
+        const swatch = this.container.querySelector('#acpSwatch');
+        const hexInput = this.container.querySelector('#acpHex');
+        const cursor = this.container.querySelector('#acpCursor');
+
+        spectrum.style.backgroundColor = `hsl(${this.h}, 100%, 50%)`;
+        swatch.style.backgroundColor = hex;
+        hexInput.value = hex.toUpperCase();
+
+        const rect = spectrum.getBoundingClientRect();
+        cursor.style.left = `${this.s}%`;
+        cursor.style.top = `${100 - this.v}%`;
+
+        if (this.onColorChange) this.onColorChange(hex);
+    }
+
+    updateFromHex(hex) {
+        if (!/^#([0-9A-F]{3}){1,2}$/i.test(hex)) return;
+        this.color = hex;
+        const hsv = this.hexToHsv(hex);
+        this.h = hsv.h;
+        this.s = hsv.s;
+        this.v = hsv.v;
+        
+        const hueSlider = this.container.querySelector('#acpHue');
+        if (hueSlider) hueSlider.value = this.h;
+        
+        this.update();
+    }
+
+    hsvToHex(h, s, v) {
+        v /= 100;
+        const s_val = s / 100;
+        let r, g, b;
+        const i = Math.floor(h / 60) % 6;
+        const f = h / 60 - i;
+        const p = v * (1 - s_val);
+        const q = v * (1 - f * s_val);
+        const t = v * (1 - (1 - f) * s_val);
+        switch (i) {
+            case 0: r = v; g = t; b = p; break;
+            case 1: r = q; g = v; b = p; break;
+            case 2: r = p; g = v; b = t; break;
+            case 3: r = p; g = q; b = v; break;
+            case 4: r = t; g = p; b = v; break;
+            case 5: r = v; g = p; b = q; break;
+        }
+        const toHex = x => Math.round(x * 255).toString(16).padStart(2, '0');
+        return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+    }
+
+    hexToHsv(hex) {
+        let r = parseInt(hex.slice(1, 3), 16) / 255;
+        let g = parseInt(hex.slice(3, 5), 16) / 255;
+        let b = parseInt(hex.slice(5, 7), 16) / 255;
+        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        let h, s, v = max;
+        const d = max - min;
+        s = max === 0 ? 0 : d / max;
+        if (max === min) h = 0;
+        else {
+            switch (max) {
+                case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                case g: h = (b - r) / d + 2; break;
+                case b: h = (r - g) / d + 4; break;
+            }
+            h /= 6;
+        }
+        return { h: h * 360, s: s * 100, v: v * 100 };
+    }
+
+    rgbToHex(rgb) {
+        if (rgb.startsWith('#')) return rgb;
+        const match = rgb.match(/\d+/g);
+        if (!match) return '#000000';
+        const toHex = x => parseInt(x).toString(16).padStart(2, '0');
+        return `#${toHex(match[0])}${toHex(match[1])}${toHex(match[2])}`;
+    }
+}
+
+let advancedColorPicker = null;
+
+function initAdvancedColorPicker() {
+    if (!advancedColorPicker) {
+        advancedColorPicker = new AdvancedColorPicker('advancedColorPickerContainer', gradientColors[activeCorner], (color) => {
+            updateCornerColor(color);
+        });
+    } else {
+        advancedColorPicker.updateFromHex(gradientColors[activeCorner]);
+    }
+}
+
+function toggleAdvancedColorPicker(show) {
+    const popup = document.getElementById('advancedColorPickerPopup');
+    if (!popup) return;
+    
+    if (show === undefined) show = !popup.classList.contains('active');
+    
+    if (show) {
+        popup.classList.add('active');
+        initAdvancedColorPicker();
+    } else {
+        popup.classList.remove('active');
+    }
+}
+
+function setActiveCorner(corner) {
+    activeCorner = corner;
+    document.querySelectorAll('.corner-btn-premium').forEach(btn => {
+        btn.classList.toggle('active', btn.classList.contains(corner));
+    });
+    // Update color picker if it's open
+    if (advancedColorPicker) {
+        advancedColorPicker.updateFromHex(gradientColors[activeCorner]);
+    }
+}
+
+function updateCornerColor(color) {
+    gradientColors[activeCorner] = color;
+    refreshGradientPreview();
+    // Apply immediately to body for real-time feel
+    document.documentElement.style.setProperty(`--corner-${activeCorner}`, color);
+    selectedColor = color; // Also update primary for compatibility
+}
+
+function refreshGradientPreview() {
+    const preview = document.getElementById('gradientPreviewSmall');
+    if (!preview) return;
+    preview.style.background = `
+        radial-gradient(at 0% 0%, ${gradientColors.tl} 0%, transparent 80%),
+        radial-gradient(at 100% 0%, ${gradientColors.tr} 0%, transparent 80%),
+        radial-gradient(at 0% 100%, ${gradientColors.bl} 0%, transparent 80%),
+        radial-gradient(at 100% 100%, ${gradientColors.br} 0%, transparent 80%),
+        ${gradientColors.br}
+    `;
+}
+
+function updateAppearancePreview() {
+    const preview = document.getElementById('prefAvatarPreview');
+    if (!preview) return;
+    
+    // Clear preview
+    preview.innerHTML = '';
+    
+    // 3D Avatar config takes precedence
+    const cfg3d = currentUser && currentUser.avatar3d_config;
+    if (cfg3d) {
+        // Render saved DiceBear avatar as mini preview
+        renderSavedAvatar(preview, cfg3d);
+    } else {
+        const zoom = (currentUser.theme_settings && currentUser.theme_settings.avatarZoom) || 1.0;
+        preview.innerHTML = `<span style="font-size: 64px; display:inline-block; transform: scale(${zoom});">${selectedEmoji || '👤'}</span>`;
+    }
+    
+    // Update the emoji avatar button
+    const btn = document.getElementById('customAvatarBtn');
+    if (btn) {
+        if (selectedEmoji && selectedEmoji !== '👤') {
+            btn.textContent = selectedEmoji;
+            btn.style.fontSize = '';
+        } else {
+            btn.textContent = '😀';
+            btn.style.fontSize = '';
+        }
+    }
+    
+    // Update the 3D avatar button (Temporarily disabled as per user request)
+    /*
+    const btn3d = document.getElementById('create3DAvatarBtn');
+    if (btn3d) {
+        btn3d.innerHTML = cfg3d ? '✅' : '👤';
+        btn3d.style.fontSize = cfg3d ? '28px' : '32px';
+    }
+    */
+}
+
+
+async function renderAvatarPreview(container) {
+    if (!container) return;
+    container.innerHTML = '<div class="loading-spinner"></div>';
+    
+    const layerSequence = [
+        { cat: 'head', id: avatarState.headShape, color: null },
+        { cat: 'skin', id: avatarState.skinTone, color: avatarState.skinColor },
+        { cat: 'ears', id: avatarState.earsStyle, color: avatarState.skinColor },
+        { cat: 'eyes', id: avatarState.eyesStyle, color: avatarState.eyesColor },
+        { cat: 'brows', id: avatarState.browsStyle, color: avatarState.browsColor },
+        { cat: 'nose', id: avatarState.noseStyle, color: null },
+        { cat: 'mouth', id: avatarState.mouthStyle, color: avatarState.mouthColor },
+        { cat: 'hairstyle', id: avatarState.hairStyle, color: avatarState.hairColor },
+        { cat: 'facial_hair', id: avatarState.facialHair, color: avatarState.facialHairColor },
+        { cat: 'eyewear', id: avatarState.eyewear, color: avatarState.eyewearColor },
+        { cat: 'headwear', id: avatarState.headwear, color: avatarState.headwearColor },
+        { cat: 'clothing', id: avatarState.clothing, color: avatarState.clothingColor }
+    ];
+
+    try {
+        const layersPromise = layerSequence.map((layer, index) => {
+            if (!layer.id || layer.id === 'none') return Promise.resolve('');
+            return renderLayer(layer.cat, layer.id, layer.color, index + 1);
+        });
+
+        const renderedLayers = await Promise.all(layersPromise);
+        container.innerHTML = renderedLayers.join('');
+    } catch (err) {
+        console.error("Error rendering preview:", err);
+    }
+}
+
+function updateCustomAvatar(val) {
+    selectedEmoji = val.trim() || "👤";
+    updateAppearancePreview();
+}
+
+function toggleDarkModePreview() {
+    const toggle = document.getElementById('darkModeToggle');
+    if (toggle) {
+        selectedDarkMode = toggle.checked;
+        if (selectedDarkMode) {
+            document.body.classList.add('dark-mode');
+        } else {
+            document.body.classList.remove('dark-mode');
+        }
+    }
+}
+
+async function saveAppearanceSettings() {
+    const msg = document.getElementById('appearanceMsg');
+    msg.textContent = 'Saving preferences...';
+    msg.style.color = '#64748b';
+
+    try {
+        const themeSettings = { 
+            ...currentUser.theme_settings,
+            primaryColor: selectedColor, 
+            darkMode: selectedDarkMode,
+            gradientColors: gradientColors
+        };
+        
+        // Always sync avatar config to ensure it's cleared if deleted
+        themeSettings.avatar_config = currentUser.avatar3d_config || null;
+
+        const payload = {
+            employee_id: currentUser.id,
+            avatar_emoji: selectedEmoji,
+            theme_settings: themeSettings
+        };
+        
+        // If we have a 3D avatar URL (legacy/GLB), include it
+        if (currentUser.avatar_url) {
+            payload.avatar_url = currentUser.avatar_url;
+        }
+
+        const res = await apiCall('employee-profile', 'POST', payload);
+
+        if (res && res.success) {
+            msg.textContent = 'Settings saved! 🎉';
+            msg.style.color = '#10b981';
+
+            // Update local user object
+            currentUser.avatar_emoji = selectedEmoji;
+            currentUser.theme_settings = themeSettings;
+            sessionStorage.setItem('attendanceUser', JSON.stringify(currentUser));
+
+            // Apply changes immediately
+            updateHeaderAvatar();
+            applyUserTheme(themeSettings);
+
+            setTimeout(() => closeModal('appearanceModal'), 1000);
+        } else {
+            msg.textContent = res.message || 'Failed to save settings';
+            msg.style.color = '#ef4444';
+        }
+    } catch (e) {
+        console.error("Save appearance error:", e);
+        msg.textContent = 'An error occurred';
+        msg.style.color = '#ef4444';
+    }
+}
+
+function updateHeaderAvatar() {
+    const avatarEl = document.getElementById('userAvatar');
+    if (!avatarEl) return;
+    
+    // Clear
+    avatarEl.innerHTML = '';
+
+    const cfg3d = currentUser.avatar3d_config || (currentUser.theme_settings && currentUser.theme_settings.avatar_config);
+    
+    if (currentUser.avatar_url && !currentUser.avatar_url.includes('glb')) {
+        // Custom Photo Avatar
+        const img = document.createElement('img');
+        img.src = currentUser.avatar_url.startsWith('data:') ? currentUser.avatar_url : '/' + currentUser.avatar_url;
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'cover';
+        img.style.borderRadius = '50%';
+        
+        const zoom = (currentUser.theme_settings && currentUser.theme_settings.avatarZoom) || 1.0;
+        const offX = (currentUser.theme_settings && currentUser.theme_settings.avatarOffsetX) || 0;
+        const offY = (currentUser.theme_settings && currentUser.theme_settings.avatarOffsetY) || 0;
+        img.style.transform = `scale(${zoom}) translate(${offX}px, ${offY}px)`;
+        
+        avatarEl.style.overflow = 'hidden';
+        avatarEl.appendChild(img);
+    } else if (cfg3d) {
+        // Render 3D Portrait in header
+        renderSavedAvatar(avatarEl, cfg3d);
+    } else if (currentUser.avatar_url) {
+        // Legacy GLB support
+        render3DAvatar(currentUser.avatar_url, avatarEl, { width: 40, height: 40, interactive: false });
+    } else {
+        const textBg = (currentUser.theme_settings && currentUser.theme_settings.avatarTextBg) || '#3b82f6';
+        const emoji = currentUser.avatar_emoji || '👤';
+        
+        if (emoji.length > 0 && emoji.length <= 3 && !isEmoji(emoji)) {
+            // Text Avatar Rendering
+            avatarEl.style.background = textBg;
+            avatarEl.style.color = '#fff';
+            avatarEl.style.display = 'flex';
+            avatarEl.style.alignItems = 'center';
+            avatarEl.style.justifyContent = 'center';
+            avatarEl.style.fontWeight = 'bold';
+            avatarEl.style.fontSize = emoji.length > 1 ? '14px' : '18px';
+            avatarEl.innerText = emoji.toUpperCase();
+        } else {
+            avatarEl.style.background = 'transparent';
+            avatarEl.innerHTML = emoji;
+        }
+    }
+}
+
+// Helper to check if string is a simple emoji (rough check)
+function isEmoji(str) {
+    const emojiRegex = /\p{Extended_Pictographic}/u;
+    return emojiRegex.test(str);
+}
+
+/* ==================== APPLE-STYLE EMOJI PICKER ==================== */
+const EMOJI_CATEGORIES = [
+    {
+        id: 'recent',
+        name: 'Recent',
+        icon: '🕒',
+        emojis: ['👤', '👨‍💻', '👩‍💻', '🚀', '🌟']
+    },
+    {
+        id: 'memoji',
+        name: 'Memoji',
+        icon: '👱‍♂️',
+        emojis: [
+            '/static/images/marker-user.png',
+            '/static/images/marker-female.png',
+            '👱🏻‍♂️', '👱🏼‍♀️', '👨🏽‍🦱', '👩🏾‍🦱', '👨🏿‍🦲', '🐭', '🐙', '🐮',
+            '🦒', '🦈', '🦉', '🐗', '🐵', '🤖',
+            '🐱', '🐶', '👽', '🦊', '💩', '🐷',
+            '🐼', '🐰', '🐔', '🦄', '🦁', '🐲',
+            '💀', '🐻', '🐯', '🐨', '🦖', '👻'
+        ],
+        hasCreateBtn: false
+    },
+    {
+        id: 'smileys',
+        name: 'Smileys',
+        icon: '😀',
+        emojis: ['😀','😃','😄','😁','😆','😅','😂','🤣','🥲','☺️','😊','😇','🙂','🙃','😉','😌','😍','🥰','😘','😗','😙','😚','😋','😛','😝','😜','🤪','🤨','🧐','🤓','😎','🥸','🤩','🥳','😏','😒','😞','😔','😟','😕','🙁','☹️','😣','😖','😫','😩','🥺','😢','😭','😤','😠','😡','🤬','🤯','😳','🥵','🥶','😱','😨','😰','😥','😓','🤗','🤔','🤭','🤫','🤥','😶','😐','😑','😬','🙄','😯','😦','😧','😮','😲','🥱','😴','🤤','😪','😵','🤐','🥴','🤢','🤮','🤧','😷','🤒','🤕','🤑','🤠','😈','👿','👹','👺','🤡','💩','👻','💀','👽','👾','🤖','🎃','😺','😸','😹','😻','😼','😽','🙀','😿','😾']
+    },
+    {
+        id: 'animals',
+        name: 'Animals',
+        icon: '🐻',
+        emojis: ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐻‍❄️','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔','🐧','🐦','🐤','🐣','🐥','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🪱','🐛','🦋','🐌','🐞','🐜','🪰','🪲','🪳','🦟','🦗','🕷','🕸','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🦭','🐊','🐅','🐆','🦓','🦍','🦧','🦣','🐘','🦛','🦏','🐪','🐫','🦒','🦘','🦬','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐕‍🦺','🐈','🐈‍⬛','🪶','🐓','🦃','🦤','🦚','🦜','🦢','🦩','🕊','🐇','🦝','🦨','🦡','🦫','🦦','🦥','🐁','🐀','🐿','🦔','🐾','🐉','🐲','🌵','🎄','🌲','🌳','🌴','🪵','🌱','🌿','☘️','🍀','🎍','🪴','🎋','🍃','🍂','🍁','🍄','🐚','🪨','🌾','💐','🌷','🌹','🥀','🌺','🌸','🌼','🌻','🌞','🌝','🌛','🌜','🌚','🌕','🌖','🌗','🌘','🌑','🌒','🌓','🌔','🌙','🌎','🌍','🌏','🪐','💫','⭐️','🌟','✨','⚡️','☄️','💥','🔥','🌪','🌈','☀️','🌤','⛅️','🌥','☁️','🌦','🌧','⛈','🌩','🌨','❄️','☃️','⛄️','🌬','💨','💧','💦','☔️','☂️','🌊','🌫']
+    },
+    {
+        id: 'food',
+        name: 'Food',
+        icon: '🍔',
+        emojis: ['🍏','🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🍆','🥑','🥦','🥬','🥒','🌶','🫑','🌽','🥕','🫒','🧄','🧅','🥔','🍠','🥐','🥯','🍞','🥖','🥨','🧀','🥚','🍳','🧈','🥞','🧇','🥓','🥩','🍗','🍖','🌭','🍔','🍟','🍕','🫓','🥪','🥙','🧆','🌮','🌯','🫔','🥗','🥘','🫕','🥫','🍝','🍜','🍲','🍛','🍣','🍱','🥟','🦪','🍤','🍙','🍚','🍘','🍥','🥠','🥮','🍢','🍡','🍧','🍨','🍦','🥧','🧁','🍰','🎂','🍮','🍭','🍬','🍫','🍿','🍩','🍪','🌰','🥜','🍯','🥛','🍼','🫖','☕️','🍵','🧃','🥤','🧋','🍶','🍺','🍻','🥂','🍷','🥃','🍸','🍹','🧉','🍾','🧊','🥄','🍴','🍽','🥣','🥡','🥢','🧂']
+    },
+    {
+        id: 'activities',
+        name: 'Activity',
+        icon: '⚽',
+        emojis: ['⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱','🪀','🏓','🏸','🏒','🏑','🥍','🏏','🪃','🥅','⛳','🪁','🏹','🎣','🤿','🥊','🥋','🎽','🛹','🛼','🛷','⛸','🥌','🎿','⛷','🏂','🪂','🏋️','🤼','🤸','⛹️','🤺','🤾','🏌️','🏇','🧘','🏄','🏊','🤽','🚣','🧗','🚵','🚴','🏆','🥇','🥈','🥉','🏅','🎖','🏵','🎗','🎫','🎟','🎪','🤹','🎭','🩰','🎨','🎬','🎤','🎧','🎼','🎹','🥁','🪘','🎷','🎺','🪗','🎸','🪕','🎻','🎲','♟','🎯','🎳','🎮','🎰','🧩']
+    }
+];
+
+let currentEmojiCategory = 'smileys';
+let currentSegment = 'emoji'; 
+let avatarSelectedSegment = 'emoji'; // emoji, photo, text
+let avatarSelectedPhoto = null;
+let avatarTextBg = '#3b82f6';
+
+function openEmojiPicker() {
+    closeModal('appearanceModal');
+    openModal('emojiPickerModal');
+    
+    // Reset to defaults or load current
+    avatarSelectedSegment = 'emoji';
+    if (currentUser.avatar_url && !currentUser.avatar_url.includes('glb')) {
+        avatarSelectedSegment = 'photo';
+    } else if (currentUser.avatar_emoji && currentUser.avatar_emoji.length <= 2 && !isEmoji(currentUser.avatar_emoji)) {
+        avatarSelectedSegment = 'text';
+    }
+    
+    selectAvatarSegment(avatarSelectedSegment);
+}
+
+function selectAvatarSegment(type) {
+    avatarSelectedSegment = type;
+    currentSegment = type; // Keep legacy variable in sync if used by renderers
+    
+    // Update buttons
+    const btns = document.querySelectorAll('#emojiSegmentedControl button');
+    btns.forEach(b => {
+        const btnText = b.innerText.trim().toLowerCase();
+        b.classList.remove('segment-active');
+        if (btnText === type.toLowerCase()) b.classList.add('segment-active');
+    });
+
+    // Toggle sections
+    document.getElementById('emojiGrid').classList.add('hidden');
+    document.getElementById('emojiSidebar').classList.add('hidden');
+    document.getElementById('photoAvatarSection').classList.add('hidden');
+    document.getElementById('textAvatarSection').classList.add('hidden');
+
+    if (type === 'emoji') {
+        document.getElementById('emojiGrid').classList.remove('hidden');
+        document.getElementById('emojiSidebar').classList.remove('hidden');
+        
+        // Render content
+        renderEmojiSidebar();
+        renderEmojiCategory(currentEmojiCategory || 'smileys');
+        updateEmojiSidebarPreview(selectedEmoji || '👤');
+    } else if (type === 'photo') {
+        document.getElementById('photoAvatarSection').classList.remove('hidden');
+        // If already has a photo, show it in preview
+        if (currentUser.avatar_url && !currentUser.avatar_url.includes('glb')) {
+            updateAvatarPreviewCircle(currentUser.avatar_url, true);
+        } else {
+            updateAvatarPreviewCircle('👤', false);
+        }
+    } else if (type === 'text') {
+        document.getElementById('textAvatarSection').classList.remove('hidden');
+        if (currentUser.avatar_emoji && !isEmoji(currentUser.avatar_emoji)) {
+            document.getElementById('avatarTextInput').value = currentUser.avatar_emoji;
+        }
+        updateTextAvatarPreview();
+    }
+}
+
+function updateAvatarPreviewCircle(content, isUrl = false) {
+    const circle = document.getElementById('emojiPreviewCircle');
+    if (!circle) return;
+    
+    circle.innerHTML = '';
+    circle.style.background = 'var(--apple-gray-light)';
+    circle.style.position = 'relative';
+    circle.style.overflow = 'hidden';
+    
+    if (isUrl) {
+        const img = document.createElement('img');
+        img.src = content.startsWith('data:') ? content : '/' + content;
+        img.id = 'innerEmojiPreview';
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'cover';
+        img.style.cursor = 'move';
+        img.style.position = 'absolute';
+        img.style.left = '0';
+        img.style.top = '0';
+        img.draggable = false;
+        
+        // Apply existing zoom/offset if any
+        const zoom = (currentUser.theme_settings && currentUser.theme_settings.avatarZoom) || 1.0;
+        const offX = (currentUser.theme_settings && currentUser.theme_settings.avatarOffsetX) || 0;
+        const offY = (currentUser.theme_settings && currentUser.theme_settings.avatarOffsetY) || 0;
+        
+        img.style.transform = `scale(${zoom}) translate(${offX}px, ${offY}px)`;
+        
+        // Pannable Logic
+        let isDragging = false;
+        let startX, startY;
+        let currentX = offX, currentY = offY;
+
+        const applyTransform = () => {
+            const zoomVal = 0.5 + (document.getElementById('emojiZoomSlider').value / 100);
+            // Translate first, then scale, to ensure pan is relative to image size
+            img.style.transform = `translate(${currentX}px, ${currentY}px) scale(${zoomVal})`;
+        };
+
+        const onMouseMove = (e) => {
+            if (!isDragging) return;
+            // Adjust drag sensitivity based on zoom to feel more natural
+            const zoomVal = 0.5 + (document.getElementById('emojiZoomSlider').value / 100);
+            currentX = (e.clientX - startX);
+            currentY = (e.clientY - startY);
+            
+            applyTransform();
+            
+            if (!currentUser.theme_settings) currentUser.theme_settings = {};
+            currentUser.theme_settings.avatarOffsetX = currentX;
+            currentUser.theme_settings.avatarOffsetY = currentY;
+        };
+
+        const onMouseUp = () => {
+            isDragging = false;
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+        };
+
+        img.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.clientX - currentX;
+            startY = e.clientY - currentY;
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
+        });
+
+        circle.appendChild(img);
+    } else {
+        circle.innerText = content;
+        circle.style.display = 'flex';
+        circle.style.alignItems = 'center';
+        circle.style.justifyContent = 'center';
+    }
+}
+
+/* Photo Upload Logic */
+function previewAvatarPhoto(input) {
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+        if (file.size > 2 * 1024 * 1024) {
+            alert('Photo size exceeds 2MB limit');
+            return;
+        }
+        
+        avatarSelectedPhoto = file;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            updateAvatarPreviewCircle(e.target.result, true);
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+async function uploadAvatarPhoto() {
+    if (!avatarSelectedPhoto) return true; // Nothing to upload, move on
+
+    const formData = new FormData();
+    formData.append('employee_id', currentUser.id);
+    formData.append('photo', avatarSelectedPhoto);
+
+    try {
+        const res = await fetch('/api/upload-avatar', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+            currentUser.avatar_url = data.avatar_url;
+            currentUser.avatar_emoji = '👤';
+            delete currentUser.avatar3d_config;
+            if (currentUser.theme_settings) delete currentUser.theme_settings.avatar_config;
+            return true;
+        } else {
+            alert(data.message || 'Upload failed');
+            return false;
+        }
+    } catch (e) {
+        console.error("Photo upload error:", e);
+        alert('Connection error during upload');
+        return false;
+    }
+}
+
+/* Text Avatar Logic */
+function updateTextAvatarPreview() {
+    const text = document.getElementById('avatarTextInput').value || 'Aa';
+    const circle = document.getElementById('emojiPreviewCircle');
+    if (!circle) return;
+    
+    circle.innerHTML = '';
+    circle.style.display = 'flex';
+    circle.style.alignItems = 'center';
+    circle.style.justifyContent = 'center';
+    circle.style.background = avatarTextBg;
+    circle.style.color = '#fff';
+    circle.style.fontSize = text.length > 1 ? '30px' : '50px';
+    circle.style.fontWeight = 'bold';
+    circle.innerText = text.toUpperCase();
+}
+
+function setTextAvatarBg(color) {
+    avatarTextBg = color;
+    updateTextAvatarPreview();
+}
+
+async function confirmEmojiSelection() {
+    const saveBtn = document.querySelector('#emojiPickerModal .btn-primary');
+    const originalText = saveBtn.innerText;
+    saveBtn.innerText = 'Saving...';
+    saveBtn.disabled = true;
+
+    try {
+        if (avatarSelectedSegment === 'photo') {
+            const success = await uploadAvatarPhoto();
+            if (!success) throw new Error('Upload failed');
+        } else if (avatarSelectedSegment === 'text') {
+            const text = document.getElementById('avatarTextInput').value.trim();
+            if (!text) {
+                alert('Please enter some text');
+                throw new Error('Empty text');
+            }
+            currentUser.avatar_emoji = text;
+            currentUser.avatar_url = null;
+            currentUser.avatar3d_config = null;
+            if (!currentUser.theme_settings) currentUser.theme_settings = {};
+            currentUser.theme_settings.avatarTextBg = avatarTextBg;
+        } else {
+            // Regular Emoji
+            currentUser.avatar_url = null;
+            currentUser.avatar3d_config = null;
+            if (!currentUser.theme_settings) currentUser.theme_settings = {};
+            // selectedEmoji is set by selectEmoji() globally
+            currentUser.avatar_emoji = selectedEmoji || '👤';
+        }
+
+        // Capture zoom factor from slider
+        const slider = document.getElementById('emojiZoomSlider');
+        if (slider) {
+            if (!currentUser.theme_settings) currentUser.theme_settings = {};
+            currentUser.theme_settings.avatarZoom = 0.5 + (slider.value / 100);
+        }
+
+        // Re-save overall profile to sync metadata
+        await saveAppearanceSettings();
+        
+        closeModal('emojiPickerModal');
+        openModal('appearanceModal');
+    } catch (e) {
+        console.error("Confirm selection error:", e);
+    } finally {
+        saveBtn.innerText = originalText;
+        saveBtn.disabled = false;
+    }
+}
+
+/* ==================== CARTOON AVATAR GENERATOR (DiceBear API) ==================== */
+let current3DConfig = null;
+let avatar3DRenderer = null; // kept for backward compat
+
+// Style categories shown in the sidebar
+const AVATAR_STYLE_GROUPS = [
+    { id: 'adventurer',        label: '✨ 3D Disney',  icon: '🧑' },
+    { id: 'lorelei',           label: '🎨 Pixar',      icon: '👩' },
+    { id: 'notionists',        label: '✏️ Sketch',     icon: '🖊️' },
+    { id: 'big-smile',         label: '😁 Expressive', icon: '😄' },
+    { id: 'fun-emoji',         label: '🎭 Movie',      icon: '🎭' },
+    { id: 'avataaars',         label: '👕 Casual',     icon: '👤' },
+];
+
+let avatarCurrentStyle = AVATAR_STYLE_GROUPS[0].id;
+let avatarCurrentSeeds = []; // 20 random seeds shown in the grid
+
+function openCreateMemoji() {
+    openModal('createMemojiModal');
+    _buildAvatarPickerUI();
+}
+
+function closeCreateMemoji() {
+    closeModal('createMemojiModal');
+}
+
+function _buildAvatarPickerUI() {
+    _renderAvatarStyleSidebar();
+    _generateAvatarSeeds();
+    _renderAvatarGrid();
+}
+
+function _renderAvatarStyleSidebar() {
+    const sidebar = document.getElementById('avatarStyleSidebar');
+    if (!sidebar) return;
+    sidebar.innerHTML = AVATAR_STYLE_GROUPS.map(g => `
+        <div class="emoji-cat${g.id === avatarCurrentStyle ? ' active' : ''}"
+             onclick="selectAvatarStyle('${g.id}')"
+             title="${g.label}"
+             style="font-size:20px; cursor:pointer;">
+            ${g.icon}
+        </div>`).join('');
+
+    // Update segmented control
+    const ctrl = document.getElementById('avatarSegmentedControl');
+    if (ctrl) {
+        ctrl.innerHTML = AVATAR_STYLE_GROUPS.map(g => `
+            <button class="${g.id === avatarCurrentStyle ? 'segment-active' : ''}"
+                    onclick="selectAvatarStyle('${g.id}')">
+                ${g.label}
+            </button>`).join('');
+    }
+}
+
+function _generateAvatarSeeds() {
+    avatarCurrentSeeds = Array.from({ length: 20 }, () =>
+        Math.random().toString(36).slice(2) + Date.now().toString(36)
+    );
+}
+
+function _renderAvatarGrid() {
+    const grid = document.getElementById('avatarGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    avatarCurrentSeeds.forEach((seed, idx) => {
+        const card = document.createElement('div');
+        card.style.cssText = `cursor:pointer; border-radius:50%; overflow:hidden; aspect-ratio:1;
+            border: 3px solid transparent; transition: border-color 0.2s, transform 0.2s;`;
+        card.onclick = () => _selectAvatarCard(card, seed, avatarCurrentStyle);
+
+        // Load the DiceBear avatar image
+        const params = new URLSearchParams({
+            seed,
+            size: 200, // Higher resolution
+            radius: 50,
+            backgroundType: 'gradientLinear',
+            backgroundColor: 'b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf,f8fafc,e2e8f0', // Expanded palette
+            backgroundRotation: Math.floor(Math.random() * 360)
+        });
+        const src = `https://api.dicebear.com/9.x/${avatarCurrentStyle}/svg?${params.toString()}`;
+
+        const img = new Image();
+        img.src = src;
+        img.style.cssText = 'width:100%; height:100%; object-fit:cover; display:block;';
+        img.onerror = () => { card.innerHTML = '👤'; card.style.fontSize = '32px'; card.style.textAlign = 'center'; };
+        card.appendChild(img);
+
+        // Auto-select first card
+        if (idx === 0) {
+            setTimeout(() => _selectAvatarCard(card, seed, avatarCurrentStyle), 300);
+        }
+
+        grid.appendChild(card);
+    });
+}
+
+function _selectAvatarCard(card, seed, style) {
+    // Deselect all
+    document.querySelectorAll('#avatarGrid > div').forEach(c => {
+        c.style.borderColor = 'transparent';
+        c.style.transform = 'scale(1)';
+    });
+
+    // Select this card
+    card.style.borderColor = 'var(--primary-color, #3b82f6)';
+    card.style.transform = 'scale(1.06)';
+
+    // Update config
+    current3DConfig = { style, seed, type: 'dicebear' };
+
+    // Update preview circle
+    const preview = document.getElementById('avatarPreviewCircle');
+    if (preview) _renderDiceBearAvatar(preview, style, seed);
+}
+
+function selectAvatarStyle(styleId) {
+    avatarCurrentStyle = styleId;
+    _renderAvatarStyleSidebar();
+    _generateAvatarSeeds();
+    _renderAvatarGrid();
+}
+
+function generateRandom3DAvatar() {
+    // Re-shuffle and regenerate the grid with same style
+    _generateAvatarSeeds();
+    _renderAvatarGrid();
+}
+
+function _renderDiceBearAvatar(container, style, seed) {
+    const W = container.clientWidth  || 280;
+    const H = container.clientHeight || 280;
+
+    // Build DiceBear v9 SVG URL with optional params for richness
+    const params = new URLSearchParams({
+        seed,
+        size: Math.max(W, H) * 2, // Double resolution for crispness
+        radius: 0, 
+        backgroundType: 'gradientLinear',
+        backgroundColor: 'f8fafc,e2e8f0,f1f5f9,f0f9ff,f5f3ff', // Studio-quality clean backgrounds
+        backgroundRotation: 45
+    });
+    const url = `https://api.dicebear.com/9.x/${style}/svg?${params.toString()}`;
+
+    // Show loading spinner with premium backdrop
+    container.innerHTML = `
+        <div class="premium-avatar-wrapper" style="width:${W}px;height:${H}px;position:relative;border-radius:50%;overflow:hidden;background:#f8fafc;">
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.03);">
+                <div class="loading-spinner"></div>
+            </div>
+        </div>`;
+
+    // Load via img to handle SVG cross-origin cleanly
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.style.cssText = `width:100%;height:100%;object-fit:cover;display:block;position:relative;z-index:1;`;
+    
+    img.onload = () => {
+        const wrapper = container.querySelector('.premium-avatar-wrapper');
+        if (!wrapper) {
+            container.innerHTML = '';
+            container.appendChild(img);
+            return;
+        }
+        
+        // Clear loading spinner
+        wrapper.innerHTML = '';
+        wrapper.appendChild(img);
+        
+        // Add Glossy Overlay
+        const gloss = document.createElement('div');
+        gloss.style.cssText = `
+            position:absolute; top:0; left:0; right:0; bottom:0;
+            background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 50%);
+            pointer-events:none; z-index:2;
+        `;
+        wrapper.appendChild(gloss);
+
+        // Add Multi-stage shadow for depth
+        wrapper.style.boxShadow = '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1), inset 0 0 0 1px rgba(255,255,255,0.1)';
+        wrapper.style.transition = 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+        
+        wrapper.onmouseover = () => { 
+            wrapper.style.transform = 'scale(1.04) translateY(-4px)';
+            wrapper.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.1)';
+        };
+        wrapper.onmouseleave = () => { 
+            wrapper.style.transform = 'scale(1) translateY(0)';
+            wrapper.style.boxShadow = '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)';
+        };
+    };
+    img.onerror = () => {
+        if (style !== 'adventurer') {
+            _renderDiceBearAvatar(container, 'adventurer', seed);
+        } else {
+            container.innerHTML = '<span style="font-size:80px;">👤</span>';
+        }
+    };
+    img.src = url;
+}
+
+// Render an avatar from a saved config (for preview)
+function renderSavedAvatar(container, cfg) {
+    if (!container || !cfg) return;
+    if (cfg.type === 'dicebear') {
+        _renderDiceBearAvatar(container, cfg.style, cfg.seed);
+    }
+}
+
+async function saveGenerated3DAvatar() {
+    if (!current3DConfig) return;
+    
+    try {
+        const res = await apiCall('memoji', 'POST', {
+            user_id: currentUser.id,
+            avatar_config: current3DConfig
+        });
+        
+        if (res && res.success) {
+            showToast('Avatar saved! 🎉');
+            currentUser.avatar3d_config = current3DConfig;
+            currentUser.avatar_url = null;
+            sessionStorage.setItem('attendanceUser', JSON.stringify(currentUser));
+            updateAppearancePreview();
+            closeCreateMemoji();
+            openAppearanceModal();
+        } else {
+            showToast('Failed to save avatar', 'error');
+        }
+    } catch (e) {
+        console.error('Error saving avatar:', e);
+        showToast('Error saving avatar', 'error');
+    }
+}
+
+
+function selectSegment(segment) {
+    currentSegment = segment;
+    
+    // Update active segmented button
+    const container = document.querySelector('.emoji-segmented-control');
+    if (container) {
+        container.innerHTML = `
+            <button class="${segment === 'memoji' ? 'segment-active' : ''}" onclick="selectSegment('memoji')">Memoji</button>
+            <button class="${segment === 'emoji' ? 'segment-active' : ''}" onclick="selectSegment('emoji')">Emoji</button>
+        `;
+    }
+    
+    // Select default category for segment
+    if (segment === 'memoji') {
+        selectEmojiCategory('memoji');
+    } else {
+        selectEmojiCategory('smileys');
+    }
+}
+
+function closeEmojiPicker() {
+    closeModal('emojiPickerModal');
+    openAppearanceModal();
+}
+
+function renderEmojiSidebar() {
+    const sidebar = document.getElementById('emojiSidebar');
+    if (!sidebar) return;
+    
+    // Show all categories in the Emoji segment now
+    let visibleCategories = EMOJI_CATEGORIES;
+    
+    sidebar.innerHTML = visibleCategories.map(cat => `
+        <button class="emoji-category-btn ${cat.id === currentEmojiCategory ? 'active' : ''}" onclick="selectEmojiCategory('${cat.id}')">
+            <span class="cat-icon">${cat.icon}</span>
+            <span>${cat.name}</span>
+        </button>
+    `).join('');
+}
+
+function selectEmojiCategory(categoryId) {
+    currentEmojiCategory = categoryId;
+    renderEmojiSidebar();
+    renderEmojiCategory(categoryId);
+}
+
+function renderEmojiCategory(categoryId) {
+    const grid = document.getElementById('emojiGrid');
+    if (!grid) return;
+    
+    const category = EMOJI_CATEGORIES.find(c => c.id === categoryId);
+    if (!category) return;
+    
+    let html = `
+        <div class="emoji-grid-section">
+            <h4>${category.name}</h4>
+            <div class="emoji-grid">
+    `;
+    
+    if (category.hasCreateBtn) {
+        html += `
+        <div class="emoji-item create-memoji-btn" onclick="openCreateMemoji()" style="background: rgba(255,255,255,0.1); font-size: 32px; color: #ffffff;">
+            +
+        </div>
+        `;
+    }
+    
+    html += category.emojis.map(emoji => {
+        const isImage = emoji.startsWith('/') || emoji.startsWith('http');
+        const displayContent = isImage 
+            ? `<img src="${emoji}" style="width: 100%; height: 100%; object-fit: contain; transform: scale(0.8);">` 
+            : emoji;
+            
+        return `
+        <div class="emoji-item ${selectedEmoji === emoji ? 'selected' : ''}" onclick="selectEmoji('${emoji}')">
+            ${displayContent}
+        </div>
+        `;
+    }).join('');
+    
+    html += `
+            </div>
+        </div>
+    `;
+    
+    grid.innerHTML = html;
+}
+
+function selectEmoji(emoji) {
+    selectedEmoji = emoji;
+    renderEmojiCategory(currentEmojiCategory);
+    updateEmojiSidebarPreview(emoji);
+}
+
+function updateEmojiSidebarPreview(emoji) {
+    const previewContainer = document.getElementById('emojiPreviewCircle');
+    if (!previewContainer) return;
+    
+    const isImage = emoji && (emoji.startsWith('/') || emoji.startsWith('http'));
+    if (isImage) {
+        previewContainer.innerHTML = `<img src="${emoji}" id="innerEmojiPreview" alt="Avatar Preview" style="width: 100%; height: 100%; object-fit: contain; transform: scale(0.85); transition: transform 0.1s;">`;
+    } else {
+        previewContainer.innerHTML = `<span id="innerEmojiPreview" style="font-size: 80px; transition: transform 0.1s; display: inline-block;">${emoji || '👤'}</span>`;
+    }
+    
+    // Set slider initial state based on saved zoom
+    const slider = document.getElementById('emojiZoomSlider');
+    if (slider) {
+        const savedZoom = (currentUser.theme_settings && currentUser.theme_settings.avatarZoom) || 1.0;
+        // zoomFactor = 0.5 + (value / 100)  =>  value = (zoomFactor - 0.5) * 100
+        slider.value = (savedZoom - 0.5) * 100;
+        
+        // Trigger initial scale
+        setTimeout(() => {
+            const inner = document.getElementById('innerEmojiPreview');
+            if (inner) {
+                const transform = inner.tagName === 'IMG' ? `scale(${0.85 * savedZoom})` : `scale(${savedZoom})`;
+                inner.style.transform = transform;
+            }
+        }, 0);
+    }
+}
+
+// Attach zoom slider event
+document.addEventListener('DOMContentLoaded', () => {
+    const slider = document.getElementById('emojiZoomSlider');
+    if (slider) {
+        slider.addEventListener('input', (e) => {
+            const inner = document.getElementById('innerEmojiPreview');
+            if (inner) {
+                const zoomFactor = 0.5 + (e.target.value / 100);
+                
+                if (inner.tagName === 'IMG') {
+                    const offX = (currentUser.theme_settings && currentUser.theme_settings.avatarOffsetX) || 0;
+                    const offY = (currentUser.theme_settings && currentUser.theme_settings.avatarOffsetY) || 0;
+                    inner.style.transform = `translate(${offX}px, ${offY}px) scale(${zoomFactor})`;
+                } else {
+                    inner.style.transform = `scale(${zoomFactor})`;
+                }
+            }
+        });
+    }
+});
+
+
+
+// ==================== DASHBOARD EDIT MODE & LAYOUT ENGINE ====================
+
+let isEditMode = false;
+let originalLayoutSnapshot = null;
+let draggedWidget = null;
+
+// Initialize Widget Sizes on Load
+function initWidgetSizes() {
+    if (currentUser && currentUser.theme_settings && currentUser.theme_settings.widgetLayouts) {
+        const layouts = currentUser.theme_settings.widgetLayouts;
+        
+        // Apply Sizes
+        for (const [id, config] of Object.entries(layouts)) {
+            const widget = document.getElementById(id);
+            if (widget && config.size) {
+                // Remove existing size classes
+                widget.classList.remove('widget-sm', 'widget-md', 'widget-lg');
+                widget.classList.add(`widget-${config.size}`);
+                
+                // Update active button state if in DOM
+                const buttons = widget.querySelectorAll('.resize-btn');
+                buttons.forEach(btn => {
+                    btn.classList.toggle('active', btn.getAttribute('onclick').includes(`'${config.size}'`));
+                });
+            }
+        }
+
+        // Apply Ordering based on container
+        applyWidgetOrder('employeeStatsGrid', layouts);
+        applyWidgetOrder('adminStatsGrid', layouts);
+        applyWidgetOrder('actionsGrid', layouts);
+    }
+}
+
+function applyWidgetOrder(containerId, layouts) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const widgets = Array.from(container.children);
+    
+    // Sort array based on saved order index
+    widgets.sort((a, b) => {
+        const orderA = (layouts[a.id] && layouts[a.id].order !== undefined) ? layouts[a.id].order : 999;
+        const orderB = (layouts[b.id] && layouts[b.id].order !== undefined) ? layouts[b.id].order : 999;
+        return orderA - orderB;
+    });
+
+    // Reattach in new order
+    widgets.forEach(widget => container.appendChild(widget));
+}
+
+
+function toggleEditMode() {
+    isEditMode = !isEditMode;
+    const body = document.body;
+    const btn = document.getElementById('editDashboardBtn');
+
+    if (isEditMode) {
+        // Enter Edit Mode
+        body.classList.add('edit-mode-active');
+        btn.innerHTML = 'Cancel Edit';
+        btn.style.background = 'rgba(239, 68, 68, 0.1)';
+        btn.style.color = '#ef4444';
+        btn.style.borderColor = '#ef4444';
+        
+        // Take Snapshot to allow cancellation
+        takeLayoutSnapshot();
+        
+        // Enable Dragging
+        enableWidgetDragging('employeeStatsGrid');
+        enableWidgetDragging('adminStatsGrid');
+        enableWidgetDragging('actionsGrid');
+        
+        // Show resize controls
+        document.querySelectorAll('.stat-card, .action-card').forEach(w => w.classList.add('editing'));
+        
+        showNotification("Edit Mode active. Drag widgets to reorder and use bottom handles to resize.", "info");
+
+    } else {
+        // Exit Edit Mode (Cancel)
+        cancelLayoutChanges();
+    }
+}
+
+function takeLayoutSnapshot() {
+    originalLayoutSnapshot = {};
+    const extractState = (containerId) => {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        Array.from(container.children).forEach((widget, index) => {
+            if(widget.id) {
+                let size = 'sm';
+                if(widget.classList.contains('widget-md')) size = 'md';
+                if(widget.classList.contains('widget-lg')) size = 'lg';
+                
+                originalLayoutSnapshot[widget.id] = { order: index, size: size, element: widget };
+            }
+        });
+    }
+    extractState('employeeStatsGrid');
+    extractState('adminStatsGrid');
+    extractState('actionsGrid');
+}
+
+function cancelLayoutChanges() {
+    if (!isEditMode) return;
+    
+    // Revert to snapshot
+    if (originalLayoutSnapshot) {
+        for (const [id, config] of Object.entries(originalLayoutSnapshot)) {
+            const widget = document.getElementById(id);
+            if (widget) {
+                widget.classList.remove('widget-sm', 'widget-md', 'widget-lg');
+                widget.classList.add(`widget-${config.size}`);
+            }
+        }
+        
+        applyWidgetOrder('employeeStatsGrid', originalLayoutSnapshot);
+        applyWidgetOrder('adminStatsGrid', originalLayoutSnapshot);
+        applyWidgetOrder('actionsGrid', originalLayoutSnapshot);
+    }
+
+    exitEditModeUI();
+}
+
+function exitEditModeUI() {
+    isEditMode = false;
+    document.body.classList.remove('edit-mode-active');
+    
+    const btn = document.getElementById('editDashboardBtn');
+    if(btn) {
+        btn.innerHTML = '✏️ Edit Layout';
+        btn.style.background = 'rgba(var(--primary-rgb), 0.1)';
+        btn.style.color = 'var(--primary-color)';
+        btn.style.borderColor = 'var(--primary-color)';
+    }
+
+    disableWidgetDragging('employeeStatsGrid');
+    disableWidgetDragging('adminStatsGrid');
+    disableWidgetDragging('actionsGrid');
+    
+    // Hide resize controls
+    document.querySelectorAll('.stat-card, .action-card').forEach(w => w.classList.remove('editing'));
+}
+
+function resizeWidget(widgetId, sizeClass) {
+    if (!isEditMode) return;
+    
+    const widget = document.getElementById(widgetId);
+    if (!widget) return;
+
+    // Reset classes
+    widget.classList.remove('widget-sm', 'widget-md', 'widget-lg');
+    widget.classList.add(`widget-${sizeClass}`);
+
+    // Update active button state visually
+    const buttons = widget.querySelectorAll('.resize-btn');
+    buttons.forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.getAttribute('onclick').includes(`'${sizeClass}'`)) {
+            btn.classList.add('active');
+        }
+    });
+}
+
+// Drag functionality
+function enableWidgetDragging(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const widgets = container.children;
+    for (let widget of widgets) {
+        if(widget.id && (widget.classList.contains('stat-card') || widget.classList.contains('action-card'))) {
+            widget.setAttribute('draggable', 'true');
+            
+            widget.addEventListener('dragstart', handleDragStart);
+            widget.addEventListener('dragover', handleDragOver);
+            widget.addEventListener('dragenter', handleDragEnter);
+            widget.addEventListener('dragleave', handleDragLeave);
+            widget.addEventListener('drop', handleDrop);
+            widget.addEventListener('dragend', handleDragEnd);
+        }
+    }
+}
+
+function disableWidgetDragging(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const widgets = container.children;
+    for (let widget of widgets) {
+        if(widget.id && (widget.classList.contains('stat-card') || widget.classList.contains('action-card'))) {
+            widget.setAttribute('draggable', 'false');
+            
+            widget.removeEventListener('dragstart', handleDragStart);
+            widget.removeEventListener('dragover', handleDragOver);
+            widget.removeEventListener('dragenter', handleDragEnter);
+            widget.removeEventListener('dragleave', handleDragLeave);
+            widget.removeEventListener('drop', handleDrop);
+            widget.removeEventListener('dragend', handleDragEnd);
+        }
+    }
+}
+
+function handleDragStart(e) {
+    if (!isEditMode) {
+        e.preventDefault();
+        return;
+    }
+    draggedWidget = this;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', this.id);
+    this.classList.add('dragging');
+}
+
+function handleDragOver(e) {
+    if (e.preventDefault) {
+        e.preventDefault(); // Necessary. Allows us to drop.
+    }
+    e.dataTransfer.dropEffect = 'move';
+    return false;
+}
+
+function handleDragEnter(e) {
+    if(this !== draggedWidget && (this.classList.contains('stat-card') || this.classList.contains('action-card'))) {
+        this.classList.add('over');
+    }
+}
+
+function handleDragLeave(e) {
+    this.classList.remove('over');
+}
+
+function handleDrop(e) {
+    if (e.stopPropagation) {
+        e.stopPropagation(); // stops the browser from redirecting.
+    }
+
+    if (draggedWidget !== this && (this.classList.contains('stat-card') || this.classList.contains('action-card'))) {
+        // Swap elements based on mouse position relative to center
+        const bounding = this.getBoundingClientRect();
+        const offset = bounding.y + (bounding.height / 2);
+        
+        const container = this.parentNode;
+        
+        // If dropping on bottom half, insert after. Else before.
+        if (e.clientY > offset) {
+            if (this.nextSibling) {
+                container.insertBefore(draggedWidget, this.nextSibling);
+            } else {
+                container.appendChild(draggedWidget);
+            }
+        } else {
+            container.insertBefore(draggedWidget, this);
+        }
+    }
+
+    return false;
+}
+
+function handleDragEnd(e) {
+    this.classList.remove('dragging');
+    const container = this.parentNode;
+    if(container) {
+        const widgets = container.children;
+        for (let widget of widgets) {
+            widget.classList.remove('over');
+        }
+    }
+}
+
+async function saveDashboardLayout() {
+    if (!currentUser) return;
+
+    const currentLayouts = {};
+    
+    // Read Current DOM State
+    const extractCurrentState = (containerId) => {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        Array.from(container.children).forEach((widget, index) => {
+            if(widget.id) {
+                let size = 'sm';
+                if(widget.classList.contains('widget-md')) size = 'md';
+                if(widget.classList.contains('widget-lg')) size = 'lg';
+                
+                currentLayouts[widget.id] = { order: index, size: size };
+            }
+        });
+    }
+
+    extractCurrentState('employeeStatsGrid');
+    extractCurrentState('adminStatsGrid');
+    extractCurrentState('actionsGrid');
+    
+    // Update theme settings object
+    if (!currentUser.theme_settings) currentUser.theme_settings = {};
+    // Deep copy to ensure we're not just referencing
+    currentUser.theme_settings.widgetLayouts = JSON.parse(JSON.stringify(currentLayouts));
+
+    try {
+        const btn = document.querySelector('.edit-actions-bar .btn-primary');
+        if(btn) {
+            btn.innerHTML = 'Saving...';
+            btn.disabled = true;
+        }
+
+        const payload = { 
+            employee_id: currentUser.id,
+            theme_settings: currentUser.theme_settings 
+        };
+        const response = await apiCall('employee-profile', 'PATCH', payload);
+
+        if (!response || !response.success) throw new Error('Failed to save layout');
+
+        // Sync local sessionStorage so reload picks up new theme settings
+        sessionStorage.setItem('attendanceUser', JSON.stringify(currentUser));
+
+        showNotification("Dashboard Layout Saved!", "success");
+        exitEditModeUI();
+
+    } catch (error) {
+        console.error('Save configuration error:', error);
+        showNotification("Error saving layout", "error");
+    } finally {
+        const btn = document.querySelector('.edit-actions-bar .btn-primary');
+        if(btn) {
+            btn.innerHTML = 'Save Layout';
+            btn.disabled = false;
+        }
+    }
+}
+
+// --- Mentor Status Banner Loading ---
+async function loadMentorStatus() {
+    if (!currentUser || currentUser.role === 'admin') return;
+
+    try {
+        const response = await apiCall('mentor-status', 'GET', { employee_id: currentUser.id });
+        if (response.success && response.mentors && response.mentors.length > 0) {
+            const section = document.getElementById('mentorStatusSection');
+            const container = document.getElementById('mentorStatusContainer');
+            if (section && container) {
+                section.style.display = 'block';
+                let html = '';
+                response.mentors.forEach(mentor => {
+                    const statusClass = `status-${mentor.status.toLowerCase()}`;
+                    
+                    let avatarHtml = '';
+                    if (mentor.avatar.startsWith('http') || mentor.avatar.startsWith('/')) {
+                        avatarHtml = `<img src="${mentor.avatar}" alt="${mentor.name}">`;
+                    } else {
+                        avatarHtml = `<span style="background:${mentor.bg}; width:100%; height:100%; display:flex; align-items:center; justify-content:center;">${mentor.avatar}</span>`;
+                    }
+                    
+                    html += `
+                        <div class="mentor-status-card">
+                            <div class="mentor-avatar">${avatarHtml}</div>
+                            <div class="mentor-details">
+                                <span class="mentor-role-label">Reporting Manager</span>
+                                <span class="mentor-name">${mentor.name}</span>
+                                <span class="mentor-status-badge ${statusClass}">${mentor.status}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+            }
+        }
+    } catch (e) {
+        console.error("Failed to load mentor status:", e);
     }
 }

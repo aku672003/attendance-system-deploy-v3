@@ -27,6 +27,8 @@ urlpatterns = [
     path('leave-request-approve', views.leave_request_approve, name='leave_request_approve'),
     path('wfh-request-approve', views.wfh_request_approve, name='wfh_request_approve'),
     path('my-requests', views.my_requests, name='my_requests'),
+    path('mentor-status', views.mentor_status, name='mentor_status'),
+
     path('unblock-attendance', views.unblock_attendance, name='unblock_attendance'),
     
     # Profile
@@ -94,4 +96,10 @@ urlpatterns = [
     path('verify-token', views.verify_token, name='verify_token'),
     path('gated-dashboard', views.gated_dashboard, name='gated_dashboard'),
     path('employee-list-summary', views.employee_list_summary, name='employee_list_summary'),
+    
+    # Memoji System
+    path('avatar-assets', views.avatar_assets_list, name='avatar_assets_list'),
+    path('memoji', views.user_memoji_api, name='user_memoji_api'),
+    path('memoji/<int:user_id>', views.user_memoji_api, name='user_memoji_api_detail'),
+    path('upload-avatar', views.upload_avatar, name='upload_avatar'),
 ]

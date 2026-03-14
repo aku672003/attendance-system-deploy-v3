@@ -29,6 +29,10 @@
     /* Body gradient colors */
     --gradient-start: #2563eb;
     --gradient-end: #1e40af;
+
+    /* RGB variants for alpha support */
+    --primary-rgb: 37, 99, 235;
+    --secondary-rgb: 124, 58, 237;
 }
 
 * {
@@ -39,7 +43,13 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+    background:
+        radial-gradient(at 0% 0%, var(--corner-tl, var(--gradient-start)) 0%, transparent 80%),
+        radial-gradient(at 100% 0%, var(--corner-tr, var(--gradient-start)) 0%, transparent 80%),
+        radial-gradient(at 0% 100%, var(--corner-bl, var(--gradient-end)) 0%, transparent 80%),
+        radial-gradient(at 100% 100%, var(--corner-br, var(--gradient-end)) 0%, transparent 80%),
+        var(--gradient-end);
+    background-attachment: fixed;
     min-height: 100vh;
     color: var(--gray-900);
     line-height: 1.5;
@@ -251,6 +261,17 @@ body {
     width: 100%;
 }
 
+.btn-subtle {
+    background: rgba(var(--primary-rgb), 0.1);
+    color: var(--primary-color);
+    border: 1px solid rgba(var(--primary-rgb), 0.2);
+}
+
+.btn-subtle:hover {
+    background: rgba(var(--primary-rgb), 0.15);
+    border-color: var(--primary-color);
+}
+
 /* Links in Login/Signup */
 .signup-link,
 .login-link {
@@ -308,18 +329,30 @@ body {
     color: var(--gray-700);
 }
 
+#userAvatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    overflow: hidden;
+    vertical-align: middle;
+    background: rgba(0, 0, 0, 0.05);
+}
+
 /* Stats Grid */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    gap: 24px;
-    margin-bottom: 32px;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
 }
 
 .stat-card {
     background: var(--white);
     border-radius: 16px;
-    padding: 24px;
+    padding: 20px;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     border-left: 4px solid var(--primary-color);
     transition: transform 0.2s ease;
@@ -335,15 +368,15 @@ body {
     color: var(--gray-500);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
 }
 
 .stat-card-value {
-    font-size: 32px;
+    font-size: 26px;
     font-weight: 700;
     color: var(--gray-900);
-    margin-bottom: 4px;
-    line-height: 1.2;
+    margin-bottom: 2px;
+    line-height: 1.1;
 }
 
 .stat-card-value.success {
@@ -359,7 +392,7 @@ body {
 }
 
 .stat-card-timing {
-    font-size: 14px;
+    font-size: 11px;
     color: var(--gray-500);
 }
 
@@ -377,7 +410,7 @@ body {
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     transition: all 0.3s ease;
     cursor: pointer;
-    padding: 24px;
+    padding: 16px;
     border-radius: 16px;
 }
 
@@ -407,7 +440,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 8px;
 }
 
 .status-title {
@@ -447,9 +480,9 @@ body {
 
 .progress-ring-container {
     position: relative;
-    width: 80px;
-    height: 80px;
-    margin-bottom: 12px;
+    width: 60px;
+    height: 60px;
+    margin-bottom: 8px;
 }
 
 .progress-ring {
@@ -463,9 +496,9 @@ body {
 }
 
 .progress-ring-fill {
-    stroke-dasharray: 201;
-    /* 2 * PI * r (32) ≈ 201 */
-    stroke-dashoffset: 201;
+    stroke-dasharray: 164;
+    /* 2 * PI * r (26) ≈ 163.3 */
+    stroke-dashoffset: 164;
     /* Start empty */
     transition: stroke-dashoffset 1.5s cubic-bezier(0.22, 1, 0.36, 1);
     stroke-linecap: round;
@@ -476,7 +509,12 @@ body {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 24px;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
 }
 
 .metric-details {
@@ -550,7 +588,7 @@ body {
 .action-card {
     background: var(--white);
     border-radius: 16px;
-    padding: 32px;
+    padding: 24px;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     border: 2px solid var(--gray-200);
     cursor: pointer;
@@ -565,16 +603,16 @@ body {
 }
 
 .action-card-icon {
-    font-size: 48px;
-    margin-bottom: 16px;
+    font-size: 40px;
+    margin-bottom: 12px;
     display: block;
 }
 
 .action-card-title {
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 700;
     color: var(--gray-900);
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
 
 .action-card-description {
@@ -849,8 +887,13 @@ body {
     background: rgba(0, 0, 0, 0.5);
     display: none;
     justify-content: center;
-    align-items: center;
+    align-items: flex-start;
+    /* Change from center to flex-start */
+    padding: 40px 20px;
+    /* Add padding for safe scroll space */
     z-index: 1000;
+    overflow-y: auto;
+    /* Ensure the modal container itself can scroll if needed */
 }
 
 .modal.active {
@@ -4875,7 +4918,7 @@ body {
 
 /* Mini Calendar Widget */
 .calendar-card {
-    min-height: 160px;
+    height: 200px;
     /* Ensure visual balance */
 }
 
@@ -4883,7 +4926,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
     font-size: 13px;
     font-weight: 700;
     color: var(--gray-800);
@@ -4895,7 +4938,7 @@ body {
     gap: 2px;
     flex: 1;
     /* specific fill */
-    align-content: center;
+    align-content: stretch;
 }
 
 .mini-cal-day-name {
@@ -4903,13 +4946,13 @@ body {
     color: var(--gray-400);
     text-align: center;
     font-weight: 600;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
 }
 
 .mini-cal-day {
     font-size: 11px;
     text-align: center;
-    padding: 4px 0;
+    padding: 2px 0;
     color: var(--gray-700);
     border-radius: 4px;
     cursor: default;
@@ -5318,16 +5361,16 @@ input:checked+.slider:before {
 .calendar-modal-content {
     width: 95% !important;
     max-width: 580px !important;
-    /* Narrower to match square grid footprint */
     max-height: 92vh !important;
     overflow-y: auto;
-    padding: clamp(12px, 2vw, 24px) !important;
-    border-radius: 16px !important;
+    padding: 24px !important;
+    border-radius: 20px !important;
     margin: 5px auto;
+    background: rgba(255, 255, 255, 0.95) !important;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
     display: flex;
     flex-direction: column;
-    align-items: center;
-    /* Center all child elements */
 }
 
 @media (min-width: 1200px) {
@@ -5340,26 +5383,47 @@ input:checked+.slider:before {
 .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
-    /* Balanced gap */
-    margin-top: 10px;
+    gap: 8px;
+    margin-top: 20px;
     width: 100%;
-    /* Ensure it spans the modal width */
 }
 
 .calendar-day {
     aspect-ratio: 1 / 1;
-    /* Perfect symmetry */
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    font-size: clamp(0.75rem, 1.8vw, 0.95rem);
-    font-weight: 700;
-    border-radius: clamp(4px, 1vw, 10px);
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 12px;
     position: relative;
-    cursor: pointer;
-    transition: all 0.2s ease;
+    cursor: default;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    background: var(--gray-50);
+    border: 1px solid var(--gray-100);
+}
+
+.calendar-day.empty {
+    background: transparent;
+    border: none;
+    cursor: default;
+}
+
+.calendar-day-label {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--gray-400);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding-bottom: 8px;
+}
+
+.calendar-day:hover:not(.empty) {
+    background: var(--gray-100);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 /* Fix for small screens */
@@ -5371,6 +5435,62 @@ input:checked+.slider:before {
     .calendar-day {
         font-size: 0.8rem;
     }
+}
+
+/* Calendar Day Statuses */
+.calendar-day.cal-present {
+    background: #ecfdf5;
+    border-color: #10b981;
+    color: #065f46;
+}
+
+.calendar-day.cal-client {
+    background: #eff6ff;
+    border-color: #3b82f6;
+    color: #1e40af;
+}
+
+.calendar-day.cal-absent {
+    background: #fef2f2;
+    border-color: #ef4444;
+    color: #991b1b;
+}
+
+.calendar-day.cal-wfh {
+    background: #f5f3ff;
+    border-color: #8b5cf6;
+    color: #5b21b6;
+}
+
+.calendar-day.cal-half {
+    background: #fffbeb;
+    border-color: #f59e0b;
+    color: #92400e;
+}
+
+.calendar-day.cal-leave {
+    background: #fdf2f8;
+    border-color: #ec4899;
+    color: #9d174d;
+}
+
+.calendar-day.selected {
+    background: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+    color: white !important;
+    transform: scale(0.95);
+}
+
+.calendar-day-number {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.calendar-day-status-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    margin-top: 2px;
 }
 
 /* ========== Attendance Predictions Styles ========== */
@@ -5431,20 +5551,59 @@ input:checked+.slider:before {
     grid-column: span 2;
     background: linear-gradient(135deg, #e9d5ff 0%, #ddd6fe 50%, #c4b5fd 100%) !important;
     border: 1px solid rgba(168, 85, 247, 0.2) !important;
-    padding: 24px !important;
+    padding: 20px !important;
     cursor: default !important;
     position: relative;
     overflow: hidden;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    transition: all 0.3s ease;
+}
+
+/* Override for small size */
+.intelligence-hub-card.widget-sm {
+    grid-column: span 1 !important;
+    padding: 12px !important;
+}
+
+.intelligence-hub-card.widget-sm .intelligence-hub-content-row {
+    flex-direction: column !important;
+    gap: 10px !important;
+    align-items: flex-start !important;
+}
+
+.intelligence-hub-card.widget-sm .intelligence-hub-percentage {
+    font-size: 24px !important;
+}
+
+.intelligence-hub-card.widget-sm .intelligence-hub-subtitle {
+    font-size: 11px !important;
+}
+
+.intelligence-hub-card.widget-sm .intelligence-hub-stats-v2 {
+    padding: 10px !important;
+    gap: 8px !important;
+    width: 100% !important;
+}
+
+.intelligence-hub-card.widget-sm .intelligence-hub-actions {
+    flex-direction: column !important;
+    gap: 4px !important;
+    width: 100% !important;
+}
+
+.intelligence-hub-card.widget-sm .intelligence-hub-btn {
+    padding: 6px !important;
+    font-size: 10px !important;
+    width: 100% !important;
 }
 
 .intelligence-hub-content-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 32px;
+    gap: 20px;
     flex: 1;
 }
 
@@ -5463,7 +5622,7 @@ input:checked+.slider:before {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 24px;
+    margin-bottom: 8px;
 }
 
 .intelligence-hub-title-group {
@@ -5517,18 +5676,18 @@ input:checked+.slider:before {
 }
 
 .intelligence-hub-percentage {
-    font-size: 64px;
+    font-size: 36px;
     font-weight: 800;
     color: #581c87;
     line-height: 1;
-    margin-bottom: 8px;
+    margin-bottom: 2px;
     display: flex;
     align-items: center;
     gap: 12px;
 }
 
 .intelligence-hub-subtitle {
-    font-size: 16px;
+    font-size: 13px;
     font-weight: 600;
     color: #7c3aed;
     opacity: 0.9;
@@ -6748,7 +6907,7 @@ input:checked+.slider:before {
     border: 1px solid #fed7aa;
     border-left: 5px solid #f59e0b;
     border-radius: 12px;
-    padding: 16px 20px;
+    padding: 10px 16px;
     display: flex;
     align-items: center;
     gap: 16px;
@@ -7604,6 +7763,7 @@ body.birthday-mode-active .status-badge {
         padding: 12px 20px !important;
     }
 }
+
 /* Bulk Manager Assignment Styles */
 .assign-manager-row {
     border-bottom: 1px solid #f1f5f9;
@@ -7644,4 +7804,3185 @@ body.birthday-mode-active .status-badge {
 
 #assignManagerList::-webkit-scrollbar-thumb:hover {
     background: #94a3b8;
+}
+
+/* ==================== DARK MODE ENHANCEMENTS ==================== */
+body.dark-mode {
+    --white: #0a0a0a;
+    --background: #000000;
+    --bg-card: #050505;
+    --text-primary: #ffffff;
+    --text-secondary: #a1a1aa;
+    --gray-50: rgba(255, 255, 255, 0.03);
+    --gray-100: rgba(255, 255, 255, 0.08);
+    --gray-200: rgba(255, 255, 255, 0.12);
+    --gray-300: rgba(255, 255, 255, 0.18);
+    --gray-400: rgba(255, 255, 255, 0.25);
+    --gray-500: #71717a;
+    --gray-600: #a1a1aa;
+    --gray-700: #d4d4d8;
+    --gray-800: #e4e4e7;
+    --gray-900: #ffffff;
+    --gradient-start: #000000 !important;
+    --gradient-end: #000000 !important;
+    color: var(--text-primary);
+}
+
+body.dark-mode .card,
+body.dark-mode .stat-card,
+body.dark-mode .action-card,
+body.dark-mode .login-card,
+body.dark-mode .modal-content,
+body.dark-mode .notification-list {
+    background: rgba(10, 10, 10, 0.9) !important;
+    backdrop-filter: blur(25px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    color: var(--text-primary);
+}
+
+body.dark-mode .form-control,
+body.dark-mode select.form-control {
+    background: rgba(15, 23, 42, 0.8);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+body.dark-mode .form-label {
+    color: var(--text-secondary);
+}
+
+body.dark-mode .stat-card-title,
+body.dark-mode .action-card-title {
+    color: var(--text-primary);
+}
+
+body.dark-mode .stat-card-timing,
+body.dark-mode .action-card-description {
+    color: var(--text-secondary);
+}
+
+body.dark-mode .modal-content h3 {
+    color: var(--text-primary) !important;
+}
+
+body.dark-mode .records-table th,
+body.dark-mode .my-doc-card {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+body.dark-mode .records-table td {
+    color: var(--text-primary);
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+body.dark-mode .calendar-day {
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-primary);
+}
+
+/* Base button overrides for dark mode */
+body.dark-mode .btn-secondary {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+body.dark-mode .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.15) !important;
+}
+
+body.dark-mode .btn-subtle {
+    background: rgba(var(--primary-rgb), 0.1) !important;
+    border: 1px solid rgba(var(--primary-rgb), 0.2) !important;
+    color: var(--primary-color) !important;
+}
+
+/* Banner & Alert Overrides */
+body.dark-mode .mentor-status-card {
+    background: #050505 !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+}
+
+body.dark-mode .mentor-status-card:hover {
+    border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+body.dark-mode .profile-alert-card {
+    background: #0a0500 !important; /* Pitch black with a hint of warm */
+    border: 1px solid rgba(245, 158, 11, 0.3) !important;
+    border-left: 5px solid #f59e0b !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .profile-alert-title {
+    color: #fbbf24 !important;
+}
+
+body.dark-mode .profile-alert-text {
+    color: #d1d5db !important;
+}
+
+body.dark-mode .notification-bar {
+    background: #000000 !important;
+    border: 1px solid rgba(139, 92, 246, 0.3) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8) !important;
+}
+
+body.dark-mode .notification-header {
+    background: rgba(139, 92, 246, 0.1) !important;
+}
+
+body.dark-mode .notification-header:hover {
+    background: rgba(139, 92, 246, 0.15) !important;
+}
+
+body.dark-mode .header {
+    background: #050505 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+}
+
+body.dark-mode .header-title {
+    color: #ffffff !important;
+}
+
+body.dark-mode .user-welcome {
+    color: #a1a1aa !important;
+}
+
+body.dark-mode .stat-card-title,
+body.dark-mode .action-card-title {
+    color: #ffffff !important;
+}
+
+body.dark-mode .stat-card-value {
+    color: #ffffff !important;
+}
+
+body.dark-mode .action-card-description {
+    color: #a1a1aa !important;
+}
+
+/* Mini Calendar Dark Mode */
+body.dark-mode .mini-cal-header {
+    color: #ffffff !important;
+}
+
+body.dark-mode .mini-cal-day-name {
+    color: #71717a !important;
+}
+
+body.dark-mode .mini-cal-day {
+    color: #a1a1aa !important;
+}
+
+body.dark-mode .mini-cal-day.status-present {
+    background-color: #052e16 !important;
+    color: #4ade80 !important;
+}
+
+body.dark-mode .mini-cal-day.status-wfh {
+    background-color: #172554 !important;
+    color: #60a5fa !important;
+}
+
+body.dark-mode .mini-cal-day.status-absent {
+    background-color: #450a0a !important;
+    color: #f87171 !important;
+}
+
+body.dark-mode .mini-cal-day.status-leave {
+    background-color: #422006 !important;
+    color: #fbbf24 !important;
+}
+
+body.dark-mode .mini-cal-day.today {
+    background: var(--primary-color) !important;
+    color: white !important;
+    box-shadow: 0 0 10px rgba(37, 99, 235, 0.5) !important;
+}
+
+body.dark-mode .intelligence-hub-card::before {
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.05) 0%, transparent 60%) !important;
+}
+
+body.dark-mode #mentorStatusSection h4 {
+    color: #a1a1aa !important;
+}
+
+/* ==================== APPLE-STYLE EMOJI PICKER ==================== */
+/* Overall Container */
+.emoji-picker-container {
+    width: 650px;
+    max-width: 95vw;
+    padding: 0;
+    border-radius: 20px;
+    overflow: hidden;
+    background: #1c1c1e;
+    /* Apple dark background */
+    display: flex;
+    flex-direction: column;
+    height: 550px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Header / Top Bar */
+.emoji-picker-header {
+    padding: 14px 20px;
+    display: flex;
+    justify-content: center;
+    /* Centered like macOS */
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: transparent;
+    position: relative;
+    /* macOS Window controls simulation (optional but looks good) */
+}
+
+.emoji-picker-header h3 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #ffffff;
+    letter-spacing: 0.3px;
+}
+
+.emoji-picker-header .close-btn {
+    position: absolute;
+    right: 16px;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    font-size: 16px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #ffffff;
+    line-height: 1;
+    transition: background 0.2s;
+}
+
+.emoji-picker-header .close-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+
+/* Main Body Split */
+.emoji-picker-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+.emoji-sidebar-wrapper {
+    width: 220px;
+    background: transparent;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+}
+
+/* Sidebar */
+.emoji-sidebar {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* Sidebar List Items (like "Memoji", "Emoji", etc) */
+.emoji-category-btn {
+    width: 100%;
+    padding: 8px 12px;
+    text-align: left;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #ffffff;
+    transition: all 0.1s;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+}
+
+.emoji-category-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Active State matches macOS Blue Selection */
+.emoji-category-btn.active {
+    background: rgba(255, 255, 255, 0.15);
+    /* #007aff for true apple blue, but translucent grey is used in the screenshot for the sidebar items */
+    font-weight: 500;
+}
+
+.emoji-category-btn .cat-icon {
+    font-size: 16px;
+    width: 20px;
+    text-align: center;
+    /* Optional: make blue if it matches the icons in the screenshot */
+    color: #0a84ff;
+}
+
+/* Sidebar Preview Section */
+.emoji-preview-section {
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.emoji-preview-circle {
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 80px;
+    overflow: hidden;
+    /* Inner shadow to match the screenshot's depth */
+    box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+.emoji-preview-circle img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transform: scale(0.85);
+    /* Padding */
+}
+
+/* Apple Range Slider */
+.apple-range-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100px;
+    background: transparent;
+}
+
+.apple-range-slider:focus {
+    outline: none;
+}
+
+.apple-range-slider::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 4px;
+    cursor: pointer;
+    background: #0a84ff;
+    border-radius: 2px;
+}
+
+.apple-range-slider::-webkit-slider-thumb {
+    height: 14px;
+    width: 14px;
+    border-radius: 50%;
+    background: #ffffff;
+    cursor: pointer;
+    -webkit-appearance: none;
+    margin-top: -5px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* Right Side Main Area */
+.emoji-main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    background: #1c1c1e;
+    /* matches container */
+}
+
+/* macOS Top Segmented Control Simulation */
+.emoji-segmented-control {
+    display: flex;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 2px;
+    margin-bottom: 24px;
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.emoji-segmented-control button {
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    padding: 4px 16px;
+    font-size: 12px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.emoji-segmented-control button.segment-active {
+    background: #0a84ff;
+    /* Apple Blue */
+    font-weight: 600;
+}
+
+
+/* Grid layout for emojis */
+.emoji-grid-section {
+    margin-bottom: 30px;
+}
+
+.emoji-grid-section h4 {
+    margin: 0 0 16px 4px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.emoji-grid {
+    display: grid;
+    /* Larger grid items for the Memoji style */
+    grid-template-columns: repeat(auto-fill, minmax(65px, 1fr));
+    gap: 16px 12px;
+}
+
+.emoji-item {
+    width: 65px;
+    height: 65px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 40px;
+    /* Big Emojis */
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), background 0.2s;
+    border: 2px solid transparent;
+    background: transparent;
+}
+
+.emoji-item:hover {
+    transform: scale(1.15);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Selected state with Apple Blue Ring */
+.emoji-item.selected {
+    border-color: #0a84ff;
+    background: rgba(10, 132, 255, 0.1);
+}
+
+
+/* Footer / Buttons area */
+.emoji-picker-footer {
+    padding: 16px 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    background: transparent;
+}
+
+/* Apple Buttons */
+.emoji-picker-footer .btn-secondary {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border: none !important;
+    color: #ffffff !important;
+    border-radius: 6px !important;
+    padding: 6px 16px !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+}
+
+.emoji-picker-footer .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.15) !important;
+}
+
+.emoji-picker-footer .btn-primary {
+    background: #0a84ff !important;
+    border: none !important;
+    color: #ffffff !important;
+    border-radius: 6px !important;
+    padding: 6px 16px !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+}
+
+.emoji-picker-footer .btn-primary:hover {
+    background: #007aff !important;
+}
+
+/* ==================== CREATE MEMOJI MODAL SPECIFICS ==================== */
+.create-color-btn {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.1s;
+    padding: 0;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    /* Default border like macOS */
+}
+
+.create-color-btn:hover {
+    transform: scale(1.1);
+}
+
+.create-color-btn.active {
+    outline: none;
+    border: 2px solid #ffffff;
+    /* White inner border */
+    box-shadow: 0 0 0 2px #0a84ff;
+    /* Blue outer ring */
+}
+
+.create-option-card {
+    width: 65px;
+    height: 75px;
+    background: rgba(255, 255, 255, 0.05);
+    /* Apple-style translucent gray */
+    border: 2px solid transparent;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 44px;
+    cursor: pointer;
+    transition: all 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.create-option-card:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.create-option-card.active {
+    background: rgba(10, 132, 255, 0.1);
+    border-color: #0a84ff;
+}
+
+/* Specific Sidebar Overrides for the Create Modal */
+#createMemojiModal .emoji-sidebar {
+    padding: 16px 12px;
+    width: 200px;
+    /* Slight width adjustment per screenshot */
+}
+
+#createMemojiModal .emoji-category-btn {
+    padding: 10px 14px;
+    font-size: 14px;
+    gap: 14px;
+    border-radius: 8px;
+    margin-bottom: 2px;
+}
+
+#createMemojiModal .emoji-category-btn.active {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+#createMemojiModal .emoji-category-btn .cat-icon {
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.4);
+    /* Grayish monochrome icons */
+    width: 20px;
+}
+
+#createMemojiModal .emoji-category-btn.active .cat-icon {
+    color: #ffffff;
+    /* Brighter when active */
+}
+
+#createMemojiModal .emoji-picker-header {
+    border-bottom: none;
+    /* The header blends in smoothly in the apple screenshot */
+}
+
+#createMemojiModal .close-btn {
+    color: #0a84ff;
+    /* Make the "< Apple Account" back button explicitly blue */
+}
+
+#createMemojiModal .close-btn:hover {
+    background: rgba(10, 132, 255, 0.1) !important;
+}
+
+/* ==================== MEMOJI EDITOR 3-PANEL SYSTEM ==================== */
+.memoji-editor-container {
+    background: #1c1c1e !important;
+    border-radius: 20px !important;
+    overflow: hidden;
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.memoji-sidebar .emoji-category-btn {
+    width: 100%;
+    padding: 12px 20px;
+    background: none;
+    border: none;
+    color: #fff;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    opacity: 0.6;
+}
+
+.memoji-sidebar .emoji-category-btn:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.memoji-sidebar .emoji-category-btn.active {
+    opacity: 1;
+    background: rgba(10, 132, 255, 0.15);
+    color: #0a84ff;
+}
+
+.cat-icon {
+    font-size: 16px;
+    width: 20px;
+}
+
+.memoji-preview-panel {
+    background: radial-gradient(circle at center, #2c2c2e 0%, #000 100%) !important;
+}
+
+.memoji-renderer span {
+    display: block;
+    width: 100%;
+    height: 100%;
+    text-align: center;
+    line-height: 350px;
+    user-select: none;
+    pointer-events: none;
+}
+
+.memoji-options h4 {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.create-color-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+.create-color-btn:hover {
+    transform: scale(1.1);
+}
+
+.create-color-btn.active::after {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    right: -4px;
+    bottom: -4px;
+    border: 2px solid #0a84ff;
+    border-radius: 50%;
+}
+
+.create-option-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid transparent;
+    border-radius: 12px;
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.create-option-card:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+}
+
+.create-option-card.active {
+    background: rgba(10, 132, 255, 0.1) !important;
+    border-color: #0a84ff !important;
+}
+
+.memoji-bottom-bar button {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    transition: all 0.2s;
+}
+
+.memoji-bottom-bar .done-btn:hover {
+    background: #0071e3;
+    transform: scale(1.02);
+}
+
+.memoji-bottom-bar .cancel-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Custom scrollbar for sidebar and options */
+.memoji-sidebar::-webkit-scrollbar,
+.memoji-options::-webkit-scrollbar {
+    width: 6px;
+}
+
+.memoji-sidebar::-webkit-scrollbar-track,
+.memoji-options::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.memoji-sidebar::-webkit-scrollbar-thumb,
+.memoji-options::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+/* Modular Memoji Layer Styling */
+.memoji-renderer .memoji-layer {
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.memoji-renderer svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.create-option-card {
+    position: relative;
+    overflow: hidden;
+}
+
+.create-option-card div {
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top-color: #0a84ff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Mini Avatar Rendering (Sidebar/Dashboard) */
+.memoji-wrapper-mini {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.memoji-wrapper-mini .memoji-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.memoji-wrapper-mini svg {
+    width: 100%;
+    height: 100%;
+}
+
+.memoji-loading-mini {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-top-color: #0a84ff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* Premium 3D Avatar Styles */
+.premium-avatar-wrapper {
+    background: #ffffff;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    position: relative;
+    z-index: 1;
+}
+
+.premium-avatar-wrapper::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 50%);
+    z-index: 3;
+    border-radius: 50%;
+}
+
+.dark-mode .premium-avatar-wrapper {
+    background: var(--gray-800);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
+}
+
+.dark-mode .premium-avatar-wrapper::after {
+    background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0) 60%);
+}
+
+.avatar-grid-item:hover .premium-avatar-wrapper {
+    transform: scale(1.08) translateY(-4px);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+}
+
+/* Advanced Gradient Personalization */
+.corner-selector-widget {
+    display: grid;
+    grid-template-columns: repeat(2, 45px);
+    grid-template-rows: repeat(2, 45px);
+    gap: 12px;
+    justify-content: center;
+    background: var(--gray-50);
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid var(--gray-200);
+    margin: 15px auto;
+    width: fit-content;
+}
+
+.corner-btn {
+    width: 45px;
+    height: 45px;
+    border-radius: 10px;
+    border: 2px solid var(--gray-300);
+    background: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--gray-400);
+    overflow: hidden;
+}
+
+.corner-btn::before {
+    content: '';
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background: currentColor;
+    opacity: 0.2;
+}
+
+.corner-btn.tl::before {
+    top: 6px;
+    left: 6px;
+    border-radius: 3px 0 0 0;
+}
+
+.corner-btn.tr::before {
+    top: 6px;
+    right: 6px;
+    border-radius: 0 3px 0 0;
+}
+
+.corner-btn.bl::before {
+    bottom: 6px;
+    left: 6px;
+    border-radius: 0 0 0 3px;
+}
+
+.corner-btn.br::before {
+    bottom: 6px;
+    right: 6px;
+    border-radius: 0 0 3px 0;
+}
+
+.corner-btn.active {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    background: var(--primary-light);
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+}
+
+.corner-btn.active::before {
+    opacity: 1;
+}
+
+.hex-color-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+    padding: 10px;
+    max-width: 280px;
+    margin: 0 auto;
+}
+
+.hex-swatch {
+    aspect-ratio: 1;
+    cursor: pointer;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    transition: all 0.2s;
+    border: none;
+    padding: 0;
+}
+
+.hex-swatch:hover {
+    transform: scale(1.2) rotate(10deg);
+    filter: saturate(1.5);
+    z-index: 10;
+}
+
+.gradient-preview-small {
+    width: 100%;
+    height: 60px;
+    border-radius: 8px;
+    border: 1px solid var(--gray-200);
+    margin-top: 12px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.gradient-preview-title {
+    position: absolute;
+    bottom: 4px;
+    right: 8px;
+    font-size: 8px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 800;
+    pointer-events: none;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Advanced Color Picker Side Popup Styles */
+.acp-popup {
+    position: fixed;
+    top: 50%;
+    right: -400px;
+    transform: translateY(-50%);
+    width: 320px;
+    background: rgba(15, 15, 25, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px;
+    box-shadow: 0 50px 100px rgba(0, 0, 0, 0.5), 0 0 20px rgba(79, 70, 229, 0.1);
+    z-index: 2100;
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    padding: 24px;
+    opacity: 0;
+    visibility: hidden;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.acp-popup::-webkit-scrollbar {
+    width: 6px;
+}
+
+.acp-popup::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.acp-popup::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+.acp-popup.active {
+    right: 24px;
+    opacity: 1;
+    visibility: visible;
+}
+
+.acp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.acp-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.acp-close {
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    color: #fff;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.2s;
+}
+
+.acp-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: rotate(90deg);
+}
+
+.acp-spectrum {
+    position: relative;
+    width: 100%;
+    height: 180px;
+    border-radius: 12px;
+    background-color: #f00;
+    cursor: crosshair;
+    overflow: hidden;
+}
+
+.acp-sat-white {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(to right, #fff, rgba(255, 255, 255, 0));
+}
+
+.acp-sat-black {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(to top, #000, rgba(0, 0, 0, 0));
+}
+
+.acp-cursor {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+}
+
+.acp-controls {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.acp-hue-slider {
+    width: 100%;
+}
+
+.acp-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 12px;
+    border-radius: 6px;
+    background: linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%);
+    outline: none;
+    cursor: pointer;
+}
+
+.acp-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.acp-inputs {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.acp-hex-input {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.acp-hex-input input {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    outline: none;
+    width: 100%;
+}
+
+.acp-label {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.4);
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.acp-swatch {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.acp-palettes {
+    margin-top: 20px;
+}
+
+.acp-palette-label {
+    font-size: 10px;
+    font-weight: 800;
+    color: rgba(255, 255, 255, 0.3);
+    margin-bottom: 8px;
+    display: block;
+}
+
+.acp-palette-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 8px;
+}
+
+.acp-palette-item {
+    aspect-ratio: 1;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: transform 0.2s;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.acp-palette-item:hover {
+    transform: scale(1.1);
+}
+
+/* Dashboard Widget Edit Mode Styles */
+.edit-mode-active .stat-card,
+.edit-mode-active .action-card,
+.edit-mode-active .attendance-card,
+.edit-mode-active .calendar-card {
+    position: relative;
+    cursor: move;
+    border: 2px dashed var(--primary-color) !important;
+    animation: wiggle 0.3s infinite ease-in-out alternate;
+    user-select: none;
+    transition: none !important;
+}
+
+@keyframes wiggle {
+    from {
+        transform: rotate(-0.5deg);
+    }
+
+    to {
+        transform: rotate(0.5deg);
+    }
+}
+
+.edit-mode-active .stat-card::after {
+    content: "⋮⋮";
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 20px;
+    color: var(--primary-color);
+    opacity: 0.6;
+}
+
+.edit-mode-active .stat-card:hover {
+    transform: none !important;
+    background: rgba(37, 99, 235, 0.05);
+}
+
+.widget-resize-controls {
+    display: none;
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--primary-color);
+    border-radius: 20px;
+    padding: 4px 12px;
+    gap: 8px;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.editing .widget-resize-controls {
+    display: flex;
+}
+
+.editing.stat-card,
+.editing.action-card {
+    cursor: grab;
+    border: 2px dashed rgba(var(--primary-rgb), 0.3) !important;
+}
+
+.editing.stat-card:active,
+.editing.action-card:active {
+    cursor: grabbing;
+}
+
+.edit-mode-active .widget-resize-controls {
+    display: flex;
+}
+
+.resize-btn {
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 10px;
+    font-weight: 800;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.resize-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.resize-btn.active {
+    background: white;
+    color: var(--primary-color);
+}
+
+/* Widget Sizing Classes */
+/* Small: Square-ish (1/3 width on desktop) */
+.widget-sm {
+    grid-column: span 1 !important;
+}
+
+@media (max-width: 1024px) {
+    .widget-sm {
+        grid-column: span 1 !important;
+    }
+}
+
+@media (max-width: 600px) {
+    .widget-sm {
+        grid-column: span 1 !important;
+    }
+}
+
+/* Medium: Rectangle (2/3 width on desktop) */
+.widget-md {
+    grid-column: span 2;
+    height: 200px;
+}
+
+/* Large: Full Width Banner */
+.widget-lg {
+    grid-column: 1 / -1;
+    height: 200px;
+}
+
+@media (max-width: 1200px) {
+    .widget-md {
+        grid-column: span 2;
+    }
+}
+
+@media (max-width: 768px) {
+
+    .widget-sm,
+    .widget-md,
+    .widget-lg,
+    .widget-full {
+        grid-column: span 1;
+        aspect-ratio: auto;
+        /* Reset aspect ratio on mobile so content doesn't break */
+        min-height: auto;
+    }
+}
+
+.dragging {
+    opacity: 0.4;
+    border: 2px solid var(--primary-color) !important;
+}
+
+.edit-actions-bar {
+    position: sticky;
+    top: 20px;
+    z-index: 1500;
+    display: none;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.edit-mode-active .edit-actions-bar {
+    display: flex;
+}
+
+.edit-btn-group {
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
+    padding: 8px 16px;
+    border-radius: 30px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    display: flex;
+    gap: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+/* Mentor Status Banner */
+#mentorStatusContainer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.mentor-status-card {
+    display: flex;
+    align-items: center;
+    background: white;
+    padding: 6px 12px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    min-width: 150px;
+    flex: 1;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.mentor-status-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 12px rgba(0, 0, 0, 0.08);
+}
+
+.mentor-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    margin-right: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 0.9rem;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.mentor-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.mentor-details {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    flex: 1;
+}
+
+.mentor-name {
+    font-weight: 600;
+    color: var(--gray-800);
+    font-size: 0.85rem;
+    margin-right: auto;
+}
+
+.mentor-role-label {
+    display: none;
+}
+
+.mentor-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 12px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.mentor-status-badge::before {
+    content: '';
+    display: block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-right: 6px;
+}
+
+/* Reusing calendar status colors for mentor badges */
+.mentor-status-badge.status-present {
+    background: #ecfdf5;
+    color: #065f46;
+    border: 1px solid #10b981;
+}
+.mentor-status-badge.status-present::before { background: #10b981; box-shadow: 0 0 8px #10b981; }
+
+.mentor-status-badge.status-absent {
+    background: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #ef4444;
+}
+.mentor-status-badge.status-absent::before { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+
+.mentor-status-badge.status-wfh {
+    background: #f5f3ff;
+    color: #5b21b6;
+    border: 1px solid #8b5cf6;
+}
+.mentor-status-badge.status-wfh::before { background: #8b5cf6; box-shadow: 0 0 8px #8b5cf6; }
+
+.mentor-status-badge.status-client {
+    background: #eff6ff;
+    color: #1e40af;
+    border: 1px solid #3b82f6;
+}
+.mentor-status-badge.status-client::before { background: #3b82f6; box-shadow: 0 0 8px #3b82f6; }
+
+.mentor-status-badge.status-leave,
+.mentor-status-badge.status-half {
+    background: #fffbeb;
+    color: #92400e;
+    border: 1px solid #f59e0b;
+}
+.mentor-status-badge.status-leave::before,
+.mentor-status-badge.status-half::before { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
+
+
+/* ==================== PERSONALIZE DASHBOARD POPUP – RESPONSIVE ==================== */
+
+.appearance-modal-box {
+    width: 95% !important;
+}
+
+@media (max-width: 480px) {
+    .appearance-modal-box {
+        border-radius: 16px !important;
+        max-height: 95vh !important;
+    }
+
+    .appearance-modal-header {
+        padding: 16px 18px !important;
+        gap: 12px !important;
+    }
+
+    #appearanceModal #prefAvatarPreview {
+        width: 52px !important;
+        height: 52px !important;
+        font-size: 28px !important;
+    }
+
+    #appearanceModal .corner-selector-widget {
+        transform: scale(0.8) !important;
+        transform-origin: left center !important;
+    }
+
+    #appearanceModal .gradient-preview-small {
+        height: 64px !important;
+    }
+}
+
+/* ==================== APPEARANCE MODAL PREMIUM UI ==================== */
+.appearance-modal-box {
+    max-width: 500px;
+    padding: 0 !important;
+    display: flex;
+    flex-direction: column;
+    border-radius: 28px !important;
+    max-height: 90vh;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    background: var(--bg-card, #ffffff);
+    overflow: hidden; /* Prevent clipping bugs */
+}
+
+.appearance-modal-header {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+    padding: 24px 28px;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+}
+
+.appearance-modal-scroll-body {
+    padding: 24px 28px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.appearance-modal-body { /* Kept for compatibility */
+    padding: 0;
+}
+
+.appearance-avatar-preview-circle {
+    font-size: 40px;
+    background: rgba(255, 255, 255, 0.2);
+    width: 68px;
+    height: 68px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.appearance-avatar-preview-circle:hover {
+    transform: scale(1.05);
+}
+
+.appearance-footer {
+    padding: 20px 28px 28px;
+    background: var(--bg-card, #ffffff);
+    border-top: 1px solid var(--gray-100);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.appearance-section-card {
+    background: var(--gray-50);
+    border: 1px solid var(--gray-100);
+    border-radius: 20px;
+    padding: 20px;
+    margin-bottom: 24px;
+}
+
+.appearance-section-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--gray-800);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.appearance-avatar-options {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+}
+
+.appearance-avatar-btn {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    font-size: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed var(--gray-300);
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    color: inherit;
+}
+
+.appearance-avatar-btn:hover {
+    border-color: var(--primary-color);
+    background: rgba(var(--primary-rgb), 0.1);
+    transform: translateY(-2px);
+}
+
+.appearance-avatar-btn.active {
+    border: 2px solid var(--primary-color);
+    background: rgba(var(--primary-rgb), 0.15);
+}
+
+.appearance-avatar-label {
+    font-size: 10px;
+    color: var(--gray-500);
+    margin-top: 6px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.appearance-theme-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.corner-selector-premium {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    width: 100px;
+    background: var(--gray-100);
+    padding: 8px;
+    border-radius: 14px;
+}
+
+.corner-btn-premium {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    border: 1px solid var(--gray-300);
+    background: var(--white);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--gray-600);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.corner-btn-premium.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+    box-shadow: 0 4px 10px rgba(var(--primary-rgb), 0.3);
+}
+
+.spectrum-trigger-premium {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    color: var(--gray-700);
+    padding: 12px 16px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.spectrum-trigger-premium:hover {
+    border-color: var(--primary-color);
+    background: rgba(var(--primary-rgb), 0.05);
+}
+
+.live-preview-premium {
+    height: 100px;
+    border-radius: 16px;
+    margin-top: 18px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);
+}
+
+.live-preview-premium .preview-label {
+    position: absolute;
+    bottom: 8px;
+    right: 12px;
+    font-size: 10px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.8);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+.appearance-footer {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.appearance-save-row {
+    display: flex;
+    gap: 12px;
+}
+
+/* Responsive Overrides for Appearance Modal */
+@media (max-width: 768px) {
+    .appearance-modal-box {
+        max-width: 95% !important;
+        border-radius: 20px !important;
+    }
+    
+    .appearance-modal-header {
+        padding: 20px;
+    }
+    
+    .appearance-modal-body {
+        padding: 20px;
+    }
+    
+    .appearance-section-card {
+        padding: 16px;
+    }
+    
+    .appearance-avatar-options {
+        justify-content: space-around;
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .appearance-modal-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .appearance-avatar-preview-circle {
+        width: 56px;
+        height: 56px;
+        font-size: 32px;
+    }
+    
+    .appearance-section-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    
+    .appearance-section-card {
+        margin-bottom: 16px;
+    }
+    
+    .appearance-gradient-controls {
+        flex-direction: column;
+        gap: 16px;
+    }
+    
+    .corner-selector-premium {
+        width: 100%;
+        grid-template-columns: repeat(4, 1fr);
+    }
+    
+    .appearance-save-row {
+        flex-direction: column-reverse;
+    }
+}
+
+/* ==================== GLOBAL RESPONSIVE OVERHAUL ==================== */
+/* Tablet: ≤ 1024px */
+@media (max-width: 1024px) {
+    .container {
+        padding: 16px;
+    }
+
+    .header {
+        padding: 16px 24px;
+    }
+
+    .header-title {
+        font-size: 20px;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+
+    .actions-grid {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .intelligence-hub-card {
+        grid-column: 1 / -1;
+    }
+}
+
+/* Large Phone / Small Tablet: ≤ 768px */
+@media (max-width: 768px) {
+    /* --- Header --- */
+    .header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 16px;
+    }
+
+    .header-title {
+        font-size: 18px;
+    }
+
+    .header-user {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .user-welcome {
+        font-size: 14px;
+    }
+
+    /* --- Login & Signup Cards --- */
+    .login-card {
+        padding: 28px 20px !important;
+        border-radius: 16px !important;
+    }
+
+    .login-title {
+        font-size: 26px;
+    }
+
+    /* --- Dashboard Grids --- */
+    .stats-grid,
+    .actions-grid {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+
+    /* --- Stat Cards --- */
+    .stat-card {
+        padding: 16px;
+    }
+
+    .stat-card-value {
+        font-size: 22px;
+    }
+
+    /* --- Action Cards --- */
+    .action-card {
+        padding: 20px 16px;
+        text-align: left;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .action-card-icon {
+        font-size: 32px;
+        margin-bottom: 0;
+        flex-shrink: 0;
+    }
+
+    /* --- Intelligence Hub --- */
+    .intelligence-hub-card {
+        grid-column: 1 / -1 !important;
+        height: auto !important;
+    }
+
+    .intelligence-hub-content-row {
+        flex-direction: column !important;
+        gap: 12px !important;
+    }
+
+    .intelligence-hub-main {
+        width: 100% !important;
+    }
+
+    .intelligence-hub-stats-v2 {
+        width: 100% !important;
+        padding: 14px !important;
+    }
+
+    .intelligence-hub-actions {
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+        width: 100% !important;
+    }
+
+    .intelligence-hub-btn {
+        flex: 1 1 100px;
+        font-size: 12px !important;
+        padding: 8px 10px !important;
+    }
+
+    .intelligence-hub-percentage {
+        font-size: 28px;
+    }
+
+    /* --- Notification Bar --- */
+    .notification-bar {
+        border-radius: 10px;
+    }
+
+    .notification-header {
+        padding: 12px 16px;
+    }
+
+    /* --- Mentor Status Banner --- */
+    #mentorStatusContainer {
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .mentor-status-card {
+        min-width: unset;
+        width: 100%;
+        flex: unset;
+    }
+
+    /* --- Profile Completion Alert --- */
+    #profileCompletionAlert > div {
+        flex-direction: column !important;
+        gap: 12px !important;
+        align-items: flex-start !important;
+        padding: 14px 16px !important;
+    }
+
+    #profileCompletionAlert button {
+        width: 100% !important;
+    }
+
+    /* --- Modals --- */
+    .modal-content {
+        max-width: 95% !important;
+        width: 95% !important;
+        padding: 20px 16px !important;
+    }
+
+    /* --- Emoji Picker (avatar picker) --- */
+    .emoji-picker-body {
+        flex-direction: column !important;
+        height: auto !important;
+        max-height: 65vh;
+        overflow-y: auto;
+    }
+
+    .emoji-sidebar-wrapper {
+        width: 100% !important;
+        border-right: none !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+        flex-direction: row !important;
+    }
+
+    .emoji-sidebar {
+        flex-direction: row !important;
+        overflow-x: auto;
+        overflow-y: hidden;
+        gap: 4px;
+        padding: 8px;
+        flex: 1;
+    }
+
+    .emoji-cat {
+        flex-direction: column;
+        gap: 4px;
+        padding: 8px 10px;
+        font-size: 12px;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    .emoji-preview-section {
+        width: 120px;
+        flex-shrink: 0;
+        padding: 12px;
+        border-top: none !important;
+        border-left: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .emoji-preview-circle {
+        width: 72px !important;
+        height: 72px !important;
+    }
+
+    /* Avatar picker modal */
+    #createMemojiModal .modal-content {
+        width: 98% !important;
+        max-width: none !important;
+    }
+
+    #avatarGrid {
+        grid-template-columns: repeat(3, 1fr) !important;
+    }
+
+    /* --- Profile screen form rows --- */
+    .form-row {
+        grid-template-columns: 1fr !important;
+        gap: 0 !important;
+    }
+
+    /* --- Admin grid --- */
+    .admin-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* --- Tables --- */
+    .records-table {
+        min-width: 620px;
+    }
+
+    .table-wrap {
+        overflow-x: auto;
+    }
+
+    /* --- Camera --- */
+    .camera-container {
+        max-width: 100%;
+    }
+
+    .camera-controls {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    /* --- Status overview card --- */
+    .status-content {
+        gap: 8px;
+    }
+
+    .metric-value {
+        font-size: 18px;
+    }
+
+    .metric-label {
+        font-size: 9px;
+    }
+
+    /* --- Buttons row in modals/footers --- */
+    .emoji-picker-footer {
+        padding: 12px 16px;
+        gap: 8px;
+    }
+
+    /* --- Premium modal --- */
+    .premium-modal-header {
+        padding: 16px 20px;
+    }
+
+    .premium-modal-header h3 {
+        font-size: 1.2rem;
+    }
+
+    .premium-modal-body {
+        padding: 16px 20px;
+    }
+
+    .premium-modal-footer {
+        padding: 16px 20px;
+    }
+
+    .premium-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* Small Phone: ≤ 480px */
+@media (max-width: 480px) {
+    /* --- Container --- */
+    .container {
+        padding: 10px;
+    }
+
+    /* --- Header --- */
+    .header {
+        padding: 12px;
+        border-radius: 12px;
+        gap: 10px;
+    }
+
+    .header-title {
+        font-size: 16px;
+    }
+
+    .header-user {
+        gap: 10px;
+    }
+
+    /* --- Login card --- */
+    .login-card {
+        padding: 22px 16px !important;
+        border-radius: 14px !important;
+    }
+
+    .login-title {
+        font-size: 22px;
+    }
+
+    .login-subtitle {
+        font-size: 13px;
+        margin-bottom: 28px;
+    }
+
+    /* --- Stats & Action cards --- */
+    .stat-card {
+        padding: 14px 12px;
+    }
+
+    .stat-card-value {
+        font-size: 20px;
+    }
+
+    .stat-card-title {
+        font-size: 12px;
+    }
+
+    .action-card {
+        padding: 16px 14px;
+    }
+
+    .action-card-icon {
+        font-size: 28px;
+    }
+
+    .action-card-title {
+        font-size: 16px;
+    }
+
+    .action-card-description {
+        font-size: 12px;
+    }
+
+    /* --- Buttons --- */
+    .btn {
+        padding: 10px 16px;
+        font-size: 14px;
+        min-height: 42px;
+    }
+
+    .btn-sm {
+        padding: 6px 12px;
+        font-size: 12px;
+        min-height: 32px;
+    }
+
+    /* --- Notification bar --- */
+    .notification-title {
+        font-size: 14px;
+    }
+
+    /* --- Intelligence hub --- */
+    .intelligence-hub-percentage {
+        font-size: 24px;
+    }
+
+    .intelligence-hub-title {
+        font-size: 11px;
+    }
+
+    .intelligence-hub-btn {
+        font-size: 11px !important;
+        padding: 7px 8px !important;
+    }
+
+    /* --- Emoji picker --- */
+    .emoji-picker-header h3 {
+        font-size: 1rem;
+    }
+
+    .emoji-segmented-control button {
+        padding: 5px 4px;
+        font-size: 11px;
+    }
+
+    #avatarGrid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 6px !important;
+    }
+
+    /* --- Status overview ring --- */
+    .progress-ring,
+    .progress-ring-container {
+        width: 48px !important;
+        height: 48px !important;
+    }
+
+    .progress-ring circle {
+        r: 20 !important;
+        cx: 24 !important;
+        cy: 24 !important;
+    }
+
+    .metric-icon {
+        font-size: 16px;
+    }
+
+    /* --- Modals --- */
+    .modal-content {
+        max-width: 98% !important;
+        padding: 16px 12px !important;
+        border-radius: 16px !important;
+    }
+
+    /* --- Map modal --- */
+    .map-modal-content {
+        height: 80vh !important;
+        border-radius: 12px !important;
+        margin: 16px !important;
+    }
+
+    /* --- Profile screen --- */
+    .card {
+        padding: 16px;
+        border-radius: 12px;
+    }
+}
+
+/* Very small: ≤ 360px */
+@media (max-width: 360px) {
+    .header-title {
+        font-size: 14px;
+    }
+
+    .user-welcome {
+        font-size: 12px;
+    }
+
+    .btn {
+        padding: 9px 12px;
+        font-size: 13px;
+    }
+
+    .stat-card-value {
+        font-size: 18px;
+    }
+
+    .login-title {
+        font-size: 20px;
+    }
+
+    .intelligence-hub-percentage {
+        font-size: 20px;
+    }
+
+    #avatarGrid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+/* ==================== TRUE DARK MODAL OVERRIDES ==================== */
+body.dark-mode .modal-content,
+body.dark-mode #predictiveModal .modal-content,
+body.dark-mode #employeePerformanceModal .modal-content,
+body.dark-mode #myTasksModal .modal-content,
+body.dark-mode #taskManagerModal .modal-content,
+body.dark-mode #calendarModal .modal-content,
+body.dark-mode #requestsModal .modal-content,
+body.dark-mode #docsModal .docs-modal-content,
+body.dark-mode #assignManagerModal .modal-content,
+body.dark-mode #taskExportModal .modal-content,
+body.dark-mode #addTaskModal .premium-modal-content {
+    background: #000000 !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 1) !important;
+    color: #ffffff !important;
+}
+
+/* Force dark background for inner containers with inline background styles */
+body.dark-mode #predictiveModal div[style*="background"],
+body.dark-mode #employeePerformanceModal div[style*="background"],
+body.dark-mode .premium-modal-body,
+body.dark-mode .export-body,
+body.dark-mode .modal-body-premium {
+    background: transparent !important;
+}
+
+body.dark-mode .predictive-header,
+body.dark-mode .modal-header,
+body.dark-mode .docs-modal-header,
+body.dark-mode .premium-modal-header,
+body.dark-mode .modal-header-premium {
+    background: #050505 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .predictive-title,
+body.dark-mode h2,
+body.dark-mode h3,
+body.dark-mode h4,
+body.dark-mode .modal-title {
+    color: #ffffff !important;
+}
+
+body.dark-mode .main-forecast-card,
+body.dark-mode .premium-column,
+body.dark-mode .stats-card-v2,
+body.dark-mode .performance-card,
+body.dark-mode .detail-card {
+    background: #0a0a0a !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Fix text colors for secondary labels */
+body.dark-mode .forecast-day-label,
+body.dark-mode .main-forecast-caption,
+body.dark-mode .premium-label,
+body.dark-mode .form-label,
+body.dark-mode .stat-card-subtext {
+    color: #a1a1aa !important;
+}
+
+/* Calendar Specifics */
+body.dark-mode .calendar-day-label {
+    color: #71717a !important;
+}
+
+body.dark-mode .calendar-day:not(.empty) {
+    background: #0a0a0a !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .calendar-day.today {
+    background: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 15px rgba(37, 99, 235, 0.4) !important;
+}
+
+/* Form Controls in Dark Mode */
+body.dark-mode .form-control,
+body.dark-mode select.premium-select,
+body.dark-mode .premium-select-wrapper select {
+    background: #111111 !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .form-control::placeholder {
+    color: #52525b !important;
+}
+
+/* Premium Task Board Specifics */
+body.dark-mode .premium-task-board {
+    background: #000000 !important;
+    padding: 20px !important;
+}
+
+body.dark-mode .premium-column {
+    background: #050505 !important;
+}
+
+body.dark-mode .premium-column-header h4 {
+    color: #ffffff !important;
+}
+
+body.dark-mode .premium-task-count {
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+}
+
+/* Task Cards */
+body.dark-mode .task-card-premium,
+body.dark-mode [class*="task-card"] {
+    background: #111111 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Specific Refinements for Calendar and Modals in True Dark */
+body.dark-mode .calendar-items-legend {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+body.dark-mode .legend-chip {
+    background: #0a0a0a !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .multi-select-toggle-container {
+    background: #050505 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+body.dark-mode .multi-select-toggle-container span,
+body.dark-mode .multi-select-toggle-container p {
+    color: #ffffff !important;
+}
+
+body.dark-mode .multi-select-toggle-container p {
+    opacity: 0.7;
+}
+
+/* Modal Close Button and Icons */
+body.dark-mode .btn-close,
+body.dark-mode .modal-close-btn,
+body.dark-mode button[onclick*="closeModal"] {
+    color: #ffffff !important;
+    opacity: 0.6;
+}
+
+body.dark-mode .btn-close:hover,
+body.dark-mode .modal-close-btn:hover {
+    opacity: 1;
+}
+
+/* Prediction accuracy and confidence badges */
+body.dark-mode [style*="background: rgba(139, 92, 246, 0.1)"] {
+    background: rgba(139, 92, 246, 0.2) !important;
+}
+
+/* Fix for any white cards in predictive modal */
+body.dark-mode #predictiveModal div[style*="background: white"],
+body.dark-mode #predictiveModal div[style*="background:white"],
+body.dark-mode #predictiveModal div[style*="background: linear-gradient"] {
+    background: #0a0a0a !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Ensure stats labels are readable */
+body.dark-mode #statsMonth,
+body.dark-mode #statsYear,
+body.dark-mode #statsWeekIdx,
+body.dark-mode #statsViewMode {
+    background: #18181b !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: #ffffff !important;
+}
+
+/* Global Component Overrides for Total True Dark Experience */
+body.dark-mode #adminScreen .card,
+body.dark-mode .admin-grid .card,
+body.dark-mode #recordsScreen .card,
+body.dark-mode .office-card,
+body.dark-mode .form-section {
+    background: #050505 !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
+}
+
+body.dark-mode .form-label, 
+body.dark-mode h3 small {
+    color: #a1a1aa !important;
+}
+
+body.dark-mode .records-table {
+    border-collapse: collapse !important;
+    background: #000000 !important;
+}
+
+body.dark-mode .records-table th {
+    background: #0a0a0a !important;
+    color: #ffffff !important;
+    border-bottom: 2px solid rgba(255,255,255,0.15) !important;
+    font-weight: 700 !important;
+}
+
+body.dark-mode .records-table td {
+    background: #050505 !important;
+    color: #e4e4e7 !important;
+    border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+}
+
+body.dark-mode .records-table tr:hover td {
+    background: #0c0c0e !important;
+}
+
+body.dark-mode #adminUsersSearch,
+body.dark-mode #adminProfilesSearch {
+    background: #0a0a0a !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .btn-secondary {
+    background: #18181b !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .btn-secondary:hover {
+    background: #27272a !important;
+    border-color: rgba(255,255,255,0.2) !important;
+}
+
+/* ==================== MONTHLY OVERVIEW & DOCUMENT OVERRIDES ==================== */
+body.dark-mode .overview-container {
+    background: #000000 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .stat-box {
+    background: #0a0a0a !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6) !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .stat-num {
+    color: #ffffff !important;
+}
+
+body.dark-mode .stat-label {
+    color: #a1a1aa !important;
+}
+
+body.dark-mode .stat-icon-bg {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+body.dark-mode .overview-footer-card {
+    background: #0a0a0a !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .overview-footer-card:hover {
+    background: #111111 !important;
+    border-color: var(--primary-color) !important;
+}
+
+/* Identity Documents & Forms in Dark Mode */
+body.dark-mode .doc-row {
+    background: #050505 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    padding: 20px !important;
+    border-radius: 16px !important;
+    margin-bottom: 20px !important;
+}
+
+body.dark-mode .form-control:disabled,
+body.dark-mode input:disabled {
+    background: #000000 !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+    opacity: 1 !important; /* Force visibility */
+}
+
+body.dark-mode .text-muted,
+body.dark-mode small.text-muted {
+    color: #71717a !important;
+}
+
+body.dark-mode hr {
+    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* ==================== VIBRANCY & POP ENHANCEMENTS ==================== */
+body.dark-mode .btn-primary {
+    box-shadow: 0 0 15px rgba(37, 99, 235, 0.4) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+body.dark-mode .status-badge,
+body.dark-mode .legend-chip {
+    font-weight: 800 !important;
+    letter-spacing: 0.5px !important;
+    box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.05) !important;
+}
+
+body.dark-mode .status-badge.status-present,
+body.dark-mode .cal-present {
+    color: #10b981 !important;
+    background: rgba(16, 185, 129, 0.15) !important;
+    border: 1.5px solid #10b981 !important;
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.3) !important;
+}
+
+body.dark-mode .status-badge.status-absent,
+body.dark-mode .cal-absent {
+    color: #ef4444 !important;
+    background: rgba(239, 68, 68, 0.15) !important;
+    border: 1.5px solid #ef4444 !important;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.3) !important;
+}
+
+body.dark-mode .status-badge.status-wfh,
+body.dark-mode .cal-wfh {
+    color: #8b5cf6 !important;
+    background: rgba(139, 92, 246, 0.15) !important;
+    border: 1.5px solid #8b5cf6 !important;
+    box-shadow: 0 0 12px rgba(139, 92, 246, 0.3) !important;
+}
+
+body.dark-mode .status-badge.status-half_day,
+body.dark-mode .cal-half {
+    color: #f59e0b !important;
+    background: rgba(245, 158, 11, 0.15) !important;
+    border: 1.5px solid #f59e0b !important;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.3) !important;
+}
+
+body.dark-mode .status-badge.status-leave,
+body.dark-mode .cal-leave {
+    color: #ec4899 !important;
+    background: rgba(236, 72, 153, 0.15) !important;
+    border: 1.5px solid #ec4899 !important;
+    box-shadow: 0 0 12px rgba(236, 72, 153, 0.3) !important;
+}
+
+/* Enhancing metrics in Intelligence Hub and Performance modals */
+body.dark-mode .hero-value,
+body.dark-mode .main-forecast-value,
+body.dark-mode .regularity-score-value {
+    background: linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 10px 20px rgba(255, 255, 255, 0.1) !important;
+}
+
+body.dark-mode .progress-ring circle {
+    filter: drop-shadow(0 0 4px var(--primary-color));
+}
+
+/* Final Specific Refinements for Popups & Sub-containers */
+body.dark-mode #historyView,
+body.dark-mode .summary-modal-container {
+    background: #000000 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode [style*="background: white"],
+body.dark-mode [style*="background:white"],
+body.dark-mode [style*="background: #f8fafc"],
+body.dark-mode [style*="background:#f8fafc"] {
+    background: #000000 !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Ensure sub-headers and filters are dark */
+body.dark-mode div[style*="border-bottom: 1px solid #f1f5f9"],
+body.dark-mode div[style*="border-top: 1px solid #f1f5f9"] {
+    background: #050505 !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+}
+
+/* Vibrant Legend & Tags Refinement */
+body.dark-mode .legend-chip[class*="cal-"] {
+    border-width: 2px !important;
+}
+
+body.dark-mode .calendar-dot {
+    width: 10px !important;
+    height: 10px !important;
+    box-shadow: 0 0 10px currentColor, 0 0 20px currentColor !important;
+}
+
+/* Document Upload Area Refinement */
+body.dark-mode .doc-row input[type="file"] {
+    color: #a1a1aa !important;
+}
+
+body.dark-mode .doc-row .form-row {
+    margin-top: 15px !important;
+    gap: 15px !important;
+}
+
+/* Make sure modal close buttons are always visible on black */
+body.dark-mode .modal-close-btn,
+body.dark-mode .btn-close {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-radius: 50% !important;
+    padding: 8px !important;
+    color: #ffffff !important;
+    opacity: 0.9 !important;
+}
+
+/* ==================== CALENDAR SOLID STATUS REFINEMENTS ==================== */
+body.dark-mode .status-badge.status-present,
+body.dark-mode .cal-present {
+    background: #10b981 !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.4) !important;
+}
+
+body.dark-mode .status-badge.status-absent,
+body.dark-mode .cal-absent {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.4) !important;
+}
+
+body.dark-mode .status-badge.status-wfh,
+body.dark-mode .cal-wfh {
+    background: #8b5cf6 !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 15px rgba(139, 92, 246, 0.4) !important;
+}
+
+body.dark-mode .status-badge.status-half_day,
+body.dark-mode .cal-half {
+    background: #f59e0b !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.4) !important;
+}
+
+body.dark-mode .status-badge.status-leave,
+body.dark-mode .cal-leave {
+    background: #ec4899 !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 15px rgba(236, 72, 153, 0.4) !important;
+}
+
+body.dark-mode .status-badge.status-client,
+body.dark-mode .cal-client {
+    background: #3b82f6 !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.4) !important;
+}
+
+/* Ensure calendar digits are white on solid backgrounds */
+body.dark-mode .calendar-day[class*="cal-"] {
+    color: #ffffff !important;
+    font-weight: 800 !important;
+}
+
+/* ==================== TASK POPUP VISIBILITY REFINEMENTS ==================== */
+body.dark-mode .premium-column-header {
+    background: #0a0a0a !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .premium-task-card {
+    background: #111111 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+}
+
+body.dark-mode .premium-task-card h5,
+body.dark-mode .premium-task-card p,
+body.dark-mode .premium-task-card .task-meta {
+    color: #ffffff !important;
+}
+
+body.dark-mode .premium-task-card p {
+    opacity: 0.8;
+}
+
+body.dark-mode .task-card-premium {
+    background: #111111 !important;
+}
+
+body.dark-mode .text-muted {
+    color: #a1a1aa !important;
+}
+
+/* Fix for the white gap at the top of columns in task manager */
+body.dark-mode .premium-column {
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Ensure scrollbars in dark mode are also dark */
+body.dark-mode ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+body.dark-mode ::-webkit-scrollbar-track {
+    background: #000000;
+}
+
+body.dark-mode ::-webkit-scrollbar-thumb {
+    background: #27272a;
+    border-radius: 4px;
+}
+
+body.dark-mode ::-webkit-scrollbar-thumb:hover {
+    background: #3f3f46;
+}
+
+/* Ultra-Specific Solid Status Overrides for Calendar Grid */
+body.dark-mode .calendar-day.cal-present {
+    background: #10b981 !important;
+    color: #ffffff !important;
+    border: none !important;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.5) !important;
+}
+
+body.dark-mode .calendar-day.cal-client {
+    background: #3b82f6 !important;
+    color: #ffffff !important;
+    border: none !important;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.5) !important;
+}
+
+body.dark-mode .calendar-day.cal-absent {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+    border: none !important;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.5) !important;
+}
+
+body.dark-mode .calendar-day.cal-wfh {
+    background: #8b5cf6 !important;
+    color: #ffffff !important;
+    border: none !important;
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.5) !important;
+}
+
+body.dark-mode .calendar-day.cal-half {
+    background: #f59e0b !important;
+    color: #ffffff !important;
+    border: none !important;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.5) !important;
+}
+
+body.dark-mode .calendar-day.cal-leave {
+    background: #ec4899 !important;
+    color: #ffffff !important;
+    border: none !important;
+    box-shadow: 0 0 10px rgba(236, 72, 153, 0.5) !important;
+}
+
+/* Ensure the date number is always white and distinct on solid status colors */
+body.dark-mode .calendar-day.cal-present .calendar-day-number,
+body.dark-mode .calendar-day.cal-client .calendar-day-number,
+body.dark-mode .calendar-day.cal-absent .calendar-day-number,
+body.dark-mode .calendar-day.cal-wfh .calendar-day-number,
+body.dark-mode .calendar-day.cal-half .calendar-day-number,
+body.dark-mode .calendar-day.cal-leave .calendar-day-number {
+    color: #ffffff !important;
+    font-weight: 800 !important;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3) !important;
+}
+
+/* Hide the dot when background is solid to keep it clean */
+body.dark-mode .calendar-day[class*="cal-"] .calendar-day-status-dot {
+    display: none !important;
+}
+
+/* Improve Task Popup visibility further */
+body.dark-mode .premium-column-header h4 {
+    color: #ffffff !important;
+    font-weight: 800 !important;
+}
+
+body.dark-mode .premium-task-count {
+    background: var(--primary-color) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255,255,255,0.2) !important;
+}
+
+/* ==================== CALENDAR SELECTION & ACTION REFINEMENTS ==================== */
+body.dark-mode .calendar-day.selected {
+    background: #2563eb !important; /* Solid Primary Blue */
+    border: 2px solid #ffffff !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 20px rgba(37, 99, 235, 0.6), inset 0 0 10px rgba(255, 255, 255, 0.2) !important;
+    transform: scale(0.95);
+    z-index: 10;
+}
+
+body.dark-mode .calendar-day.selected .calendar-day-number {
+    color: #ffffff !important;
+    font-weight: 900 !important;
+}
+
+/* Ensure the multi-select actions area is visible on black */
+body.dark-mode .multi-select-actions {
+    background: #050505 !important;
+    padding: 16px !important;
+    border-radius: 12px !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    margin-top: 20px !important;
+    box-shadow: 0 -10px 20px rgba(0,0,0,0.4) !important;
+}
+
+body.dark-mode #multiRequestBtn {
+    background: #2563eb !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    height: 50px !important;
+    font-size: 1rem !important;
+    box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 1px !important;
+}
+
+body.dark-mode #multiRequestBtn:hover {
+    background: #1d4ed8 !important;
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.6) !important;
+}
+
+/* Fix for any remaining transparent status indicators in legend */
+body.dark-mode .legend-chip.cal-present { background: #10b981 !important; color: #ffffff !important; }
+body.dark-mode .legend-chip.cal-client  { background: #3b82f6 !important; color: #ffffff !important; }
+body.dark-mode .legend-chip.cal-absent  { background: #ef4444 !important; color: #ffffff !important; }
+body.dark-mode .legend-chip.cal-wfh     { background: #8b5cf6 !important; color: #ffffff !important; }
+body.dark-mode .legend-chip.cal-half    { background: #f59e0b !important; color: #ffffff !important; }
+body.dark-mode .legend-chip.cal-leave   { background: #ec4899 !important; color: #ffffff !important; }
+
+/* Robust Scrolling Fix for Attendance Calendar Popup */
+body.dark-mode .calendar-modal-content {
+    max-height: 85vh !important; /* Slightly more constrained for safe scrolling */
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    display: block !important; /* Change from flex to block to ensure natural scrolling of children */
+}
+
+/* Ensure the grid and actions have proper spacing for scrolling */
+body.dark-mode .calendar-grid {
+    margin-bottom: 20px !important;
+}
+
+body.dark-mode .multi-select-actions {
+    padding-bottom: 30px !important; /* Extra padding at bottom for scroll visibility */
+}
+
+/* Custom Scrollbar for a premium look on True Dark */
+body.dark-mode .calendar-modal-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+body.dark-mode .calendar-modal-content::-webkit-scrollbar-track {
+    background: #000000;
+}
+
+body.dark-mode .calendar-modal-content::-webkit-scrollbar-thumb {
+    background: #333333;
+    border-radius: 10px;
+}
+
+body.dark-mode .calendar-modal-content::-webkit-scrollbar-thumb:hover {
+    background: #444444;
+}
+
+/* Global Scrollable Modal Content Overrides for Dark Mode */
+body.dark-mode .modal-content {
+    max-height: 85vh !important;
+    overflow-y: auto !important;
+}
+
+/* Ensure the Task Manager content doesn't overflow horizontally while scrolling vertically */
+body.dark-mode #myTasksModal .modal-content {
+    overflow-x: hidden !important;
+}
+
+/* Premium scrollbar for all dark mode modals */
+body.dark-mode .modal-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+body.dark-mode .modal-content::-webkit-scrollbar-track {
+    background: #000000;
+}
+
+body.dark-mode .modal-content::-webkit-scrollbar-thumb {
+    background: #333333;
+    border-radius: 10px;
+}
+
+/* ==================== MODAL OPACITY & SOLID BLACK REFINEMENT ==================== */
+/* 
+   The user asked to "reduce opacity to 0". In the context of "True Dark", 
+   this typically means removing the translucency (glass effect) to achieve 
+   a solid, pitch-black background.
+*/
+
+body.dark-mode .modal-content,
+body.dark-mode .calendar-modal-content,
+body.dark-mode .overview-container,
+body.dark-mode #employeePerformanceModal .modal-content,
+body.dark-mode #predictiveModal .modal-content,
+body.dark-mode .docs-modal-content {
+    background: #000000 !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    opacity: 1 !important; /* Ensure it is fully opaque and visible */
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.8) !important;
+}
+
+/* Ensure inner cards within shared modals also follow the solid black theme */
+body.dark-mode .modal-content .glass-card,
+body.dark-mode .modal-content .stat-box,
+body.dark-mode .modal-content .overview-footer-card {
+    background: #050505 !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Fix for any remaining semi-transparent modal backdrops if desired */
+/* body.dark-mode .modal { background: rgba(0, 0, 0, 0.8) !important; } */
+
+/* ==================== PERFORMANCE MODAL SOLID BLACK OVERRIDES ==================== */
+/* 
+   Forcing solid black on the performance modal which has many inline 
+   light-mode styles in script.js.
+*/
+
+body.dark-mode #employeePerformanceModal .modal-content,
+body.dark-mode #employeePerformanceModal .predictive-modal {
+    background: #000000 !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Modal Header - Solid Black or very dark instead of Indigo */
+body.dark-mode #employeePerformanceModal .predictive-header {
+    background: #050505 !important;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Regularity Summary Banner */
+body.dark-mode #employeePerformanceModal div[style*="background: white; border-bottom: 1px solid #e2e8f0"] {
+    background: #0a0a0a !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Modal Body Container */
+body.dark-mode #employeePerformanceModal .stats-modal-body {
+    background: #000000 !important;
+}
+
+/* Inner Glass Cards & Stat Boxes */
+body.dark-mode #employeePerformanceModal .glass-card {
+    background: #0a0a0a !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: none !important;
+}
+
+body.dark-mode #employeePerformanceModal div[style*="background: #f1f5f9"] {
+    background: #111111 !important;
+}
+
+/* Progress Bar Backgrounds */
+body.dark-mode #employeePerformanceModal div[style*="background: #e2e8f0"] {
+    background: #27272a !important;
+}
+
+/* Labels and text colors that usually get lost */
+body.dark-mode #employeePerformanceModal div[style*="color: var(--gray-500)"],
+body.dark-mode #employeePerformanceModal span[style*="color: var(--gray-500)"] {
+    color: #a1a1aa !important;
+}
+
+body.dark-mode #employeePerformanceModal h3,
+body.dark-mode #employeePerformanceModal h2 {
+    color: #ffffff !important;
+}
+
+/* Force dark on any div with background: white or #f8fafc inside this modal */
+body.dark-mode #employeePerformanceModal div[style*="background: white"],
+body.dark-mode #employeePerformanceModal div[style*="background: #f8fafc"],
+body.dark-mode #employeePerformanceModal div[style*="background: #ffffff"] {
+    background: #000000 !important;
+}
+
+/* Ensure the likelihood banner also looks dark */
+body.dark-mode #employeePerformanceModal div[style*="background: rgba(16, 185, 129, 0.05)"] {
+    background: rgba(16, 185, 129, 0.1) !important;
+    border-color: rgba(16, 185, 129, 0.2) !important;
+}
+
+body.dark-mode #employeePerformanceModal div[style*="background: #f8fafc"] {
+    background: #0a0a0a !important;
+}
+
+/* ==================== ABSOLUTE SOLID BLACK OVERRIDES ==================== */
+/* 
+   Enforcing pitch black on all modal components to eliminate any remaining 
+   blue gradients or light-grey backgrounds in dark mode.
+*/
+
+body.dark-mode #employeePerformanceModal .predictive-header,
+body.dark-mode .predictive-header {
+    background: #000000 !important;
+    background-image: none !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+body.dark-mode #employeePerformanceModal div[style*="background: white"],
+body.dark-mode #employeePerformanceModal div[style*="background: #ffffff"],
+body.dark-mode #employeePerformanceModal div[style*="background:#ffffff"] {
+    background: #000000 !important;
+}
+
+body.dark-mode #employeePerformanceModal .stats-modal-body {
+    background: #000000 !important;
+}
+
+body.dark-mode #employeePerformanceModal .glass-card {
+    background: #050505 !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    backdrop-filter: none !important;
+}
+
+/* Specific fix for the Regularity Summary Banner background */
+body.dark-mode #employeePerformanceModal div[style*="Regularity Score"] {
+    background: #000000 !important;
+}
+
+/* Force dark on any child with light background inline styles */
+body.dark-mode #employeePerformanceModal *[style*="background: white"],
+body.dark-mode #employeePerformanceModal *[style*="background: #f"],
+body.dark-mode #employeePerformanceModal *[style*="background:#f"] {
+    background-color: #000000 !important;
+    background-image: none !important;
+}
+
+/* Fix text contrast for solid black */
+body.dark-mode #employeePerformanceModal h2,
+body.dark-mode #employeePerformanceModal h3,
+body.dark-mode #employeePerformanceModal div,
+body.dark-mode #employeePerformanceModal span,
+body.dark-mode #employeePerformanceModal p {
+    color: #ffffff !important;
+}
+
+body.dark-mode #employeePerformanceModal div[style*="color: var(--gray-500)"] {
+    color: #a1a1aa !important;
+}
+
+/* ==================== HEADER USER NAME GLOW REFINEMENT ==================== */
+body.dark-mode #userName {
+    color: #3b82f1 !important; /* Vibrant high-contrast blue */
+    text-shadow: 0 0 10px rgba(59, 130, 246, 0.6), 0 0 20px rgba(59, 130, 246, 0.3) !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.5px !important;
+}
+
+body.dark-mode .user-welcome {
+    color: #ffffff !important;
+    font-weight: 500 !important;
+}
+
+body.dark-mode #userAvatar {
+    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.2)) !important;
 }

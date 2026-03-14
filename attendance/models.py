@@ -125,6 +125,12 @@ class EmployeeProfile(models.Model):
     gender = models.CharField(max_length=20, choices=GENDER_CHOICES, null=True, blank=True)
     date_of_birth = models.DateField(null=True, blank=True)
     documents_pdf_path = models.CharField(max_length=255, null=True, blank=True)
+
+    # Dashboard Personalization
+    avatar_emoji = models.CharField(max_length=10, default="👤")
+    avatar_url = models.URLField(max_length=500, null=True, blank=True)
+    theme_settings = models.JSONField(default=dict, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -336,11 +342,13 @@ class Task(models.Model):
         return f"{self.title} (Team Task)"
 
 
+from django.utils import timezone
+
 class TaskComment(models.Model):
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='comments')
     author = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='task_comments')
     content = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
         db_table = 'task_comments'
@@ -416,3 +424,45 @@ class TrainingLog(models.Model):
 
     def __str__(self):
         return f"Training Log {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')} - Accuracy: {self.stability_factor}"
+class AvatarAsset(models.Model):
+    CATEGORY_CHOICES = [
+        ('skin', 'Skin'),
+        ('hair', 'Hairstyle'),
+        ('brows', 'Brows'),
+        ('eyes', 'Eyes'),
+        ('head', 'Head'),
+        ('nose', 'Nose'),
+        ('mouth', 'Mouth'),
+        ('ears', 'Ears'),
+        ('facial_hair', 'Facial Hair'),
+        ('eyewear', 'Eyewear'),
+        ('headwear', 'Headwear'),
+        ('clothing', 'Clothing'),
+        ('body', 'Body'),
+    ]
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
+    name = models.CharField(max_length=100)
+    file_path = models.CharField(max_length=255) # Path to SVG or image
+    metadata = models.JSONField(default=dict, blank=True) # color_options, layer_order, etc.
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'avatar_assets'
+
+    def __str__(self):
+        return f"{self.category} - {self.name}"
+
+
+class Memoji(models.Model):
+    employee = models.OneToOneField(Employee, on_delete=models.CASCADE, related_name='memoji')
+    avatar_config = models.JSONField(default=dict)
+    avatar_url = models.URLField(max_length=500, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'memojis'
+
+    def __str__(self):
+        return f"{self.employee.username}'s Memoji"

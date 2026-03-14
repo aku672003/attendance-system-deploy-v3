@@ -27,8 +27,9 @@ from datetime import datetime, date, time, timedelta
 from .models import (
     Employee, EmployeeProfile, OfficeLocation, DepartmentOfficeAccess,
     AttendanceRecord, EmployeeRequest, EmployeeDocument, Task, BirthdayWish, TaskComment, Team,
-    TemporaryTag, TrainingLog
+    TemporaryTag, TrainingLog, AvatarAsset, Memoji
 )
+from .serializers import AvatarAssetSerializer, MemojiSerializer
 from django.contrib.auth.hashers import make_password, check_password
 
 
@@ -169,6 +170,8 @@ def login(request):
                 'has_subordinates': employee.subordinates.exists(),
                 'gender': profile.gender if profile else None,
                 'date_of_birth': str(profile.date_of_birth) if profile and profile.date_of_birth else None,
+                'avatar_emoji': profile.avatar_emoji if profile else "👤",
+                'theme_settings': profile.theme_settings if profile else {},
             }
             return Response({
                 'success': True,
@@ -943,10 +946,29 @@ def wfh_request(request):
 
 
 # Profile Management Views
-@api_view(['GET', 'POST'])
+@api_view(['GET', 'POST', 'PATCH'])
 @parser_classes([JSONParser])
 def employee_profile(request, employee_id=None):
     """Get or save employee profile"""
+    
+    # Handle PATCH (partial update, e.g. for theme settings)
+    if request.method == 'PATCH':
+        data = request.data
+        employee_id = employee_id or data.get('employee_id')
+
+        if not employee_id:
+            return Response({'success': False, 'message': 'Employee ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            employee = Employee.objects.get(id=employee_id)
+            profile, created = EmployeeProfile.objects.get_or_create(employee=employee)
+            if 'theme_settings' in data:
+                profile.theme_settings = data.get('theme_settings')
+                profile.save()
+            return Response({'success': True, 'message': 'Profile updated successfully'})
+        except Exception as e:
+            return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     # Handle POST (save profile)
     if request.method == 'POST':
         data = request.data
@@ -963,27 +985,57 @@ def employee_profile(request, employee_id=None):
             profile, created = EmployeeProfile.objects.get_or_create(employee=employee)
 
             # Update profile fields
-            profile.emergency_contact_name = data.get('emergency_contact_name')
-            profile.emergency_contact_phone = data.get('emergency_contact_phone')
-            profile.alternate_number = data.get('alternate_number')
-            profile.bank_account_number = data.get('bank_account_number')
-            profile.bank_ifsc = data.get('bank_ifsc')
-            profile.bank_bank_name = data.get('bank_name')
-            profile.pan_number = data.get('pan_number')
-            profile.aadhar_number = data.get('aadhar_number')
-            profile.qualification = data.get('highest_qualification')
-            profile.certificates_summary = data.get('qualification_notes')
-            profile.home_address = data.get('home_address')
-            profile.current_address = data.get('current_address')
-            profile.date_of_joining = data.get('date_of_joining')
-            profile.skill_set = data.get('skill_set')
-            profile.reporting_manager = data.get('reporting_manager')
-            profile.professional_training = data.get('professional_training')
-            profile.family_details = data.get('family_details')
-            profile.marital_status = data.get('marital_status')
-            profile.personal_email = data.get('personal_email')
-            profile.gender = data.get('gender')
-            profile.date_of_birth = data.get('date_of_birth')
+            if 'emergency_contact_name' in data:
+                profile.emergency_contact_name = data.get('emergency_contact_name')
+            if 'emergency_contact_phone' in data:
+                profile.emergency_contact_phone = data.get('emergency_contact_phone')
+            if 'alternate_number' in data:
+                profile.alternate_number = data.get('alternate_number')
+            if 'bank_account_number' in data:
+                profile.bank_account_number = data.get('bank_account_number')
+            if 'bank_ifsc' in data:
+                profile.bank_ifsc = data.get('bank_ifsc')
+            if 'bank_name' in data:
+                profile.bank_bank_name = data.get('bank_name')
+            if 'pan_number' in data:
+                profile.pan_number = data.get('pan_number')
+            if 'aadhar_number' in data:
+                profile.aadhar_number = data.get('aadhar_number')
+            if 'highest_qualification' in data:
+                profile.qualification = data.get('highest_qualification')
+            if 'qualification_notes' in data:
+                profile.certificates_summary = data.get('qualification_notes')
+            if 'home_address' in data:
+                profile.home_address = data.get('home_address')
+            if 'current_address' in data:
+                profile.current_address = data.get('current_address')
+            if 'date_of_joining' in data:
+                profile.date_of_joining = data.get('date_of_joining')
+            if 'skill_set' in data:
+                profile.skill_set = data.get('skill_set')
+            if 'reporting_manager' in data:
+                profile.reporting_manager = data.get('reporting_manager')
+            if 'professional_training' in data:
+                profile.professional_training = data.get('professional_training')
+            if 'family_details' in data:
+                profile.family_details = data.get('family_details')
+            if 'marital_status' in data:
+                profile.marital_status = data.get('marital_status')
+            if 'personal_email' in data:
+                profile.personal_email = data.get('personal_email')
+            if 'gender' in data:
+                profile.gender = data.get('gender')
+            if 'date_of_birth' in data:
+                profile.date_of_birth = data.get('date_of_birth')
+            
+            # Personalization fields
+            if 'avatar_emoji' in data:
+                profile.avatar_emoji = data['avatar_emoji']
+            if 'theme_settings' in data:
+                profile.theme_settings = data['theme_settings']
+            if 'avatar_url' in data and data['avatar_url']:
+                profile.avatar_url = data['avatar_url']
+                
             profile.save()
 
             # Update employee basic info if provided
@@ -1063,13 +1115,15 @@ def employee_profile(request, employee_id=None):
             'current_address': profile.current_address,
             'date_of_joining': str(profile.date_of_joining) if profile.date_of_joining else None,
             'skill_set': profile.skill_set,
-            'reporting_manager': profile.reporting_manager,
+            'reporting_manager': ", ".join([m.name for m in employee.managers.all()]) if employee.managers.exists() else profile.reporting_manager,
             'professional_training': profile.professional_training,
             'family_details': profile.family_details,
             'marital_status': profile.marital_status,
             'personal_email': profile.personal_email,
             'gender': profile.gender,
             'date_of_birth': str(profile.date_of_birth) if profile.date_of_birth else None,
+            'avatar_emoji': profile.avatar_emoji,
+            'theme_settings': profile.theme_settings,
             'documents': docs_data,
         }
 
@@ -2905,7 +2959,7 @@ def task_comment_api(request):
 
         # Updated permission checks for hybrid assignment
         is_assignee = task.assignees.filter(id=author.id).exists()
-        is_manager_of_assignee = task.assignees.filter(manager=author).exists()
+        is_manager_of_assignee = task.assignees.filter(managers=author).exists()
 
         can_comment = False
         role = str(author.role).lower()
@@ -3670,3 +3724,182 @@ def employee_list_summary(request):
             'success': False,
             'message': f'Failed to fetch employee list: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+def avatar_assets_list(request):
+    """Returns available assets grouped by category"""
+    category = request.GET.get('category')
+    assets = AvatarAsset.objects.filter(is_active=True)
+    if category:
+        assets = assets.filter(category=category)
+    
+    serializer = AvatarAssetSerializer(assets, many=True)
+    return Response({
+        'success': True,
+        'assets': serializer.data
+    })
+
+@api_view(['GET', 'POST', 'PUT'])
+def user_memoji_api(request, user_id=None):
+    """Retrieve or update a user's memoji configuration"""
+    if not user_id:
+        user_id = request.data.get('user_id') or request.GET.get('user_id')
+    
+    if not user_id:
+        return Response({'success': False, 'message': 'User ID required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        employee = Employee.objects.get(id=user_id)
+    except Employee.DoesNotExist:
+        return Response({'success': False, 'message': 'Employee not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == 'GET':
+        memoji = Memoji.objects.filter(employee=employee).first()
+        if not memoji:
+            return Response({'success': True, 'memoji': None})
+        serializer = MemojiSerializer(memoji)
+        return Response({'success': True, 'memoji': serializer.data})
+
+    elif request.method in ['POST', 'PUT']:
+        avatar_config = request.data.get('avatar_config')
+        avatar_url = request.data.get('avatar_url')
+        
+        if not avatar_config and not avatar_url:
+            return Response({'success': False, 'message': 'Avatar configuration or URL required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        defaults = {}
+        if avatar_config:
+            defaults['avatar_config'] = avatar_config
+        if avatar_url:
+            defaults['avatar_url'] = avatar_url
+            
+        memoji, created = Memoji.objects.update_or_create(
+            employee=employee,
+            defaults=defaults
+        )
+        
+        # Sync with Employee profile avatar fields for global rendering
+        profile = getattr(employee, 'profile', None)
+        if profile:
+            if avatar_url:
+                profile.avatar_url = avatar_url
+            if avatar_config:
+                import json
+                profile.theme_settings['avatar_config'] = avatar_config
+            profile.save()
+        
+        serializer = MemojiSerializer(memoji)
+        return Response({
+            'success': True, 
+            'message': 'Avatar saved successfully',
+            'memoji': serializer.data
+        })
+
+
+@api_view(['POST'])
+@csrf_exempt
+@parser_classes([MultiPartParser, FormParser])
+def upload_avatar(request):
+    """Upload a custom photo for user avatar"""
+    employee_id = request.POST.get('employee_id')
+    if not employee_id:
+        return Response({'success': False, 'message': 'Employee ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        employee = Employee.objects.get(id=employee_id)
+        profile, _ = EmployeeProfile.objects.get_or_create(employee=employee)
+    except Employee.DoesNotExist:
+        return Response({'success': False, 'message': 'Employee not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if 'photo' not in request.FILES:
+        return Response({'success': False, 'message': 'No photo file provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+    photo = request.FILES['photo']
+    
+    # Validation
+    if photo.size > 2 * 1024 * 1024: # 2MB limit
+        return Response({'success': False, 'message': 'Photo size exceeds 2MB limit'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if not photo.content_type.startswith('image/'):
+        return Response({'success': False, 'message': 'Invalid file type. Please upload an image.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Save file
+    upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', 'avatars')
+    os.makedirs(upload_dir, exist_ok=True)
+    
+    ext = os.path.splitext(photo.name)[1].lower()
+    filename = f"avatar_{employee_id}_{uuid.uuid4().hex[:8]}{ext}"
+    file_path = os.path.join(upload_dir, filename)
+    
+    with open(file_path, 'wb') as f:
+        for chunk in photo.chunks():
+            f.write(chunk)
+            
+    # Update profile
+    previous_photo = profile.avatar_url
+    profile.avatar_url = f'uploads/avatars/{filename}'
+    profile.avatar_emoji = "👤" # Reset emoji if used
+    profile.theme_settings.pop('avatar_config', None) # Clear 3D config
+    profile.save()
+    
+    # Delete previous custom avatar if exists and is not default
+    if previous_photo and previous_photo.startswith('uploads/avatars/') and os.path.exists(os.path.join(settings.MEDIA_ROOT, previous_photo)):
+        try:
+            os.remove(os.path.join(settings.MEDIA_ROOT, previous_photo))
+        except:
+            pass
+
+    return Response({
+        'success': True,
+        'message': 'Avatar photo uploaded successfully',
+        'avatar_url': profile.avatar_url
+    })
+
+
+@api_view(['GET'])
+@parser_classes([JSONParser])
+def mentor_status(request):
+    """Get today's attendance status for all mentors of the current employee"""
+    employee_id = request.query_params.get('employee_id')
+    
+    if not employee_id:
+        return Response({'success': False, 'message': 'Employee ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+    try:
+        employee = Employee.objects.get(id=employee_id)
+        mentors = employee.managers.all()
+        
+        mentor_data = []
+        today = timezone.localtime(timezone.now()).date()
+        
+        for mentor in mentors:
+            status = 'Absent'
+            record = AttendanceRecord.objects.filter(employee=mentor, date=today).first()
+            if record:
+                status = record.status
+                
+            try:
+                profile = EmployeeProfile.objects.get(employee=mentor)
+                avatar = profile.avatar_url or profile.avatar_emoji or '👤'
+                bg = profile.theme_settings.get('avatarTextBg', '#2563eb') if profile.theme_settings else '#2563eb'
+            except EmployeeProfile.DoesNotExist:
+                avatar = '👤'
+                bg = '#2563eb'
+                
+            mentor_data.append({
+                'id': mentor.id,
+                'name': mentor.name,
+                'status': status,
+                'avatar': avatar,
+                'bg': bg
+            })
+            
+        return Response({
+            'success': True,
+            'mentors': mentor_data
+        })
+        
+    except Employee.DoesNotExist:
+        return Response({'success': False, 'message': 'Employee not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
