@@ -3892,10 +3892,10 @@ async function loadWFHEligibility() {
                 statWFH.textContent = `${currentCount}/${maxWfhLimit}`;
                 statWFH.style.color = currentCount >= maxWfhLimit ? '#ef4444' : '#10b981';
 
-                // Animate Ring (Circumference ~ 201)
+                // Animate Ring (Circumference ~ 164)
                 if (wfhRing) {
                     const wfhPercent = Math.min((currentCount / maxWfhLimit), 1);
-                    const wfhOffset = 201 - (wfhPercent * 201);
+                    const wfhOffset = 164 - (wfhPercent * 164);
                     wfhRing.style.strokeDashoffset = wfhOffset;
                 }
             }
@@ -3905,10 +3905,10 @@ async function loadWFHEligibility() {
                 statLeaves.textContent = `${leavesUsed}/${maxLeaveLimit}`;
                 statLeaves.style.color = leavesUsed >= maxLeaveLimit ? '#ef4444' : '#10b981';
 
-                // Animate Ring (Circumference ~ 201)
+                // Animate Ring (Circumference ~ 164)
                 if (leavesRing) {
                     const leavesPercent = Math.min((leavesUsed / maxLeaveLimit), 1);
-                    const leavesOffset = 201 - (leavesPercent * 201);
+                    const leavesOffset = 164 - (leavesPercent * 164);
                     leavesRing.style.strokeDashoffset = leavesOffset;
                 }
             }
@@ -9772,7 +9772,7 @@ function renderEmployeePerformanceModal(data, employeeId) {
                 <div style="display: flex; justify-content: space-between; align-items: start; width: 100%;">
                     <div style="display: flex; flex-direction: column; gap: 12px;">
                         <div style="display: flex; align-items: center; gap: 16px;">
-                            <div style="background: rgba(255,255,255,0.2); width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 12px; font-size: 20px;">
+                            <div id="perfModalAvatar" style="background: rgba(255,255,255,0.2); width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; border-radius: 16px; font-size: 40px; overflow: hidden; flex-shrink: 0;">
                                 👤
                             </div>
                             <div>
@@ -9979,6 +9979,12 @@ function renderEmployeePerformanceModal(data, employeeId) {
     `;
 
     document.body.appendChild(modal);
+
+    // Render Avatar
+    const avatarContainer = document.getElementById('perfModalAvatar');
+    if (avatarContainer && data.avatar_emoji) {
+        renderAvatar(data.avatar_emoji, avatarContainer);
+    }
 }
 
 function checkDueTomorrowReminders() {
@@ -10961,15 +10967,36 @@ async function renderAvatar(avatarStr, container) {
     }
     
     // Fallback to Image or Emoji
-    if (avatarStr && (avatarStr.startsWith('http') || avatarStr.startsWith('/'))) {
+    if (avatarStr && (avatarStr.startsWith('http') || avatarStr.startsWith('/') || avatarStr.startsWith('uploads/'))) {
         const isHeader = container.id === 'userAvatar';
-        const size = isHeader ? '24px' : '100px';
+        const isPerfModal = container.id === 'perfModalAvatar';
+        const size = isPerfModal ? '80px' : (isHeader ? '24px' : '100px');
         const zoom = (currentUser.theme_settings && currentUser.theme_settings.avatarZoom) || 1.0;
         const transform = `scale(${0.85 * zoom})`;
-        container.innerHTML = `<img src="${avatarStr}" style="width:${size}; height:${size}; vertical-align:middle; border-radius:50%; display:inline-block; border:1px solid rgba(255,255,255,0.2); object-fit:cover; transform: ${transform};">`;
+        
+        let src = avatarStr;
+        if (!src.startsWith('http') && !src.startsWith('/') && !src.startsWith('data:')) {
+            src = '/media/' + src;
+        }
+        
+        container.innerHTML = `<img src="${src}" style="width:${size}; height:${size}; vertical-align:middle; border-radius:50%; display:inline-block; border:1px solid rgba(255,255,255,0.2); object-fit:cover; transform: ${transform};">`;
     } else {
         const zoom = (currentUser.theme_settings && currentUser.theme_settings.avatarZoom) || 1.0;
-        container.innerHTML = `<span style="display:inline-block; transform: scale(${zoom});">${avatarStr || "👤"}</span>`;
+        const textBg = (currentUser.theme_settings && currentUser.theme_settings.avatarTextBg) || '#3b82f6';
+        
+        if (avatarStr && avatarStr.length > 0 && avatarStr.length <= 3 && !isEmoji(avatarStr)) {
+            container.style.background = textBg;
+            container.style.color = '#fff';
+            container.style.display = 'inline-flex';
+            container.style.alignItems = 'center';
+            container.style.justifyContent = 'center';
+            container.style.fontWeight = 'bold';
+            container.style.fontSize = avatarStr.length > 1 ? '14px' : '18px';
+            container.innerText = avatarStr.toUpperCase();
+        } else {
+            container.style.background = 'transparent';
+            container.innerHTML = `<span style="display:inline-block; transform: scale(${zoom});">${avatarStr || "👤"}</span>`;
+        }
     }
 }
 
@@ -11273,6 +11300,18 @@ function updateAppearancePreview() {
     if (cfg3d) {
         // Render saved DiceBear avatar as mini preview
         renderSavedAvatar(preview, cfg3d);
+    } else if (currentUser && currentUser.avatar_url && !currentUser.avatar_url.includes('glb')) {
+        // Render Custom Photo
+        const zoom = (currentUser.theme_settings && currentUser.theme_settings.avatarZoom) || 1.0;
+        const offX = (currentUser.theme_settings && currentUser.theme_settings.avatarOffsetX) || 0;
+        const offY = (currentUser.theme_settings && currentUser.theme_settings.avatarOffsetY) || 0;
+        
+        let src = currentUser.avatar_url;
+        if (!src.startsWith('http') && !src.startsWith('/') && !src.startsWith('data:')) {
+            src = '/media/' + src;
+        }
+        
+        preview.innerHTML = `<img src="${src}" style="width:100px; height:100px; border-radius:50%; object-fit:cover; transform: scale(${zoom}) translate(${offX}px, ${offY}px);">`;
     } else {
         const zoom = (currentUser.theme_settings && currentUser.theme_settings.avatarZoom) || 1.0;
         preview.innerHTML = `<span style="font-size: 64px; display:inline-block; transform: scale(${zoom});">${selectedEmoji || '👤'}</span>`;
@@ -11368,7 +11407,7 @@ async function saveAppearanceSettings() {
 
         const payload = {
             employee_id: currentUser.id,
-            avatar_emoji: selectedEmoji,
+            avatar_emoji: currentUser.avatar_emoji || selectedEmoji,
             theme_settings: themeSettings
         };
         
@@ -11384,7 +11423,7 @@ async function saveAppearanceSettings() {
             msg.style.color = '#10b981';
 
             // Update local user object
-            currentUser.avatar_emoji = selectedEmoji;
+            currentUser.avatar_emoji = payload.avatar_emoji;
             currentUser.theme_settings = themeSettings;
             sessionStorage.setItem('attendanceUser', JSON.stringify(currentUser));
 
@@ -11416,7 +11455,11 @@ function updateHeaderAvatar() {
     if (currentUser.avatar_url && !currentUser.avatar_url.includes('glb')) {
         // Custom Photo Avatar
         const img = document.createElement('img');
-        img.src = currentUser.avatar_url.startsWith('data:') ? currentUser.avatar_url : '/' + currentUser.avatar_url;
+        let src = currentUser.avatar_url;
+        if (!src.startsWith('http') && !src.startsWith('/') && !src.startsWith('data:')) {
+            src = '/media/' + src;
+        }
+        img.src = src;
         img.style.width = '100%';
         img.style.height = '100%';
         img.style.objectFit = 'cover';
@@ -11443,7 +11486,7 @@ function updateHeaderAvatar() {
             // Text Avatar Rendering
             avatarEl.style.background = textBg;
             avatarEl.style.color = '#fff';
-            avatarEl.style.display = 'flex';
+            avatarEl.style.display = 'inline-flex';
             avatarEl.style.alignItems = 'center';
             avatarEl.style.justifyContent = 'center';
             avatarEl.style.fontWeight = 'bold';
@@ -11527,6 +11570,19 @@ function openEmojiPicker() {
         avatarSelectedSegment = 'photo';
     } else if (currentUser.avatar_emoji && currentUser.avatar_emoji.length <= 2 && !isEmoji(currentUser.avatar_emoji)) {
         avatarSelectedSegment = 'text';
+    }
+    
+    // Load existing settings
+    if (currentUser.theme_settings) {
+        if (currentUser.theme_settings.avatarTextBg) {
+            avatarTextBg = currentUser.theme_settings.avatarTextBg;
+        }
+        if (currentUser.theme_settings.avatarZoom) {
+            const slider = document.getElementById('emojiZoomSlider');
+            if (slider) {
+                slider.value = (currentUser.theme_settings.avatarZoom - 0.5) * 100;
+            }
+        }
     }
     
     selectAvatarSegment(avatarSelectedSegment);
@@ -11639,6 +11695,7 @@ function updateAvatarPreviewCircle(content, isUrl = false) {
             isDragging = true;
             startX = e.clientX - currentX;
             startY = e.clientY - currentY;
+            circle.style.cursor = 'grabbing';
             window.addEventListener('mousemove', onMouseMove);
             window.addEventListener('mouseup', onMouseUp);
         });
@@ -11751,6 +11808,9 @@ async function confirmEmojiSelection() {
             // selectedEmoji is set by selectEmoji() globally
             currentUser.avatar_emoji = selectedEmoji || '👤';
         }
+
+        // Sync global selectedEmoji to match current segment's choice
+        selectedEmoji = currentUser.avatar_emoji;
 
         // Capture zoom factor from slider
         const slider = document.getElementById('emojiZoomSlider');
@@ -12513,7 +12573,7 @@ async function loadMentorStatus() {
                         <div class="mentor-status-card">
                             <div class="mentor-avatar">${avatarHtml}</div>
                             <div class="mentor-details">
-                                <span class="mentor-role-label">Reporting Manager</span>
+                                <span style="font-size: 0.85rem; color: var(--gray-500); text-transform: uppercase; font-weight: 800; margin-right: 6px;">Your Mentor:</span>
                                 <span class="mentor-name">${mentor.name}</span>
                                 <span class="mentor-status-badge ${statusClass}">${mentor.status}</span>
                             </div>
