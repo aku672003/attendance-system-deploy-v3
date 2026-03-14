@@ -263,6 +263,7 @@ class EmployeeRequest(models.Model):
             models.Index(fields=['employee']),
             models.Index(fields=['status']),
             models.Index(fields=['start_date']),
+            models.Index(fields=['end_date']),
             models.Index(fields=['request_type']),
         ]
 
