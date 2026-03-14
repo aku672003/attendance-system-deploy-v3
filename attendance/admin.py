@@ -101,6 +101,8 @@ class BirthdayWishAdmin(admin.ModelAdmin):
 @admin.register(TaskComment)
 class TaskCommentAdmin(admin.ModelAdmin):
     list_display = ['task', 'author', 'created_at']
+    fields = ['task', 'author', 'content', 'created_at']
+    readonly_fields = []
 
 
 @admin.register(Team)
