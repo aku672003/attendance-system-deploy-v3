@@ -2199,11 +2199,14 @@ def employee_performance_analysis(request, employee_id):
         ot_ratio = round((total_ot_h / total_all_h) * 100, 1) if total_all_h > 0 else 0
         reg_ratio = round((total_reg_h / total_all_h) * 100, 1) if total_all_h > 0 else 0
 
+        profile = employee.profile if hasattr(employee, 'profile') else None
+
         return Response({
             'success': True,
             'employee_name': employee.name,
             'department': employee.department,
             'email': employee.email,
+            'avatar_emoji': profile.avatar_emoji if profile else "👤",
             'history': history,
             'filter': {
                 'start_date': str(start_date),
