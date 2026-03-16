@@ -9,7 +9,7 @@
     <!-- External Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Orbitron:wght@400;700;900&family=Dancing+Script:wght@700&family=Pacifico&family=Tilt+Prism&family=Bungee+Spice&family=Nabla&display=swap"
         rel="stylesheet">
@@ -24,6 +24,7 @@
     <!-- External Stylesheet -->
     {% load static %}
     <link rel="stylesheet" href="{% static 'style.css' %}">
+    <link rel="stylesheet" href="{% static 'predictive_card.css' %}">
     <style>
         /* Apple-Style Emoji/Avatar Picker Refinements */
         .emoji-picker-container {
@@ -660,30 +661,6 @@
 
             <!-- Employee Stats Grid (shown for non-admin users) -->
             <div class="stats-grid" id="employeeStatsGrid">
-                <!-- Each widget must have a unique ID and data-size for layout persistence -->
-                <div class="stat-card" id="widget-today-status" draggable="false">
-                    <div class="stat-card-title">Today's Status</div>
-                    <div class="stat-card-value" id="todayStatus">Not Marked</div>
-                    <div class="stat-card-timing" id="todayTiming"></div>
-                    <div id="todayMapPreview" style="height: 60px; margin-top: 10px; border-radius: 8px; overflow: hidden; display: none;"></div>
-                    <div class="widget-resize-controls">
-                        <button class="resize-btn" onclick="resizeWidget('widget-today-status', 'sm')">S</button>
-                        <button class="resize-btn" onclick="resizeWidget('widget-today-status', 'md')">M</button>
-                        <button class="resize-btn" onclick="resizeWidget('widget-today-status', 'lg')">L</button>
-                    </div>
-                </div>
-                
-                <div class="stat-card calendar-card" id="widget-mini-calendar" onclick="openAttendanceCalendar()"
-                    style="padding: 12px; display: flex; flex-direction: column; justify-content: center; cursor: pointer;" draggable="false">
-                    <div id="miniCalendarContainer"
-                        style="width: 100%; height: 100%; display: flex; flex-direction: column;"></div>
-                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
-                        <button class="resize-btn" onclick="resizeWidget('widget-mini-calendar', 'sm')">S</button>
-                        <button class="resize-btn" onclick="resizeWidget('widget-mini-calendar', 'md')">M</button>
-                        <button class="resize-btn" onclick="resizeWidget('widget-mini-calendar', 'lg')">L</button>
-                    </div>
-                </div>
-
                 <!-- Premium Status Card -->
                 <div class="stat-card status-card premium-glass" id="widget-requests" onclick="openMyRequests()" draggable="false">
                     <div class="card-glow"></div>
@@ -748,6 +725,31 @@
                         <button class="resize-btn" onclick="resizeWidget('widget-requests', 'lg')">L</button>
                     </div>
                 </div>
+
+                <!-- Each widget must have a unique ID and data-size for layout persistence -->
+                <div class="stat-card" id="widget-today-status" draggable="false">
+                    <div class="stat-card-title">Today's Status</div>
+                    <div class="stat-card-value" id="todayStatus">Not Marked</div>
+                    <div class="stat-card-timing" id="todayTiming"></div>
+                    <div id="todayMapPreview" style="height: 60px; margin-top: 10px; border-radius: 8px; overflow: hidden; display: none;"></div>
+                    <div class="widget-resize-controls">
+                        <button class="resize-btn" onclick="resizeWidget('widget-today-status', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-today-status', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-today-status', 'lg')">L</button>
+                    </div>
+                </div>
+                
+                <div class="stat-card calendar-card" id="widget-mini-calendar" onclick="openAttendanceCalendar()"
+                    style="padding: 12px; display: flex; flex-direction: column; justify-content: center; cursor: pointer;" draggable="false">
+                    <div id="miniCalendarContainer"
+                        style="width: 100%; height: 100%; display: flex; flex-direction: column;"></div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('widget-mini-calendar', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-mini-calendar', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-mini-calendar', 'lg')">L</button>
+                    </div>
+                </div>
+
                 <div class="stat-card" id="widget-location" draggable="false">
                     <div class="stat-card-title">Location Status</div>
                     <div class="stat-card-value" id="locationStatus">Checking...</div>
@@ -760,38 +762,7 @@
                 </div>
 
                 <!-- Intelligence Hub Card (Employee Version) -->
-                <div class="stat-card intelligence-hub-card hidden" id="intelligenceHubCardEmployee" draggable="false">
-                    <div class="intelligence-hub-header">
-                        <div class="intelligence-hub-title-group">
-                            <span class="intelligence-hub-icon">🧠</span>
-                            <span class="intelligence-hub-title">INTELLIGENCE HUB</span>
-                        </div>
-                    </div>
-
-                    <div class="intelligence-hub-content-row">
-                        <div class="intelligence-hub-main">
-                            <div class="intelligence-hub-percentage">
-                                <span id="hubRegularityEmployee">--%</span>
-                            </div>
-                            <div class="intelligence-hub-subtitle">Regularity Percentage</div>
-                        </div>
-<div class="intelligence-hub-actions">
-                            <button class="intelligence-hub-btn" style="flex: 1;"
-                                onclick="event.stopPropagation(); viewTrends();">
-                                <span class="btn-icon">📊</span> Analysis
-                            </button>
-                            <button class="intelligence-hub-btn" style="flex: 1;"
-                                onclick="event.stopPropagation(); viewMyStats();">
-                                <span class="btn-icon">👤</span> Personnel
-                            </button>
-                        </div>
-                    </div>
-                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
-                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCardEmployee', 'sm')">S</button>
-                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCardEmployee', 'md')">M</button>
-                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCardEmployee', 'lg')">L</button>
-                    </div>
-                </div>
+                {% include 'intelligence_hub_employee_card.html' %}
             </div>
 
             <!-- Admin Stats Grid (shown only for admin users) -->
@@ -842,61 +813,8 @@
                     </div>
                 </div>
 
-                <!-- Intelligence Hub Card (Triple Width) -->
-                <div class="stat-card intelligence-hub-card" id="intelligenceHubCard">
-                    <div class="intelligence-hub-header">
-                        <div class="intelligence-hub-title-group">
-                            <span class="intelligence-hub-icon">🧠</span>
-                            <span class="intelligence-hub-title">INTELLIGENCE HUB</span>
-                        </div>
-                    </div>
-
-                    <div class="intelligence-hub-content-row">
-                        <div class="intelligence-hub-main">
-                            <div class="intelligence-hub-percentage">
-                                <span id="hubForecast">--%</span>
-                                <div class="info-tooltip">
-                                    <span class="info-icon"
-                                        style="background: rgba(255,255,255,0.2); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: help; color: white;">?</span>
-                                    <div class="tooltip-content">Predicted attendance percentage for this day based on
-                                        historical patterns.</div>
-                                </div>
-                            </div>
-                            <div class="intelligence-hub-subtitle" id="hubSubtitle">Attendance Forecast</div>
-                        </div>
-
-                        <div class="intelligence-hub-stats-v2">
-                            <div class="intelligence-hub-confidence">
-                                <span>Confidence: <span id="hubConfidence">--%</span></span>
-                                <div class="info-tooltip">
-                                    <span class="info-icon"
-                                        style="background: rgba(255,255,255,0.1); width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: help;">i</span>
-                                    <div class="tooltip-content">Confidence score reflects how consistent and complete
-                                        the recent data is.</div>
-                                </div>
-                            </div>
-
-                        <div class="intelligence-hub-actions">
-                                <button class="intelligence-hub-btn" onclick="event.stopPropagation(); viewTrends();">
-                                    <span class="btn-icon">📊</span> View Analysis
-                                </button>
-                                <button id="hubMyStatsBtn" class="intelligence-hub-btn"
-                                    onclick="event.stopPropagation(); viewMyStats();">
-                                    <span class="btn-icon">👤</span> My Stats
-                                </button>
-                                <button class="intelligence-hub-btn"
-                                    onclick="event.stopPropagation(); searchPersonnel();">
-                                    <span class="btn-icon">🔍</span> Search Personnel
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
-                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCard', 'sm')">S</button>
-                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCard', 'md')">M</button>
-                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCard', 'lg')">L</button>
-                    </div>
-                </div>
+                <!-- Intelligence Hub Card (Admin Version) -->
+                {% include 'intelligence_hub_admin_cards.html' %}
             </div>
 
             <div class="actions-grid" id="actionsGrid">
@@ -1005,23 +923,8 @@
                         <button class="resize-btn" onclick="resizeWidget('assignManagerDashboardCard', 'lg')">L</button>
                     </div>
                 </div>
-                <div class="action-card hidden" onclick="trainPredictionModel()" id="trainModelCard" draggable="false">
-                    <span class="action-card-icon">🧠</span>
-                    <div class="action-card-title">Train Forecast Model</div>
-                    <div class="action-card-description">Retrain the prediction model with recent data (Admin only)
-                    </div>
-                    <div id="trainModelStatus"
-                        style="font-size: 11px; margin-top: 8px; color: var(--primary-color); font-weight: 500;">
-                        <span id="lastTrainedText">Checking model status...</span>
-                        <span id="trainSpinner" class="loading-spinner hidden"
-                            style="display:inline-block; width:10px; height:10px; vertical-align:middle; margin-left:5px;"></span>
-                    </div>
-                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
-                        <button class="resize-btn" onclick="resizeWidget('trainModelCard', 'sm')">S</button>
-                        <button class="resize-btn" onclick="resizeWidget('trainModelCard', 'md')">M</button>
-                        <button class="resize-btn" onclick="resizeWidget('trainModelCard', 'lg')">L</button>
-                    </div>
-                </div>
+                <!-- Train Forecast Model Action Card -->
+                <!-- Extracted to predictive_card_partial.html -->
 
             </div>
         </div>
@@ -2457,43 +2360,6 @@
         </div>
     </div>
 
-    <!-- Request Action Modal (Calendar Click) -->
-    <div id="requestActionModal" class="modal">
-        <div class="modal-content" style="max-width: 500px;">
-            <h3>Request Time Off</h3>
-            <p id="requestActionDateDisplay" style="color: #64748b; margin-bottom: 20px;"></p>
-
-            <input type="hidden" id="requestActionDate">
-
-            <div class="form-group">
-                <label class="form-label">Request Type</label>
-                <select id="requestType" class="form-control" onchange="toggleRequestPeriod()">
-                    <option value="wfh">Work From Home</option>
-                    <option value="full_day">Full Day Leave</option>
-                    <option value="half_day">Half Day Leave</option>
-                </select>
-            </div>
-
-            <div class="form-group hidden" id="requestPeriodGroup">
-                <label class="form-label">Half Day Period</label>
-                <select id="requestPeriod" class="form-control">
-                    <option value="first_half">First Half (Before Lunch)</option>
-                    <option value="second_half">Second Half (After Lunch)</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Reason</label>
-                <textarea id="requestReason" class="form-control" rows="3"
-                    placeholder="Please provide a reason..."></textarea>
-            </div>
-
-            <div style="display:flex; gap:12px; justify-content:flex-end; margin-top: 20px;">
-                <button class="btn btn-secondary" onclick="closeModal('requestActionModal')">Cancel</button>
-                <button class="btn btn-primary" onclick="submitRequest()">Submit Request</button>
-            </div>
-        </div>
-    </div>
 
 
 
@@ -2828,93 +2694,8 @@
         </div>
     </div>
 
-    <!-- Training Modal -->
-    <div id="trainModelModal" class="modal">
-        <div class="modal-content" style="max-width: 600px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="margin: 0;">Forecast Model Training</h3>
-                <button onclick="closeModal('trainModelModal')"
-                    style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--gray-500); padding: 4px 8px; line-height: 1;">&times;</button>
-            </div>
-
-            <div class="training-container">
-                <div class="training-status-card">
-                    <div class="training-progress-wrapper">
-                        <div class="progress-bar-container"
-                            style="width: 100%; height: 12px; background: #e5e7eb; border-radius: 6px; overflow: hidden; margin-top: 10px;">
-                            <div id="trainingProgressBar" class="progress-bar-fill"
-                                style="width: 0%; height: 100%; background: var(--primary-color); transition: width 0.3s ease;">
-                            </div>
-                        </div>
-                        <div id="trainingProgressText"
-                            style="font-size: 12px; color: var(--gray-500); margin-top: 8px; text-align: center; font-weight: 500;">
-                            Ready to calibrate model using historical data</div>
-                    </div>
-                    <button id="btnStartTraining" class="btn btn-primary" style="width: 100%; margin-top: 20px;"
-                        onclick="startTrainingProcess()">
-                        Start Training Session
-                    </button>
-                </div>
-
-                <div class="training-tabs" style="margin-top: 24px;">
-                    <div class="tabs-header"
-                        style="display: flex; border-bottom: 1px solid #e5e7eb; margin-bottom: 16px;">
-                        <button class="training-tab-btn active" id="tabLogsBtn" onclick="switchTrainingTab('logs')"
-                            style="padding: 10px 16px; border: none; background: none; cursor: pointer; border-bottom: 2px solid var(--primary-color); font-weight: 600; color: var(--primary-color);">Live
-                            Logs</button>
-                        <button class="training-tab-btn" id="tabHistoryBtn" onclick="switchTrainingTab('history')"
-                            style="padding: 10px 16px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; font-weight: 500; color: var(--gray-500);">Training
-                            History</button>
-                    </div>
-
-                    <div id="trainingLogTab" class="tab-content">
-                        <div id="trainingLogs" class="log-console"
-                            style="background: #111827; color: #10b981; padding: 16px; border-radius: 8px; font-family: 'Courier New', Courier, monospace; font-size: 12px; height: 200px; overflow-y: auto; line-height: 1.5;">
-                            <div class="log-entry" style="color: #9ca3af;">[SYSTEM] Waiting for training
-                                sequence to
-                                start...</div>
-                        </div>
-                    </div>
-
-                    <div id="trainingHistoryTab" class="tab-content hidden">
-                        <div style="text-align: right; margin-bottom: 8px;">
-                            <button class="btn btn-subtle btn-sm" onclick="clearTrainingHistory()"
-                                style="font-size: 11px; color: var(--error-color);">
-                                <span class="btn-icon">🗑️</span> Clear History
-                            </button>
-                        </div>
-                        <div id="trainingHistoryItems" class="history-list"
-                            style="max-height: 200px; overflow-y: auto;">
-                            <!-- History populated by JS -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Clear History Confirmation Modal -->
-    <div id="clearHistoryModal" class="modal" style="z-index: 99999;">
-        <div class="modal-content" style="max-width: 400px; text-align: center;">
-            <div style="font-size: 48px; margin-bottom: 12px;">🗑️</div>
-            <h3 style="color: var(--gray-900); margin-bottom: 8px;">Clear Training History?</h3>
-            <p style="color: var(--gray-500); font-size: 14px; margin-bottom: 24px; line-height: 1.5;">
-                This will permanently delete all past AI model training records. This action <strong>cannot
-                    be
-                    undone</strong>.
-            </p>
-            <div style="display: flex; gap: 12px; justify-content: center;">
-                <button class="btn btn-secondary" onclick="closeModal('clearHistoryModal')" style="flex: 1;">
-                    Cancel
-                </button>
-                <button class="btn btn-primary" onclick="confirmClearHistory()" id="confirmClearBtn"
-                    style="flex: 1; background: var(--error-color); border-color: var(--error-color);">
-                    <span id="confirmClearText">Yes, Clear All</span>
-                    <span id="confirmClearSpinner" class="loading-spinner hidden"></span>
-                </button>
-            </div>
-        </div>
-    </div>
+    <!-- Intelligence Hub Partials (Modals) -->
+    {% include 'predictive_modals_partial.html' %}
 
     <div id="calendarModal" class="modal">
         <div class="modal-content calendar-modal-content">
@@ -2985,6 +2766,44 @@
         </div>
     </div>
 
+    <!-- Request Action Modal (Calendar Click) -->
+    <div id="requestActionModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h3>Request Time Off</h3>
+            <p id="requestActionDateDisplay" style="color: #64748b; margin-bottom: 20px;"></p>
+
+            <input type="hidden" id="requestActionDate">
+
+            <div class="form-group">
+                <label class="form-label">Request Type</label>
+                <select id="requestType" class="form-control" onchange="toggleRequestPeriod()">
+                    <option value="wfh">Work From Home</option>
+                    <option value="full_day">Full Day Leave</option>
+                    <option value="half_day">Half Day Leave</option>
+                </select>
+            </div>
+
+            <div class="form-group hidden" id="requestPeriodGroup">
+                <label class="form-label">Half Day Period</label>
+                <select id="requestPeriod" class="form-control">
+                    <option value="first_half">First Half (Before Lunch)</option>
+                    <option value="second_half">Second Half (After Lunch)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Reason</label>
+                <textarea id="requestReason" class="form-control" rows="3"
+                    placeholder="Please provide a reason..."></textarea>
+            </div>
+
+            <div style="display:flex; gap:12px; justify-content:flex-end; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closeModal('requestActionModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="submitRequest()">Submit Request</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Notification -->
     <div id="notification" class="notification"></div>
 
@@ -2992,6 +2811,7 @@
     <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     {% load static %}
     <script src="{% static 'script.js' %}"></script>
+    <script src="{% static 'predictive_card.js' %}"></script>
 
     <!-- Birthday Special Effects Container -->
     <div id="birthdayFXContainer"></div>

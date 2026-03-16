@@ -5490,469 +5490,6 @@ input:checked+.slider:before {
     width: 4px;
     height: 4px;
     border-radius: 50%;
-    margin-top: 2px;
-}
-
-/* ========== Attendance Predictions Styles ========== */
-
-.predictions-table {
-    font-size: 14px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    border-radius: 12px;
-    overflow: hidden;
-}
-
-.predictions-table thead tr {
-    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
-    color: white;
-}
-
-.predictions-table thead th {
-    padding: 16px 12px;
-    font-weight: 600;
-    text-transform: uppercase;
-    font-size: 11px;
-    letter-spacing: 0.5px;
-}
-
-.predictions-table tbody tr {
-    transition: background-color 0.2s ease;
-}
-
-.predictions-table tbody tr:hover {
-    background-color: var(--gray-50);
-}
-
-.predictions-table tbody td {
-    padding: 16px 12px;
-    vertical-align: middle;
-}
-
-/* Performance ring animation */
-.predictions-table circle {
-    transition: stroke-dashoffset 0.6s ease;
-}
-
-/* Responsive table */
-@media (max-width: 1200px) {
-    .predictions-table {
-        font-size: 12px;
-    }
-
-    .predictions-table thead th,
-    .predictions-table tbody td {
-        padding: 12px 8px;
-    }
-}
-
-/* ========== Intelligence Hub Card Styles ========== */
-
-.intelligence-hub-card {
-    grid-column: span 2;
-    background: linear-gradient(135deg, #e9d5ff 0%, #ddd6fe 50%, #c4b5fd 100%) !important;
-    border: 1px solid rgba(168, 85, 247, 0.2) !important;
-    padding: 20px !important;
-    cursor: default !important;
-    position: relative;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    transition: all 0.3s ease;
-}
-
-/* Override for small size */
-.intelligence-hub-card.widget-sm {
-    grid-column: span 1 !important;
-    padding: 12px !important;
-}
-
-.intelligence-hub-card.widget-sm .intelligence-hub-content-row {
-    flex-direction: column !important;
-    gap: 10px !important;
-    align-items: flex-start !important;
-}
-
-.intelligence-hub-card.widget-sm .intelligence-hub-percentage {
-    font-size: 24px !important;
-}
-
-.intelligence-hub-card.widget-sm .intelligence-hub-subtitle {
-    font-size: 11px !important;
-}
-
-.intelligence-hub-card.widget-sm .intelligence-hub-stats-v2 {
-    padding: 10px !important;
-    gap: 8px !important;
-    width: 100% !important;
-}
-
-.intelligence-hub-card.widget-sm .intelligence-hub-actions {
-    flex-direction: column !important;
-    gap: 4px !important;
-    width: 100% !important;
-}
-
-.intelligence-hub-card.widget-sm .intelligence-hub-btn {
-    padding: 6px !important;
-    font-size: 10px !important;
-    width: 100% !important;
-}
-
-.intelligence-hub-content-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 20px;
-    flex: 1;
-}
-
-.intelligence-hub-card::before {
-    content: "";
-    position: absolute;
-    top: -50%;
-    right: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
-    pointer-events: none;
-}
-
-.intelligence-hub-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 8px;
-}
-
-.intelligence-hub-title-group {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.intelligence-hub-icon {
-    font-size: 20px;
-}
-
-.intelligence-hub-title {
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    color: #6b21a8;
-    text-transform: uppercase;
-}
-
-.intelligence-hub-trend-badge {
-    font-size: 10px;
-    font-weight: 700;
-    padding: 6px 14px;
-    border-radius: 20px;
-    letter-spacing: 0.5px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-.intelligence-hub-trend-badge.down {
-    background-color: #fee2e2;
-    color: #991b1b;
-}
-
-.intelligence-hub-trend-badge.up {
-    background-color: #dcfce7;
-    color: #166534;
-}
-
-.intelligence-hub-trend-badge.stable {
-    background-color: #f3f4f6;
-    color: #4b5563;
-}
-
-.intelligence-hub-main {
-    flex: 1.5;
-    text-align: left;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-}
-
-.intelligence-hub-percentage {
-    font-size: 36px;
-    font-weight: 800;
-    color: #581c87;
-    line-height: 1;
-    margin-bottom: 2px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.intelligence-hub-subtitle {
-    font-size: 13px;
-    font-weight: 600;
-    color: #7c3aed;
-    opacity: 0.9;
-}
-
-.intelligence-hub-stats-v2 {
-    flex: 2;
-    background: rgba(255, 255, 255, 0.4);
-    border-radius: 16px;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 16px;
-    backdrop-filter: blur(5px);
-}
-
-.intelligence-hub-confidence {
-    text-align: left;
-    font-size: 14px;
-    color: #6b21a8;
-    margin-bottom: 0;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.intelligence-hub-confidence span span {
-    font-weight: 800;
-    font-size: 16px;
-}
-
-.intelligence-hub-actions {
-    display: flex;
-    gap: 12px;
-    margin-top: 8px;
-}
-
-/* Predictive Analysis Modal Styles */
-.predictive-modal-content {
-    background-color: #fff;
-    margin: 3% auto;
-    padding: 30px;
-    border: none;
-    width: 90%;
-    max-width: 600px;
-    border-radius: 24px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-    position: relative;
-    max-height: 90vh;
-    overflow-y: auto;
-}
-
-.predictive-modal {
-    background: #ffffff;
-    border-radius: 24px;
-    padding: 0;
-    width: 800px;
-    /* Increased to 800px for a more spacious feel */
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-    position: relative;
-    color: #1f2937;
-    overflow: hidden;
-    /* Added to ensure border-radius clips children */
-}
-
-.predictive-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 24px;
-}
-
-.predictive-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 18px;
-    font-weight: 700;
-}
-
-.forecast-day-label {
-    font-size: 14px;
-    color: #6b7280;
-}
-
-.main-forecast-card {
-    background: #f3f0ff;
-    border-radius: 20px;
-    padding: 40px 20px;
-    text-align: center;
-    margin-bottom: 24px;
-}
-
-.main-forecast-value {
-    font-size: 64px;
-    font-weight: 800;
-    color: #8b5cf6;
-    line-height: 1;
-    margin-bottom: 8px;
-}
-
-.main-forecast-caption {
-    font-size: 13px;
-    font-weight: 600;
-    color: #6b7280;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-}
-
-.main-forecast-subtext {
-    margin-top: 16px;
-    font-size: 15px;
-    font-weight: 600;
-    color: #374151;
-}
-
-.activity-chart-header {
-    text-align: center;
-    font-size: 12px;
-    font-weight: 700;
-    color: #9ca3af;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 16px;
-}
-
-.activity-bars {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    height: 100px;
-    padding: 0 20px;
-    margin-bottom: 8px;
-    gap: 8px;
-}
-
-.activity-bar-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    flex: 1;
-}
-
-.activity-bar {
-    width: 100%;
-    max-width: 35px;
-    background: #e5e7eb;
-    border-radius: 6px;
-    transition: height 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    position: relative;
-}
-
-.activity-bar.next-bar {
-    background: #8b5cf6;
-}
-
-.activity-bar-value {
-    position: absolute;
-    top: -22px;
-    width: 100%;
-    text-align: center;
-    font-size: 11px;
-    font-weight: 700;
-    color: #4b5563;
-}
-
-.activity-bar.next-bar .activity-bar-value {
-    color: #8b5cf6;
-}
-
-.activity-days {
-    display: flex;
-    justify-content: space-between;
-    padding: 0 20px;
-    margin-bottom: 24px;
-    gap: 8px;
-}
-
-.activity-day {
-    flex: 1;
-    text-align: center;
-    font-size: 11px;
-    font-weight: 700;
-    color: #9ca3af;
-    text-transform: uppercase;
-}
-
-.activity-day.next-day {
-    color: #6b7280;
-}
-
-.metric-cards {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-bottom: 24px;
-}
-
-.metric-card {
-    background: #fff;
-    border: 1px solid #f3f4f6;
-    border-radius: 16px;
-    padding: 16px;
-}
-
-.metric-card-title {
-    font-size: 12px;
-    font-weight: 600;
-    color: #6b7280;
-    margin-bottom: 8px;
-}
-
-.metric-card-value {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 18px;
-    font-weight: 700;
-    color: #1f2937;
-    margin-bottom: 4px;
-}
-
-.metric-card-caption {
-    font-size: 11px;
-    color: #9ca3af;
-}
-
-.insight-banner {
-    background: #fffbeb;
-    border: 1px solid #fef3c7;
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 24px;
-}
-
-.insight-text {
-    font-size: 13px;
-    color: #92400e;
-    line-height: 1.5;
-}
-
-.insight-footer {
-    margin-top: 8px;
-    font-size: 12px;
-    color: #b45309;
-}
-
-.predictive-understood-btn {
-    width: 100%;
-    padding: 16px;
-    background: #2563eb;
-    color: white;
-    border: none;
-    border-radius: 12px;
-    font-size: 15px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.predictive-understood-btn:hover {
-    background: #1d4ed8;
-    transform: translateY(-1px);
 }
 
 /* Global Tooltip Styles */
@@ -6008,39 +5545,7 @@ input:checked+.slider:before {
     font-weight: bold;
 }
 
-.intelligence-hub-btn {
-    flex: 1;
-    background: rgba(255, 255, 255, 0.9);
-    border: 1px solid rgba(139, 92, 246, 0.3);
-    border-radius: 8px;
-    padding: 10px 16px;
-    font-size: 13px;
-    font-weight: 600;
-    color: #6b21a8;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-}
-
-.intelligence-hub-btn:hover {
-    background: rgba(255, 255, 255, 1);
-    border-color: rgba(139, 92, 246, 0.5);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(139, 92, 246, 0.2);
-}
-
-.intelligence-hub-btn .btn-icon {
-    font-size: 14px;
-}
-
-.intelligence-hub-btn:disabled {
-    opacity: 0.7;
-    cursor: wait;
-    transform: none;
-}
+/* Intelligence Hub button styles removed */
 
 .status-badge.active {
     background: rgba(139, 92, 246, 0.2);
@@ -6098,35 +5603,7 @@ input:checked+.slider:before {
         gap: 16px !important;
     }
 
-    /* 2. Intelligence Hub Mobile Stack */
-    .intelligence-hub-card {
-        height: auto !important;
-        grid-column: auto !important;
-    }
-
-    .intelligence-hub-content-row {
-        flex-direction: column !important;
-        align-items: flex-start !important;
-    }
-
-    .intelligence-hub-main {
-        width: 100% !important;
-        border-right: none !important;
-        border-bottom: 1px solid rgba(226, 232, 240, 0.6);
-        padding-bottom: 16px !important;
-        margin-bottom: 16px !important;
-    }
-
-    .intelligence-hub-stats-v2 {
-        width: 100% !important;
-        grid-template-columns: 1fr !important;
-        gap: 12px !important;
-    }
-
-    .intelligence-hub-actions {
-        flex-direction: column !important;
-        width: 100% !important;
-    }
+    /* Intelligence Hub Mobile styles removed */
 
     /* 3. Birthday Modal Mobile Stack */
     #birthdayCalendarModal .birthday-modal-content {
@@ -10000,19 +9477,7 @@ body.dark-mode #mentorStatusSection h4 {
         font-size: 14px;
     }
 
-    /* --- Intelligence hub --- */
-    .intelligence-hub-percentage {
-        font-size: 24px;
-    }
-
-    .intelligence-hub-title {
-        font-size: 11px;
-    }
-
-    .intelligence-hub-btn {
-        font-size: 11px !important;
-        padding: 7px 8px !important;
-    }
+    /* Mobile Intelligence hub styles removed */
 
     /* --- Emoji picker --- */
     .emoji-picker-header h3 {
@@ -10100,8 +9565,6 @@ body.dark-mode #mentorStatusSection h4 {
 }
 
 /* ==================== TRUE DARK MODAL OVERRIDES ==================== */
-body.dark-mode .modal-content,
-body.dark-mode #predictiveModal .modal-content,
 body.dark-mode #employeePerformanceModal .modal-content,
 body.dark-mode #myTasksModal .modal-content,
 body.dark-mode #taskManagerModal .modal-content,
@@ -10118,7 +9581,6 @@ body.dark-mode #addTaskModal .premium-modal-content {
 }
 
 /* Force dark background for inner containers with inline background styles */
-body.dark-mode #predictiveModal div[style*="background"],
 body.dark-mode #employeePerformanceModal div[style*="background"],
 body.dark-mode .premium-modal-body,
 body.dark-mode .export-body,
@@ -10126,7 +9588,6 @@ body.dark-mode .modal-body-premium {
     background: transparent !important;
 }
 
-body.dark-mode .predictive-header,
 body.dark-mode .modal-header,
 body.dark-mode .docs-modal-header,
 body.dark-mode .premium-modal-header,
@@ -10136,7 +9597,6 @@ body.dark-mode .modal-header-premium {
     color: #ffffff !important;
 }
 
-body.dark-mode .predictive-title,
 body.dark-mode h2,
 body.dark-mode h3,
 body.dark-mode h4,
@@ -10144,7 +9604,6 @@ body.dark-mode .modal-title {
     color: #ffffff !important;
 }
 
-body.dark-mode .main-forecast-card,
 body.dark-mode .premium-column,
 body.dark-mode .stats-card-v2,
 body.dark-mode .performance-card,
@@ -10264,13 +9723,7 @@ body.dark-mode [style*="background: rgba(139, 92, 246, 0.1)"] {
     background: rgba(139, 92, 246, 0.2) !important;
 }
 
-/* Fix for any white cards in predictive modal */
-body.dark-mode #predictiveModal div[style*="background: white"],
-body.dark-mode #predictiveModal div[style*="background:white"],
-body.dark-mode #predictiveModal div[style*="background: linear-gradient"] {
-    background: #0a0a0a !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-}
+/* Dark mode fixes for predictive card removed */
 
 /* Ensure stats labels are readable */
 body.dark-mode #statsMonth,
@@ -10460,6 +9913,7 @@ body.dark-mode .main-forecast-value,
 body.dark-mode .regularity-score-value {
     background: linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
     text-shadow: 0 10px 20px rgba(255, 255, 255, 0.1) !important;
 }
