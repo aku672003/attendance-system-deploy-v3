@@ -52,8 +52,9 @@ document.addEventListener('DOMContentLoaded', async function () {
         try {
             currentUser = JSON.parse(storedUser);
             // Apply personalization on reload
-            if (currentUser.avatar_emoji) {
-                renderAvatar(currentUser.avatar_emoji, document.getElementById('userAvatar'));
+            const userAvatar = document.getElementById('userAvatar');
+            if (currentUser.avatar_emoji && userAvatar) {
+                renderAvatar(currentUser.avatar_emoji, userAvatar);
             }
             if (currentUser.theme_settings) {
                 applyUserTheme(currentUser.theme_settings);
@@ -2758,7 +2759,7 @@ function updateDashboardVisibility() {
     const adminStatsGrid = document.getElementById('adminStatsGrid');
     const employeeStatsGrid = document.getElementById('employeeStatsGrid');
 
-    if (currentUser.role === 'admin') {
+    if (currentUser.role === 'admin' || currentUser.role === 'mentor' || currentUser.has_subordinates) {
         // Show Task Mentor (Admin), Hide My Tasks
         if (taskMentorCard) taskMentorCard.classList.remove('hidden');
         if (myTasksCard) myTasksCard.classList.add('hidden');
@@ -2784,6 +2785,11 @@ function updateDashboardVisibility() {
         // Ensure Employee Stats Grid is visible for Employee/Mentor
         if (adminStatsGrid) adminStatsGrid.classList.add('hidden');
         if (employeeStatsGrid) employeeStatsGrid.classList.remove('hidden');
+    }
+
+    // Initialize Intelligence Hub if defined
+    if (typeof initIntelligenceHubVisibility === 'function') {
+        initIntelligenceHubVisibility();
     }
 }
 
@@ -11233,5 +11239,34 @@ async function loadMentorStatus() {
         }
     } catch (e) {
         console.error("Failed to load mentor status:", e);
+    }
+}
+
+// ========== Office Management Functions ==========
+
+/**
+ * Fetches office data from the API and populates the primary office select elements.
+ * Targeted IDs: signupOffice, profilePrimaryOffice
+ */
+async function refreshPrimaryOfficeSelects() {
+    try {
+        const result = await apiCall('offices', 'GET');
+        if (result.success && result.offices) {
+            const signupSelect = document.getElementById('signupOffice');
+            const profileSelect = document.getElementById('profilePrimaryOffice');
+            
+            const optionsHtml = '<option value="">Select Office</option>' + 
+                result.offices.map(o => `<option value="${o.id}">${o.name}</option>`).join('');
+                
+            if (signupSelect) signupSelect.innerHTML = optionsHtml;
+            if (profileSelect) profileSelect.innerHTML = optionsHtml;
+            
+            // Re-select value if profile is loaded
+            if (currentUser && currentUser.primary_office_id && profileSelect) {
+                profileSelect.value = currentUser.primary_office_id;
+            }
+        }
+    } catch (error) {
+        console.error('Failed to refresh office selects:', error);
     }
 }

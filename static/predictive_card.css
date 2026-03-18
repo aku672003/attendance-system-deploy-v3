@@ -1,0 +1,545 @@
+/* Intelligence Hub & Predictive Analysis Card Styles */
+
+/* ========== Intelligence Hub Card Styles ========== */
+.intelligence-hub-card {
+    grid-column: span 2;
+    background: linear-gradient(135deg, #e9d5ff 0%, #ddd6fe 50%, #c4b5fd 100%) !important;
+    border: 1px solid rgba(168, 85, 247, 0.2) !important;
+    padding: 20px !important;
+    cursor: default !important;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: all 0.3s ease;
+}
+
+.intelligence-hub-card.widget-sm {
+    grid-column: span 1 !important;
+    padding: 12px !important;
+}
+
+.intelligence-hub-card.widget-sm .intelligence-hub-content-row {
+    flex-direction: column !important;
+    gap: 10px !important;
+    align-items: flex-start !important;
+}
+
+.intelligence-hub-card.widget-sm .intelligence-hub-percentage {
+    font-size: 24px !important;
+}
+
+.intelligence-hub-card.widget-sm .intelligence-hub-subtitle {
+    font-size: 11px !important;
+}
+
+.intelligence-hub-card.widget-sm .intelligence-hub-stats-v2 {
+    padding: 10px !important;
+    gap: 8px !important;
+    width: 100% !important;
+}
+
+.intelligence-hub-card.widget-sm .intelligence-hub-actions {
+    flex-direction: column !important;
+    gap: 4px !important;
+    width: 100% !important;
+}
+
+.intelligence-hub-card.widget-sm .intelligence-hub-btn {
+    padding: 6px !important;
+    font-size: 10px !important;
+    width: 100% !important;
+}
+
+.intelligence-hub-content-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex: 1;
+}
+
+.intelligence-hub-card::before {
+    content: "";
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+.intelligence-hub-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.intelligence-hub-title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.intelligence-hub-icon {
+    font-size: 20px;
+}
+
+.intelligence-hub-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #6b21a8;
+    text-transform: uppercase;
+}
+
+.intelligence-hub-trend-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.intelligence-hub-trend-badge.down { background-color: #fee2e2; color: #991b1b; }
+.intelligence-hub-trend-badge.up { background-color: #dcfce7; color: #166534; }
+.intelligence-hub-trend-badge.stable { background-color: #f3f4f6; color: #4b5563; }
+
+.intelligence-hub-main {
+    display: flex;
+    flex-direction: column;
+}
+
+.intelligence-hub-gauge-container {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    margin-bottom: 12px;
+}
+
+.intelligence-hub-gauge {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.gauge-background {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.2);
+    stroke-width: 8;
+}
+
+.gauge-progress {
+    fill: none;
+    stroke: #581c87;
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-dasharray: 283;
+    stroke-dashoffset: 283;
+    transition: stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.gauge-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.gauge-label {
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: #6b21a8;
+    opacity: 0.7;
+    margin-top: -4px;
+}
+
+.gauge-tooltip {
+    position: absolute;
+    top: 0;
+    right: 0;
+}
+
+.gauge-tooltip .info-icon {
+    background: rgba(255, 255, 255, 0.2);
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    cursor: help;
+    color: white;
+}
+
+.intelligence-hub-percentage {
+    font-size: 36px;
+    font-weight: 800;
+    color: #581c87;
+    line-height: 1;
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.intelligence-hub-subtitle {
+    font-size: 13px;
+    font-weight: 600;
+    color: #7c3aed;
+    opacity: 0.9;
+}
+
+.intelligence-hub-stats-v2 {
+    flex: 2;
+    background: rgba(255, 255, 255, 0.4);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 16px;
+    backdrop-filter: blur(5px);
+}
+
+.intelligence-hub-confidence {
+    text-align: left;
+    font-size: 14px;
+    color: #6b21a8;
+    margin-bottom: 0;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.intelligence-hub-confidence span span {
+    font-weight: 800;
+    font-size: 16px;
+}
+
+.intelligence-hub-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.intelligence-hub-btn {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #6b21a8;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.intelligence-hub-btn:hover {
+    background: rgba(255, 255, 255, 1);
+    border-color: rgba(139, 92, 246, 0.5);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(139, 92, 246, 0.2);
+}
+
+/* ========== Predictive Analysis Modal Styles ========== */
+.predictive-modal {
+    background: #ffffff;
+    border-radius: 24px;
+    padding: 0;
+    width: 100%;
+    max-width: 650px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    position: relative;
+    color: #1f2937;
+    overflow: hidden;
+}
+
+.predictive-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.predictive-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.forecast-day-label {
+    font-size: 14px;
+    color: #6b7280;
+}
+
+.main-forecast-card {
+    background: #f3f0ff;
+    border-radius: 20px;
+    padding: 40px 20px;
+    text-align: center;
+    margin-bottom: 24px;
+}
+
+.main-forecast-value {
+    font-size: 64px;
+    font-weight: 800;
+    color: #8b5cf6;
+    line-height: 1;
+    margin-bottom: 8px;
+}
+
+.main-forecast-caption {
+    font-size: 13px;
+    font-weight: 600;
+    color: #6b7280;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.main-forecast-subtext {
+    margin-top: 16px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #374151;
+}
+
+/* Activity Bars */
+.activity-bars {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    height: 100px;
+    padding: 0 20px;
+    margin-bottom: 8px;
+    gap: 8px;
+}
+
+.activity-bar-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+}
+
+.activity-bar {
+    width: 100%;
+    max-width: 35px;
+    background: #e5e7eb;
+    border-radius: 6px;
+    transition: height 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    position: relative;
+}
+
+.activity-bar.next-bar {
+    background: #8b5cf6;
+}
+
+.activity-bar-value {
+    position: absolute;
+    top: -22px;
+    width: 100%;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: #4b5563;
+}
+
+.activity-bar.next-bar .activity-bar-value {
+    color: #8b5cf6;
+}
+
+.activity-days {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 20px;
+    margin-bottom: 24px;
+    gap: 8px;
+}
+
+.activity-day {
+    flex: 1;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: #9ca3af;
+    text-transform: uppercase;
+}
+
+.activity-day.next-day {
+    color: #6b7280;
+}
+
+/* Metric Cards */
+.metric-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.metric-card {
+    background: #fff;
+    border: 1px solid #f3f4f6;
+    border-radius: 16px;
+    padding: 16px;
+}
+
+.metric-card-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7280;
+    margin-bottom: 8px;
+}
+
+.metric-card-value {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #1f2937;
+    margin-bottom: 4px;
+}
+
+.metric-card-caption {
+    font-size: 11px;
+    color: #9ca3af;
+}
+
+.insight-banner {
+    background: #fffbeb;
+    border: 1px solid #fef3c7;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 24px;
+}
+
+.insight-text {
+    font-size: 13px;
+    color: #92400e;
+    line-height: 1.5;
+}
+
+.predictive-understood-btn {
+    width: 100%;
+    padding: 16px;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+/* ========== Attendance Predictions Table ========== */
+.predictions-table {
+    font-size: 14px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border-radius: 12px;
+    overflow: hidden;
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.predictions-table thead tr {
+    background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+    color: white;
+}
+
+.predictions-table thead th {
+    padding: 16px 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    text-align: center;
+}
+
+.predictions-table tbody tr {
+    transition: background-color 0.2s ease;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.predictions-table tbody td {
+    padding: 16px 12px;
+    vertical-align: middle;
+}
+
+/* ========== Dark Mode Overrides ========== */
+body.dark-mode .intelligence-hub-card {
+    background: linear-gradient(135deg, #2e1065 0%, #1e1b4b 100%) !important;
+    border: 1px solid rgba(139, 92, 246, 0.3) !important;
+}
+
+body.dark-mode .intelligence-hub-title { color: #d8b4fe; }
+body.dark-mode .intelligence-hub-percentage { color: #f5f3ff; }
+body.dark-mode .intelligence-hub-subtitle { color: #a78bfa; }
+body.dark-mode .intelligence-hub-confidence { color: #a78bfa; }
+body.dark-mode .intelligence-hub-stats-v2 { background: rgba(0, 0, 0, 0.3); }
+
+body.dark-mode .intelligence-hub-btn {
+    background: rgba(30, 27, 75, 0.8);
+    border-color: rgba(139, 92, 246, 0.4);
+    color: #ddd6fe;
+}
+
+body.dark-mode #predictiveModal .modal-content,
+body.dark-mode #employeePerformanceModal .modal-content {
+    background: #000000 !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 1) !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode #predictiveModal div[style*="background"],
+body.dark-mode #employeePerformanceModal div[style*="background"] {
+    background: transparent !important;
+}
+
+body.dark-mode .predictive-header {
+    background: #050505 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .predictive-title { color: #ffffff !important; }
+
+body.dark-mode .main-forecast-card {
+    background: #0a0a0a !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important;
+}
+
+body.dark-mode .forecast-day-label,
+body.dark-mode .main-forecast-caption {
+    color: #a1a1aa !important;
+}
+
+body.dark-mode .main-forecast-value {
+    background: linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 10px 20px rgba(255, 255, 255, 0.1) !important;
+}
