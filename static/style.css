@@ -891,7 +891,7 @@ body {
     /* Change from center to flex-start */
     padding: 40px 20px;
     /* Add padding for safe scroll space */
-    z-index: 1000;
+    z-index: 5000;
     overflow-y: auto;
     /* Ensure the modal container itself can scroll if needed */
 }
@@ -1386,7 +1386,7 @@ body {
     overflow-y: auto;
     animation: slideDown 0.3s ease-out;
     position: relative;
-    z-index: 1000;
+    z-index: 900;
 }
 
 @keyframes slideDown {

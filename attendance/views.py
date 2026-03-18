@@ -477,7 +477,7 @@ def create_task(request):
             description=data.get('description'),
             priority=data.get('priority', 'Medium'),
             due_date=data.get('due_date'),
-            Mentor=creator, # Assuming creator is Mentor
+            mentor=creator, # Assuming creator is mentor
             created_by=creator
         )
         
@@ -497,11 +497,14 @@ def create_team(request):
         name = data.get('name')
         member_ids = data.get('members', [])
 
-        Mentor = Employee.objects.filter(id=mentor_id).first()
-        if not Mentor:
+        if not mentor_id:
+             return Response({'success': False, 'message': 'Mentor ID required'})
+
+        mentor_obj = Employee.objects.filter(id=mentor_id).first()
+        if not mentor_obj:
             return Response({'success': False, 'message': 'Mentor not found'})
 
-        team = Team.objects.create(name=name, Mentor=Mentor)
+        team = Team.objects.create(name=name, mentor=mentor_obj)
         
         if member_ids:
             members = Employee.objects.filter(id__in=member_ids)
@@ -719,7 +722,7 @@ def attendance_records(request):
 
     user_id = request.GET.get('user_id')
     user = Employee.objects.filter(id=user_id).first() if user_id else None
-    # Include de-facto Mentors (any user who has subordinates)
+    # Include de-facto mentors (any user who has subordinates)
     is_mentor = user and (user.role == 'mentor' or (user.role != 'admin' and user.subordinates.exists()))
 
     # Auto-mark absentees only after 6 PM (scheduler handles the main trigger)
@@ -733,7 +736,7 @@ def attendance_records(request):
 
         if is_mentor:
             from django.db.models import Q
-            records_qs = records_qs.filter(Q(employee__Mentors=user) | Q(employee=user))
+            records_qs = records_qs.filter(Q(employee__mentors=user) | Q(employee=user))
 
         if employee_id:
             records_qs = records_qs.filter(employee_id=employee_id)
@@ -1206,7 +1209,7 @@ def admin_profiles_list(request):
     try:
         employees_qs = Employee.objects.filter(is_active=True)
         if is_mentor:
-            employees_qs = employees_qs.filter(Mentors=user)
+            employees_qs = employees_qs.filter(mentors=user)
 
         employees = employees_qs.select_related('profile')\
             .annotate(docs_count=Count('documents'))\
@@ -1254,7 +1257,7 @@ def admin_users(request):
     try:
         users = Employee.objects.all().order_by('-id').prefetch_related('profile')
         if is_mentor:
-            users = users.filter(Mentors=user)
+            users = users.filter(mentors=user)
         
         users_data = []
         for u in users:
@@ -1799,8 +1802,8 @@ def admin_summary(request):
         records_qs = AttendanceRecord.objects.filter(date=today)
         
         if is_mentor:
-            employees_qs = employees_qs.filter(Mentors=user)
-            records_qs = records_qs.filter(employee__Mentors=user)
+            employees_qs = employees_qs.filter(mentors=user)
+            records_qs = records_qs.filter(employee__mentors=user)
 
         # Total employees
         total_employees = employees_qs.count()
@@ -2478,7 +2481,7 @@ def pending_requests(request):
             ).select_related('employee').order_by('start_date')
 
         if is_mentor:
-            requests_obj = requests_obj.filter(employee__Mentors=user)
+            requests_obj = requests_obj.filter(employee__mentors=user)
 
         requests_data = []
         for req in requests_obj:
@@ -2565,14 +2568,14 @@ def active_tasks(request):
             try:
                 emp = Employee.objects.get(id=employee_id)
                 # Treat de-facto Mentors (employees with subordinates) like official Mentors
-                is_emp_Mentor = emp.role.lower() == 'Mentor' or (emp.role.lower() != 'admin' and emp.subordinates.exists())
-                if is_emp_Mentor:
-                    query = query.filter(Q(assignees__Mentors=emp) | Q(Mentor=emp) | Q(created_by=emp) | Q(assignees=emp)).distinct()
+                is_emp_mentor = emp.role.lower() == 'mentor' or (emp.role.lower() != 'admin' and emp.subordinates.exists())
+                if is_emp_mentor:
+                    query = query.filter(Q(assignees__mentors=emp) | Q(mentor=emp) | Q(created_by=emp) | Q(assignees=emp)).distinct()
                 elif emp.role.lower() != 'admin':
                     try:
-                        query = query.filter(Q(assignees=emp) | Q(Mentor=emp)).distinct()
+                        query = query.filter(Q(assignees=emp) | Q(mentor=emp)).distinct()
                     except Exception:
-                        query = query.filter(Q(assignees=emp) | Q(Mentor=emp)).distinct()
+                        query = query.filter(Q(assignees=emp) | Q(mentor=emp)).distinct()
             except Employee.DoesNotExist:
                 pass # Or return 0
 
@@ -2589,23 +2592,23 @@ def active_tasks(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-def _get_admin_task_Mentor_data():
+def _get_admin_task_mentor_data():
     """Helper: Get all tasks for Admin Task Mentor"""
-    tasks = Task.objects.select_related('created_by', 'Mentor').prefetch_related('assignees').order_by('-created_at')
+    tasks = Task.objects.select_related('created_by', 'mentor').prefetch_related('assignees').order_by('-created_at')
     return _serialize_tasks(tasks)
 
 def _get_employee_my_tasks_data(employee):
     """Helper: Get assigned tasks + overseen tasks for Employee My Tasks"""
     tasks = Task.objects.filter(
-        Q(assignees=employee) | Q(Mentor=employee)
-    ).distinct().select_related('created_by', 'Mentor').prefetch_related('assignees').order_by('-created_at')
+        Q(assignees=employee) | Q(mentor=employee)
+    ).distinct().select_related('created_by', 'mentor').prefetch_related('assignees').order_by('-created_at')
     return _serialize_tasks(tasks)
 
-def _get_Mentor_employees_tasks_data(Mentor):
-    """Helper: Get tasks for employees reporting to this Mentor + tasks explicitly managed by them"""
+def _get_mentor_employees_tasks_data(mentor):
+    """Helper: Get tasks for employees reporting to this mentor + tasks explicitly managed by them"""
     tasks = Task.objects.filter(
-        Q(assignees__Mentors=Mentor) | Q(Mentor=Mentor)
-    ).distinct().select_related('created_by', 'Mentor').prefetch_related('assignees').order_by('-created_at')
+        Q(assignees__mentors=mentor) | Q(mentor=mentor)
+    ).distinct().select_related('created_by', 'mentor').prefetch_related('assignees').order_by('-created_at')
     return _serialize_tasks(tasks)
 
 def _serialize_tasks(tasks):
@@ -2638,8 +2641,10 @@ def _serialize_tasks(tasks):
             'priority': task.priority,
             'assignees': assignees_info,
             'overseers': [{'id': o.id, 'name': o.name} for o in task.overseers.all()],
-            'mentor_id': task.mentor.id if task.mentor else None,
+            'Mentor_id': task.mentor.id if task.mentor else None,
             'Mentor_name': task.mentor.name if task.mentor else None,
+            'mentor_id': task.mentor.id if task.mentor else None,
+            'mentor_name': task.mentor.name if task.mentor else None,
             'created_by': task.created_by.id,
             'created_by_name': task.created_by.name,
             'due_date': str(task.due_date) if task.due_date else None,
@@ -2683,7 +2688,7 @@ def _create_task_admin(data, creator):
         description=data.get('description', ''),
         status=data.get('status', 'todo'),
         priority=data.get('priority', 'medium'),
-        Mentor=Mentor_employee,
+        mentor=Mentor_employee,
         created_by=creator,
         due_date=data.get('due_date')
     )
@@ -2710,11 +2715,11 @@ def tasks_api(request):
 
                 if emp.role == 'admin':
                     # ADMIN PATH
-                    tasks_data = _get_admin_task_Mentor_data()
+                    tasks_data = _get_admin_task_mentor_data()
                 elif emp.role == 'mentor':
                     # Mentor PATH - Sees their own tasks + their employees' tasks
                     own_tasks = _get_employee_my_tasks_data(emp)
-                    subordinate_tasks = _get_Mentor_employees_tasks_data(emp)
+                    subordinate_tasks = _get_mentor_employees_tasks_data(emp)
                     # Merge and remove duplicates if any (though shouldn't be)
                     tasks_data = own_tasks + [t for t in subordinate_tasks if t['id'] not in [ot['id'] for ot in own_tasks]]
                 else:
@@ -2774,6 +2779,9 @@ def tasks_api(request):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# Alias: URL conf references 'views.create_task' for the explicit create endpoint
+create_task = tasks_api
+
 def _update_task_admin(task, data, user=None):
     """Helper: Admin/Overseer/Reporting Mentor updates task details"""
     user_role = str(user.role).lower() if user else 'none'
@@ -2783,7 +2791,7 @@ def _update_task_admin(task, data, user=None):
     # Mentor check: user manages at least one of the assignees
     is_reporting_mentor = False
     if user:
-        is_reporting_mentor = task.assignees.filter(Mentors=user).exists()
+        is_reporting_mentor = task.assignees.filter(mentors=user).exists()
 
     if task.status == 'completed' and not (is_admin or is_overseer or is_reporting_mentor):
         # We allow Admins and the Overseer to bypass this for correction/reopening
@@ -2869,7 +2877,7 @@ def _update_task_employee(task, data, user=None):
 def task_detail_api(request, task_id):
     """Update, delete or fetch a task (Separated Admin/Employee Logic)"""
     try:
-        task = Task.objects.prefetch_related('assignees').select_related('Mentor').get(id=task_id)
+        task = Task.objects.prefetch_related('assignees').select_related('mentor').get(id=task_id)
     except Task.DoesNotExist:
         return Response({
             'success': False,
@@ -2897,8 +2905,8 @@ def task_detail_api(request, task_id):
         if request.method == 'POST':
             # Check for DELETE method simulation
             if data.get('_method') == 'DELETE':
-                is_task_Mentor = task.mentor and task.mentor.id == requesting_user.id
-                if requesting_user.role != 'admin' and not is_task_Mentor:
+                is_task_mentor = task.mentor and task.mentor.id == requesting_user.id
+                if requesting_user.role != 'admin' and not is_task_mentor:
                     return Response({'success': False, 'message': 'Unauthorized to delete this task'}, status=status.HTTP_403_FORBIDDEN)
 
                 task.delete()
@@ -2907,7 +2915,7 @@ def task_detail_api(request, task_id):
             # Update Logic
             role = str(requesting_user.role).lower()
             is_assignee = task.assignees.filter(id=requesting_user.id).exists()
-            is_mentor_of_assignee = task.assignees.filter(Mentors=requesting_user).exists()
+            is_mentor_of_assignee = task.assignees.filter(mentors=requesting_user).exists()
 
             if role == 'admin':
                 _update_task_admin(task, data, requesting_user)
@@ -2952,12 +2960,12 @@ def task_comment_api(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        task = Task.objects.prefetch_related('assignees').select_related('Mentor').get(id=task_id)
+        task = Task.objects.prefetch_related('assignees').select_related('mentor').get(id=task_id)
         author = Employee.objects.get(id=author_id)
 
         # Updated permission checks for hybrid assignment
         is_assignee = task.assignees.filter(id=author.id).exists()
-        is_mentor_of_assignee = task.assignees.filter(Mentors=author).exists()
+        is_mentor_of_assignee = task.assignees.filter(mentors=author).exists()
 
         can_comment = False
         role = str(author.role).lower()
