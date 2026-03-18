@@ -349,7 +349,7 @@ function resetAttendanceFlow() {
 
 function showScreen(screenId) {
     // Prevent non-admins from opening adminScreen
-    if (screenId === 'adminScreen' && (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'manager' && !currentUser.has_subordinates))) {
+    if (screenId === 'adminScreen' && (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'Mentor' && !currentUser.has_subordinates))) {
         showNotification('Admins only.', 'warning');
         screenId = 'dashboardScreen';
         return;
@@ -486,6 +486,36 @@ function showNotification(message, type = 'success') {
     notification.onclick = () => {
         notification.classList.remove('show');
     };
+}
+
+/**
+ * Shows the global premium loading screen
+ */
+function showLoading(message = "Loading your dashboard...") {
+    const loader = document.getElementById('globalLoader');
+    if (!loader) return;
+    
+    // Update message if provided
+    const subtitle = loader.querySelector('.loader-subtitle');
+    if (subtitle) subtitle.textContent = message;
+    
+    loader.classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+/**
+ * Hides the global premium loading screen
+ */
+function hideLoading() {
+    const loader = document.getElementById('globalLoader');
+    if (!loader) return;
+    
+    loader.classList.remove('active');
+    
+    // Only restore overflow if no modals are active
+    if (!document.querySelector('.modal.active')) {
+        document.body.style.overflow = '';
+    }
 }
 
 // Geolocation permission help UI
@@ -682,6 +712,7 @@ async function handleLogin(event) {
             currentUser = result.user;
             sessionStorage.setItem('attendanceUser', JSON.stringify(currentUser));
             sessionStorage.setItem('attendanceLoginTime', Date.now().toString());
+            showLoading("Initializing your workspace...");
 
             // Apply personalization
             if (currentUser.avatar_emoji) {
@@ -708,6 +739,8 @@ async function handleLogin(event) {
             } catch (err) {
                 console.error("Critical error loading dashboard data:", err);
                 showNotification("Dashboard loaded with some errors", "warning");
+            } finally {
+                hideLoading();
             }
 
             updateDashboardVisibility();
@@ -947,8 +980,8 @@ async function handleNotificationClick(type, id) {
     } else if (type === 'birthday') {
         openBirthdayCalendar();
     } else if (type === 'task') {
-        if (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.has_subordinates) {
-            openTaskManager();
+        if (currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.has_subordinates) {
+            openTaskMentor();
         } else {
             openMyTasks();
         }
@@ -1046,7 +1079,7 @@ async function loadDashboardData() {
         document.getElementById('checkInCard').classList.add('hidden'); // Hide check-in for admin
         document.getElementById('checkOutCard').classList.add('hidden'); // Hide check-out for admin
         document.getElementById('adminCard').classList.remove('hidden');
-        document.getElementById('assignManagerDashboardCard').classList.remove('hidden');
+        document.getElementById('assignMentorDashboardCard').classList.remove('hidden');
         document.getElementById('exportCard').classList.remove('hidden');
         document.getElementById('trainModelCard')?.classList.remove('hidden');
         document.getElementById('profileCard').classList.add('hidden');
@@ -1071,13 +1104,13 @@ async function loadDashboardData() {
         document.getElementById('employeeStatsGrid').classList.remove('hidden');
         document.getElementById('profileCard').classList.remove('hidden');
         document.getElementById('adminCard').classList.add('hidden');
-        document.getElementById('assignManagerDashboardCard').classList.add('hidden');
+        document.getElementById('assignMentorDashboardCard').classList.add('hidden');
         document.getElementById('exportCard').classList.add('hidden');
         document.getElementById('trainModelCard')?.classList.add('hidden');
         document.getElementById('adminExportNote')?.classList.add('hidden');
         document.getElementById('myStatsCard')?.classList.remove('hidden');
 
-        if (currentUser.role === 'manager' || currentUser.has_subordinates) {
+        if (currentUser.role === 'Mentor' || currentUser.has_subordinates) {
             document.getElementById('manageEmployeesCard')?.classList.remove('hidden');
         } else {
             document.getElementById('manageEmployeesCard')?.classList.add('hidden');
@@ -1220,10 +1253,11 @@ async function loadActiveTasks() {
 
 // Admin Card Click Handlers
 async function showEmployeeSummary() {
-    if (!(currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.has_subordinates)) {
+    if (!(currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.has_subordinates)) {
         showNotification('Access denied', 'error');
         return;
     }
+    showLoading("Generating workforce summary...");
     try {
         const res = await apiCall('admin-summary', 'GET', { user_id: currentUser.id });
         if (res && res.success) {
@@ -1315,6 +1349,8 @@ async function showEmployeeSummary() {
     } catch (error) {
         console.error('Error showing employee summary:', error);
         showNotification('Error loading employee summary', 'error');
+    } finally {
+        hideLoading();
     }
 }
 
@@ -1341,6 +1377,7 @@ function refreshBirthdayCalendar() {
 // --- Premium Birthday Calendar Logic ---
 
 async function openBirthdayCalendar() {
+    showLoading("Opening birthday celebrations...");
     const content = document.getElementById('birthdayCalendarContent');
     // Premium loading state
     content.innerHTML = '<div class="text-center" style="padding: 40px; color:#64748b;"><div class="loading-spinner" style="border-top-color:#3b82f6; border-bottom-color:#3b82f6;"></div><p style="margin-top:16px; font-weight:600;">Loading Calendar...</p></div>';
@@ -1455,6 +1492,8 @@ async function openBirthdayCalendar() {
     } catch (error) {
         console.error('Error loading birthday calendar:', error);
         content.innerHTML = '<div class="text-center" style="padding: 40px;"><p class="text-danger">System Error</p><button class="btn-premium btn-premium-danger" onclick="closeModal(\'birthdayCalendarModal\')">Close</button></div>';
+    } finally {
+        hideLoading();
     }
 }
 
@@ -2025,6 +2064,7 @@ function showBirthdayDetails(day) {
 }
 
 async function openRequestsModal() {
+    showLoading("Analyzing employee requests...");
     const content = document.getElementById('requestsContent');
     content.innerHTML = '<div class="text-center" style="padding: 40px;"><div class="loading-spinner" style="margin: 0 auto 16px;"></div><p>Loading futuristic dashboard...</p></div>';
 
@@ -2120,6 +2160,8 @@ async function openRequestsModal() {
     } catch (error) {
         console.error('Error loading requests:', error);
         content.innerHTML = '<div class="text-center" style="padding: 40px;"><p>Error loading requests</p></div>';
+    } finally {
+        setTimeout(hideLoading, 500);
     }
 }
 
@@ -2170,7 +2212,7 @@ function renderRequestCards(requests) {
                             ` : `
                                 <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
                                     <span class="premium-badge" style="background: ${req.status === 'approved' ? '#dcfce7' : '#fee2e2'}; color: ${req.status === 'approved' ? '#166534' : '#991b1b'}; border-radius: 8px; padding: 6px 14px; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em;">${req.status}</span>
-                                    ${req.reviewed_by_name ? `<span style="font-size:0.7rem; color:#94a3b8; font-weight:600;">By ${req.is_manager ? 'Manager: ' : ''}${req.reviewed_by_name}</span>` : ''}
+                                    ${req.reviewed_by_name ? `<span style="font-size:0.7rem; color:#94a3b8; font-weight:600;">By ${req.is_Mentor ? 'Mentor: ' : ''}${req.reviewed_by_name}</span>` : ''}
                                 </div>
                             `}
                         </div>
@@ -2284,21 +2326,23 @@ function applyRequestFilters() {
     list.innerHTML = renderRequestCards(filtered);
 }
 
-async function openTaskManager() {
+async function openTaskMentor() {
+    showLoading("Opening Task Mentor...");
     await refreshTasks();
     await populateTaskExportEmployeeFilter();
 
     // Hide Add Task button for non-admins
-    const addTaskBtn = document.querySelector('#taskManagerModal .modal-actions .btn-primary');
+    const addTaskBtn = document.querySelector('#taskMentorModal .modal-actions .btn-primary');
     if (addTaskBtn) {
-        if (typeof currentUser !== 'undefined' && currentUser && currentUser.role !== 'admin' && currentUser.role !== 'manager' && !currentUser.has_subordinates) {
+        if (typeof currentUser !== 'undefined' && currentUser && currentUser.role !== 'admin' && currentUser.role !== 'Mentor' && !currentUser.has_subordinates) {
             addTaskBtn.style.display = 'none';
         } else {
             addTaskBtn.style.display = 'inline-block';
         }
     }
 
-    openModal('taskManagerModal');
+    openModal('taskMentorModal');
+    hideLoading();
 }
 
 async function populateTaskExportEmployeeFilter() {
@@ -2407,7 +2451,7 @@ async function confirmTaskExport() {
             { header: 'Priority', key: 'priority', width: 15 },
             { header: 'Assignees', key: 'assignees', width: 30 },
             { header: 'Overseers', key: 'overseers', width: 30 },
-            { header: 'Manager', key: 'manager', width: 25 },
+            { header: 'Mentor', key: 'Mentor', width: 25 },
             { header: 'Created By', key: 'created_by', width: 25 },
             { header: 'Due Date', key: 'due_date', width: 15 },
             { header: 'In Progress At', key: 'started_at', width: 25 },
@@ -2425,7 +2469,7 @@ async function confirmTaskExport() {
                 priority: task.priority,
                 assignees: (task.assignees || []).map(a => a.name).join(', '),
                 overseers: (task.overseers || []).map(o => o.name).join(', '),
-                manager: task.manager_name || '',
+                Mentor: task.Mentor_name || '',
                 created_by: task.created_by_name || '',
                 due_date: task.due_date || 'N/A',
                 started_at: task.started_at ? new Date(task.started_at).toLocaleString() : 'N/A',
@@ -2540,7 +2584,7 @@ function renderTaskBoard() {
                         <span class="premium-priority-badge ${priorityClass}" style="border-radius: 6px; padding: 4px 10px;">${task.priority || 'Medium'}</span>
                         ${dueBadge}
                         <div style="display:flex; gap:8px;">
-                            ${typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || task.manager_id === currentUser.id || currentUser.role === 'manager' || currentUser.has_subordinates) ? `
+                            ${typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || task.Mentor_id === currentUser.id || currentUser.role === 'Mentor' || currentUser.has_subordinates) ? `
                             <button class="btn-icon-sm" onclick="event.stopPropagation(); editTask(${task.id})" style="background:#f1f5f9; border:none; color:#64748b; cursor:pointer; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; transition:all 0.2s;" title="Edit">✎</button>
                             <button class="btn-icon-sm" onclick="event.stopPropagation(); deleteTask(${task.id})" style="background:#fef2f2; border:none; color:#ef4444; cursor:pointer; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; transition:all 0.2s;" title="Delete">🗑</button>
                             ` : ''}
@@ -2555,9 +2599,9 @@ function renderTaskBoard() {
                             <div style="display:flex;">${avatarGroup}</div>
                             <span style="font-size:0.85rem; color:#475569; font-weight: 500; margin-left: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px;">${assigneeNames}</span>
                         </div>
-                        ${task.manager_name ? `
+                        ${task.Mentor_name ? `
                         <div style="display:flex; align-items:center; gap:6px; margin-top: 4px;">
-                            <span style="font-size:0.75rem; color:#64748b; font-weight: 600; background:#f1f5f9; padding:2px 8px; border-radius:4px;">👁 Overseer: ${task.manager_name}</span>
+                            <span style="font-size:0.75rem; color:#64748b; font-weight: 600; background:#f1f5f9; padding:2px 8px; border-radius:4px;">👁 Overseer: ${task.Mentor_name}</span>
                         </div>
                         ` : ''}
                         <div style="display:flex; flex-direction:column; align-items:flex-end;">
@@ -2583,8 +2627,10 @@ function renderTaskBoard() {
 let myTasks = [];
 
 async function openMyTasks() {
+    showLoading("Fetching your tasks...");
     await refreshMyTasks();
     openModal('myTasksModal');
+    hideLoading();
 }
 
 async function refreshMyTasks() {
@@ -2667,7 +2713,7 @@ function renderMyTaskBoard() {
                         <span class="premium-priority-badge ${priorityClass}" style="border-radius: 6px; padding: 4px 10px;">${task.priority || 'Medium'}</span>
                         ${dueBadge}
                         <div style="display:flex; gap:8px; margin-left: auto;">
-                            ${typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || task.manager_id === currentUser.id) ? `
+                            ${typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || task.Mentor_id === currentUser.id) ? `
                             <button class="btn-icon-sm" onclick="event.stopPropagation(); editTask(${task.id})" style="background:#f1f5f9; border:none; color:#64748b; cursor:pointer; width:28px; height:28px; border-radius:6px; display:flex; align-items:center; justify-content:center; transition:all 0.2s; font-size: 10px;" title="Edit">✎</button>
                             <button class="btn-icon-sm" onclick="event.stopPropagation(); deleteTask(${task.id})" style="background:#fef2f2; border:none; color:#ef4444; cursor:pointer; width:28px; height:28px; border-radius:6px; display:flex; align-items:center; justify-content:center; transition:all 0.2s; font-size: 10px;" title="Delete">🗑</button>
                             ` : ''}
@@ -2704,7 +2750,7 @@ function renderMyTaskBoard() {
 function updateDashboardVisibility() {
     if (!currentUser) return;
 
-    const taskManagerCard = document.getElementById('taskManagerCard');
+    const taskMentorCard = document.getElementById('taskMentorCard');
     const myTasksCard = document.getElementById('myTasksCard');
     const intelligenceHubCard = document.getElementById('intelligenceHubCard');
     const intelligenceHubCardEmployee = document.getElementById('intelligenceHubCardEmployee');
@@ -2713,8 +2759,8 @@ function updateDashboardVisibility() {
     const employeeStatsGrid = document.getElementById('employeeStatsGrid');
 
     if (currentUser.role === 'admin') {
-        // Show Task Manager (Admin), Hide My Tasks
-        if (taskManagerCard) taskManagerCard.classList.remove('hidden');
+        // Show Task Mentor (Admin), Hide My Tasks
+        if (taskMentorCard) taskMentorCard.classList.remove('hidden');
         if (myTasksCard) myTasksCard.classList.add('hidden');
 
         // Admin defaults
@@ -2726,8 +2772,8 @@ function updateDashboardVisibility() {
         if (adminStatsGrid) adminStatsGrid.classList.remove('hidden');
         if (employeeStatsGrid) employeeStatsGrid.classList.add('hidden');
     } else {
-        // Hide Task Manager (Admin), Show My Tasks (Employee/Manager)
-        if (taskManagerCard) taskManagerCard.classList.add('hidden');
+        // Hide Task Mentor (Admin), Show My Tasks (Employee/Mentor)
+        if (taskMentorCard) taskMentorCard.classList.add('hidden');
         if (myTasksCard) myTasksCard.classList.remove('hidden');
 
         // Employee Intelligence Hub
@@ -2735,7 +2781,7 @@ function updateDashboardVisibility() {
         if (intelligenceHubCardEmployee) intelligenceHubCardEmployee.classList.remove('hidden');
         if (hubMyStatsBtn) hubMyStatsBtn.classList.remove('hidden');
 
-        // Ensure Employee Stats Grid is visible for Employee/Manager
+        // Ensure Employee Stats Grid is visible for Employee/Mentor
         if (adminStatsGrid) adminStatsGrid.classList.add('hidden');
         if (employeeStatsGrid) employeeStatsGrid.classList.remove('hidden');
     }
@@ -2773,7 +2819,7 @@ function addNewTask() {
  * Populate Edit Task Modal
  */
 async function editTask(taskId) {
-    // Check both global task arrays (Task Manager and My Tasks)
+    // Check both global task arrays (Task Mentor and My Tasks)
     const task = (tasks && Array.isArray(tasks) ? tasks.find(t => t.id === taskId) : null) ||
         (myTasks && Array.isArray(myTasks) ? myTasks.find(t => t.id === taskId) : null);
 
@@ -2803,8 +2849,8 @@ async function editTask(taskId) {
 
     // For overseer multi-select
     selectedOverseerIds = task.overseers ? task.overseers.map(o => o.id) : [];
-    if (selectedOverseerIds.length === 0 && task.manager_id) {
-        selectedOverseerIds = [task.manager_id];
+    if (selectedOverseerIds.length === 0 && task.Mentor_id) {
+        selectedOverseerIds = [task.Mentor_id];
     }
     updateSelectedTags('overseerDisplay', selectedOverseerIds, window.allEmployeesSimple || [], 'taskOverseerIds');
 
@@ -2822,10 +2868,10 @@ async function populateTaskAssigneeDropdown() {
             // Populate Multi-Select Options
             populateEmployeeListInDropdown('multiSelectOptionsList', false);
 
-            const managerSelect = document.getElementById('taskManager');
-            if (managerSelect) {
-                // Allow selecting any employee as a manager/overseer
-                managerSelect.innerHTML = '<option value="none">Optional: Select Manager...</option>' +
+            const MentorSelect = document.getElementById('taskMentor');
+            if (MentorSelect) {
+                // Allow selecting any employee as a Mentor/overseer
+                MentorSelect.innerHTML = '<option value="none">Optional: Select Mentor...</option>' +
                     res.employees.map(emp => `<option value="${emp.id}">${emp.name} (${emp.role})</option>`).join('');
             }
             // Populate Overseer Multi-Select
@@ -2836,17 +2882,17 @@ async function populateTaskAssigneeDropdown() {
     }
 }
 
-// Auto-select manager when assignee changes
+// Auto-select Mentor when assignee changes
 document.addEventListener('change', (e) => {
     if (e.target.id === 'taskAssignee') {
         const empId = parseInt(e.target.value);
         if (!empId || !window.allEmployeesSimple) return;
 
         const emp = window.allEmployeesSimple.find(x => x.id === empId);
-        if (emp && emp.manager_id) {
-            const managerSelect = document.getElementById('taskManager');
-            if (managerSelect) {
-                managerSelect.value = emp.manager_id;
+        if (emp && emp.Mentor_id) {
+            const MentorSelect = document.getElementById('taskMentor');
+            if (MentorSelect) {
+                MentorSelect.value = emp.Mentor_id;
             }
         }
     }
@@ -2917,6 +2963,7 @@ async function saveNewTask() {
 let currentSelectedTaskId = null;
 
 async function openTaskDetail(taskId) {
+    showLoading("Loading task details...");
     const task = [...tasks, ...myTasks].find(t => t.id === taskId);
     if (!task) return;
 
@@ -2974,6 +3021,7 @@ async function openTaskDetail(taskId) {
     document.getElementById('newTaskComment').value = '';
 
     openModal('taskDetailModal');
+    hideLoading();
 }
 
 function renderTaskComments(comments) {
@@ -3128,8 +3176,10 @@ async function rejectRequest(requestId, type) {
 /* ==================== MY REQUESTS POPUP (STATUS OVERVIEW) ==================== */
 
 function openMyRequests() {
+    showLoading("Opening your requests...");
     openModal('myRequestsModal');
     loadStatusOverview();
+    hideLoading();
 }
 
 async function loadStatusOverview() {
@@ -3308,7 +3358,7 @@ async function loadMyRequests() {
                                 color: ${statusColor};
                                 background: ${statusBg};
                             ">${statusText}</span>
-                            ${req.reviewed_by_name ? `<div style="font-size: 10px; color: var(--gray-400); font-weight: 500;">By ${req.is_manager ? 'Manager: ' : ''}${req.reviewed_by_name}</div>` : ''}
+                            ${req.reviewed_by_name ? `<div style="font-size: 10px; color: var(--gray-400); font-weight: 500;">By ${req.is_Mentor ? 'Mentor: ' : ''}${req.reviewed_by_name}</div>` : ''}
                         </div>
                     </div>
                 `;
@@ -3359,8 +3409,12 @@ async function openAttendanceCalendar() {
     
     if (isCalendarBuilding) return; // Guard against multiple builds
 
+    showLoading("Initializing Attendance Calendar...");
     const modal = document.getElementById('calendarModal');
-    if (modal && modal.classList.contains('active')) return;
+    if (modal && modal.classList.contains('active')) {
+        hideLoading();
+        return;
+    }
 
     isCalendarBuilding = true;
     try {
@@ -3371,6 +3425,7 @@ async function openAttendanceCalendar() {
         openModal('calendarModal');
     } finally {
         isCalendarBuilding = false;
+        hideLoading();
     }
 }
 
@@ -3392,9 +3447,13 @@ async function changeCalendarMonth(offset) {
 }
 
 async function buildAttendanceCalendar(year, month) {
+    showLoading("Building attendance matrix...");
     const grid = document.getElementById('calendarGrid');
     const label = document.getElementById('calendarMonthLabel');
-    if (!grid || !label) return;
+    if (!grid || !label) {
+        hideLoading();
+        return;
+    }
 
     grid.innerHTML = '';
 
@@ -3525,7 +3584,7 @@ async function buildAttendanceCalendar(year, month) {
                 const typeLabel = record.status === 'wfh' ? 'WFH' : (record.is_half_day ? 'Half Day' : 'Full Day');
                 tooltipLines.push(`Status: ${typeLabel} (${record.request_status || record.status})`);
                 if (record.reviewed_by_name) {
-                    tooltipLines.push(`${record.is_manager ? 'Manager: ' : 'Admin: '}${record.reviewed_by_name}`);
+                    tooltipLines.push(`${record.is_Mentor ? 'Mentor: ' : 'Admin: '}${record.reviewed_by_name}`);
                 }
             } else {
                 // Regular attendance record
@@ -3571,6 +3630,7 @@ async function buildAttendanceCalendar(year, month) {
         cell.className = cls;
         grid.appendChild(cell);
     }
+    hideLoading();
 }
 
 function toggleMultiSelectMode() {
@@ -5547,7 +5607,7 @@ async function confirmCheckOut() {
 }
 
 
-// To allow admins/managers to view specific employee records
+// To allow admins/Mentors to view specific employee records
 let overrideRecordsEmployeeId = null;
 let overrideRecordsEmployeeName = null;
 
@@ -5580,16 +5640,16 @@ async function loadAttendanceRecords(isMore = false) {
             }
         }
 
-        const isAdminOrManager = currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.has_subordinates;
-        const batchSize = isAdminOrManager ? 1 : 10;
+        const isAdminOrMentor = currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.has_subordinates;
+        const batchSize = isAdminOrMentor ? 1 : 10;
 
         const params = {
             days_limit: batchSize,
             days_offset: attendanceDaysOffset
         };
 
-        // For non-admin, non-manager, non-de-facto-manager employees, fetch only their last 6 months of data
-        if (currentUser.role !== 'admin' && currentUser.role !== 'manager' && !currentUser.has_subordinates) {
+        // For non-admin, non-Mentor, non-de-facto-Mentor employees, fetch only their last 6 months of data
+        if (currentUser.role !== 'admin' && currentUser.role !== 'Mentor' && !currentUser.has_subordinates) {
             params.employee_id = currentUser.id;
             // No strict 6-month limit here if we want true pagination, but we can keep it as a safety
             const today = getCurrentISTDate();
@@ -5598,12 +5658,12 @@ async function loadAttendanceRecords(isMore = false) {
             params.start_date = formatDate(sixMonthsAgo);
             params.end_date = formatDate(today);
         } else if (overrideRecordsEmployeeId) {
-            // If an Admin/Manager clicked "Records" on a specific user
+            // If an Admin/Mentor clicked "Records" on a specific user
             params.employee_id = overrideRecordsEmployeeId;
         } else if (currentUser.role === 'admin') {
             // Admins see all records by default - don't set employee_id
-        } else if (currentUser.role === 'manager' || currentUser.has_subordinates) {
-            // If manager or lead clicked "Records" from main dashboard, show their personal records
+        } else if (currentUser.role === 'Mentor' || currentUser.has_subordinates) {
+            // If Mentor or lead clicked "Records" from main dashboard, show their personal records
             params.employee_id = currentUser.id;
         }
 
@@ -5637,8 +5697,8 @@ async function loadAttendanceRecords(isMore = false) {
 }
 
 async function loadMoreAttendanceRecords() {
-    const isAdminOrManager = currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.has_subordinates;
-    const batchSize = isAdminOrManager ? 1 : 10;
+    const isAdminOrMentor = currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.has_subordinates;
+    const batchSize = isAdminOrMentor ? 1 : 10;
     attendanceDaysOffset += batchSize;
     await loadAttendanceRecords(true);
 }
@@ -5672,7 +5732,7 @@ function renderAttendanceTable(records) {
         ${attendanceHasMore ? `
             <div class="text-center" style="margin-top: 24px; margin-bottom: 40px;">
                 <button id="loadMoreAttendanceBtn" class="btn btn-primary" onclick="loadMoreAttendanceRecords()" style="padding: 12px 32px; font-weight: 600; border-radius: 12px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);">
-                    ${(currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.has_subordinates) ? 'Load Previous Day' : 'Load Previous 10 Days'}
+                    ${(currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.has_subordinates) ? 'Load Previous Day' : 'Load Previous 10 Days'}
                 </button>
             </div>
         ` : ''}
@@ -5680,7 +5740,7 @@ function renderAttendanceTable(records) {
 
     const listContainer = document.getElementById('attendanceListContainer');
 
-    if (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.has_subordinates) {
+    if (currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.has_subordinates) {
         renderAdminDayWiseView(records, listContainer);
     } else {
         renderUserMonthWiseView(records, listContainer);
@@ -5865,7 +5925,7 @@ function applyAttendanceSearch() {
         return;
     }
 
-    if (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.has_subordinates) {
+    if (currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.has_subordinates) {
         renderAdminDayWiseView(filtered, listContainer);
     } else {
         renderUserMonthWiseView(filtered, listContainer);
@@ -6119,7 +6179,7 @@ let allAdminProfiles = [];
 /* Open Admin Panel and ALWAYS pull fresh data from DB */
 // === ADMIN: open panel and load everything ===
 async function openAdminPanel() {
-    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'manager' && !currentUser.has_subordinates)) {
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'Mentor' && !currentUser.has_subordinates)) {
         showNotification('Admins only.', 'warning');
         return;
     }
@@ -6129,11 +6189,11 @@ async function openAdminPanel() {
         refreshAdminOffices(),
         refreshAdminUsers(),
         refreshPrimaryOfficeSelects(),
-        refreshManagerDropdown(),
+        refreshMentorDropdown(),
         refreshAdminProfiles()          // 🔹 load extended user details
     ];
 
-    if (currentUser.role !== 'admin' && (currentUser.role === 'manager' || currentUser.has_subordinates)) {
+    if (currentUser.role !== 'admin' && (currentUser.role === 'Mentor' || currentUser.has_subordinates)) {
         document.getElementById('adminAddOfficeCard')?.classList.add('hidden');
         document.getElementById('adminAddUserCard')?.classList.add('hidden');
         document.getElementById('adminOfficesListCard')?.classList.add('hidden');
@@ -6150,17 +6210,17 @@ async function openAdminPanel() {
         }
         if (statsGrid) statsGrid.classList.remove('hidden');
 
-        // Manager needs to fetch these when opening the panel
+        // Mentor needs to fetch these when opening the panel
         promises.push(loadAdminSummary());
         promises.push(loadUpcomingBirthdays());
         promises.push(loadPendingRequests());
         promises.push(loadActiveTasks());
 
-        // Hide Intelligence Hub for managers as requested
+        // Hide Intelligence Hub for Mentors as requested
         document.getElementById('intelligenceHubCard')?.classList.add('hidden');
 
 
-        // Show specific Admin Panel action buttons for managers
+        // Show specific Admin Panel action buttons for Mentors
         document.getElementById('btnAdminExportAttendance').style.display = 'inline-block';
 
     } else {
@@ -6514,7 +6574,7 @@ function renderAdminUsers(users) {
                 <td>${u.phone || ''}</td>
                 <td>${u.department || ''}</td>
                 <td>${u.role || ''}</td>
-                <td>${u.manager_name || '<small class="text-muted">None</small>'}</td>
+                <td>${u.Mentor_name || '<small class="text-muted">None</small>'}</td>
                 <td style="white-space:nowrap;">
                     <button class="btn btn-secondary" style="background:#3b82f6;color:#fff" onclick="showEmployeePerformanceAnalysis(${u.id})">Stats</button>
                     <button class="btn btn-secondary" onclick="viewEmployeeRecords(${u.id}, '${u.name}')">Records</button>
@@ -6542,13 +6602,13 @@ function filterAdminUsers() {
     renderAdminUsers(filtered);
 }
 
-/* Bulk Manager Assignment */
-let bulkManagerEmployees = [];
-let bulkManagerPotentials = []; // Admins/Managers
+/* Bulk Mentor Assignment */
+let bulkMentorEmployees = [];
+let bulkMentorPotentials = []; // Admins/Mentors
 
-async function openAssignManagerModal() {
-    openModal('assignManagerModal');
-    const listEl = document.getElementById('assignManagerList');
+async function openAssignMentorModal() {
+    openModal('assignMentorModal');
+    const listEl = document.getElementById('assignMentorList');
     listEl.innerHTML = `
         <div style="display:flex; align-items:center; justify-content:center; padding:40px; color:#64748b;">
             <span class="loading-spinner" style="border-top-color:#1e293b; margin-right:12px;"></span>
@@ -6559,9 +6619,9 @@ async function openAssignManagerModal() {
     try {
         const res = await apiCall('employees-simple', 'GET');
         if (res && res.success && Array.isArray(res.employees)) {
-            bulkManagerEmployees = res.employees;
-            bulkManagerPotentials = res.employees; // 🔹 Populate ALL employees as potential managers
-            renderAssignManagerList(bulkManagerEmployees);
+            bulkMentorEmployees = res.employees;
+            bulkMentorPotentials = res.employees; // 🔹 Populate ALL employees as potential Mentors
+            renderAssignMentorList(bulkMentorEmployees);
         } else {
             listEl.innerHTML = `<div style="padding:40px;text-align:center;color:#991b1b;">Failed to load employees.</div>`;
         }
@@ -6571,8 +6631,8 @@ async function openAssignManagerModal() {
     }
 }
 
-function renderAssignManagerList(employees) {
-    const listEl = document.getElementById('assignManagerList');
+function renderAssignMentorList(employees) {
+    const listEl = document.getElementById('assignMentorList');
     if (!listEl) return;
 
     if (employees.length === 0) {
@@ -6581,26 +6641,26 @@ function renderAssignManagerList(employees) {
     }
 
     listEl.innerHTML = employees.map(emp => `
-        <div class="assign-manager-row" style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #f1f5f9; background:white; transition:background 0.2s;">
+        <div class="assign-Mentor-row" style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #f1f5f9; background:white; transition:background 0.2s;">
             <div style="flex:1; min-width:0; margin-right:20px;">
                 <div style="font-weight:600; color:#1e293b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${emp.name}</div>
                 <div style="font-size:0.8rem; color:#64748b; text-transform:uppercase; letter-spacing:0.5px;">${emp.role}</div>
             </div>
             
             <div style="flex:2; display:flex; gap:12px; align-items:center;">
-                <div class="manager-select-container" style="flex:1; position:relative;">
-                    <div class="bulk-manager-chips" id="chips-${emp.id}" style="display:flex; flex-wrap:wrap; gap:4px; min-height:42px; padding:6px 12px; border:1px solid #e2e8f0; border-radius:8px; cursor:pointer; background:white; align-items:center;" onclick="toggleManagerDropdown(${emp.id})">
-                        ${renderManagerChips(emp.manager_ids || [])}
+                <div class="Mentor-select-container" style="flex:1; position:relative;">
+                    <div class="bulk-Mentor-chips" id="chips-${emp.id}" style="display:flex; flex-wrap:wrap; gap:4px; min-height:42px; padding:6px 12px; border:1px solid #e2e8f0; border-radius:8px; cursor:pointer; background:white; align-items:center;" onclick="toggleMentorDropdown(${emp.id})">
+                        ${renderMentorChips(emp.Mentor_ids || [])}
                         <span style="margin-left:auto; color:#94a3b8; font-size:10px;">▼</span>
                     </div>
-                    <div class="bulk-manager-dropdown hidden" id="dropdown-${emp.id}" style="position:absolute; top:100%; left:0; width:100%; max-height:250px; overflow-y:auto; background:white; border:1px solid #e2e8f0; border-radius:8px; box-shadow:0 10px 15px -3px rgba(0,0,0,0.1); z-index:100; margin-top:4px; padding:4px;">
-                        <input type="text" class="form-control" placeholder="Search managers..." style="height:34px; font-size:0.85rem; margin-bottom:8px; border-radius:6px; padding:0 8px;" oninput="filterManagerOptions(this, ${emp.id})" onclick="event.stopPropagation()">
-                        <div class="manager-options" id="options-${emp.id}">
-                            ${renderManagerOptions(emp.id, emp.manager_ids || [])}
+                    <div class="bulk-Mentor-dropdown hidden" id="dropdown-${emp.id}" style="position:absolute; top:100%; left:0; width:100%; max-height:250px; overflow-y:auto; background:white; border:1px solid #e2e8f0; border-radius:8px; box-shadow:0 10px 15px -3px rgba(0,0,0,0.1); z-index:100; margin-top:4px; padding:4px;">
+                        <input type="text" class="form-control" placeholder="Search Mentors..." style="height:34px; font-size:0.85rem; margin-bottom:8px; border-radius:6px; padding:0 8px;" oninput="filterMentorOptions(this, ${emp.id})" onclick="event.stopPropagation()">
+                        <div class="Mentor-options" id="options-${emp.id}">
+                            ${renderMentorOptions(emp.id, emp.Mentor_ids || [])}
                         </div>
                     </div>
                 </div>
-                <button class="btn btn-primary btn-sm" id="btn-save-${emp.id}" onclick="saveManagersForEmployee(${emp.id})" style="height:42px; padding:0 16px; border-radius:8px; font-size:14px; min-width:80px;">
+                <button class="btn btn-primary btn-sm" id="btn-save-${emp.id}" onclick="saveMentorsForEmployee(${emp.id})" style="height:42px; padding:0 16px; border-radius:8px; font-size:14px; min-width:80px;">
                     💾 Save
                 </button>
             </div>
@@ -6608,10 +6668,10 @@ function renderAssignManagerList(employees) {
     `).join('');
 }
 
-function renderManagerChips(managerIds) {
-    if (!managerIds || managerIds.length === 0) return `<span style="color:#94a3b8; font-size:0.85rem;">No managers</span>`;
-    return managerIds.map(id => {
-        const mgr = bulkManagerPotentials.find(m => m.id === id);
+function renderMentorChips(MentorIds) {
+    if (!MentorIds || MentorIds.length === 0) return `<span style="color:#94a3b8; font-size:0.85rem;">No Mentors</span>`;
+    return MentorIds.map(id => {
+        const mgr = bulkMentorPotentials.find(m => m.id === id);
         if (!mgr) return '';
         return `
             <div style="background:#eff6ff; color:#1e40af; padding:2px 8px; border-radius:4px; font-size:0.75rem; display:flex; align-items:center; gap:4px; border:1px solid #dbeafe; font-weight:500;">
@@ -6621,48 +6681,48 @@ function renderManagerChips(managerIds) {
     }).join('');
 }
 
-function renderManagerOptions(empId, currentManagerIds, filter = '') {
-    const managers = !filter ? bulkManagerPotentials : bulkManagerPotentials.filter(m => m.name.toLowerCase().includes(filter.toLowerCase()));
+function renderMentorOptions(empId, currentMentorIds, filter = '') {
+    const Mentors = !filter ? bulkMentorPotentials : bulkMentorPotentials.filter(m => m.name.toLowerCase().includes(filter.toLowerCase()));
 
-    if (managers.length === 0) return `<div style="padding:10px; text-align:center; color:#94a3b8; font-size:0.85rem;">No managers found</div>`;
+    if (Mentors.length === 0) return `<div style="padding:10px; text-align:center; color:#94a3b8; font-size:0.85rem;">No Mentors found</div>`;
 
-    return managers.map(mgr => {
-        const isChecked = currentManagerIds.includes(mgr.id);
+    return Mentors.map(mgr => {
+        const isChecked = currentMentorIds.includes(mgr.id);
         return `
-            <div class="manager-option" style="display:flex; align-items:center; padding:8px 10px; cursor:pointer; border-radius:6px; transition:background 0.2s;" onclick="toggleManagerSelection(event, ${empId}, ${mgr.id})">
-                <input type="checkbox" style="margin-right:10px; width:16px; height:16px; cursor:pointer;" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleManagerSelection(event, ${empId}, ${mgr.id})">
+            <div class="Mentor-option" style="display:flex; align-items:center; padding:8px 10px; cursor:pointer; border-radius:6px; transition:background 0.2s;" onclick="toggleMentorSelection(event, ${empId}, ${mgr.id})">
+                <input type="checkbox" style="margin-right:10px; width:16px; height:16px; cursor:pointer;" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleMentorSelection(event, ${empId}, ${mgr.id})">
                 <span style="font-size:0.85rem; color:#334155; user-select:none;">${mgr.name}</span>
             </div>
         `;
     }).join('');
 }
 
-function filterAssignManagerList() {
-    const query = document.getElementById('assignManagerSearch').value.toLowerCase();
-    const filtered = bulkManagerEmployees.filter(emp =>
+function filterAssignMentorList() {
+    const query = document.getElementById('assignMentorSearch').value.toLowerCase();
+    const filtered = bulkMentorEmployees.filter(emp =>
         emp.name.toLowerCase().includes(query) ||
         emp.role.toLowerCase().includes(query)
     );
-    renderAssignManagerList(filtered);
+    renderAssignMentorList(filtered);
 }
 
-function filterManagerOptions(input, empId) {
-    const emp = bulkManagerEmployees.find(e => e.id === empId);
+function filterMentorOptions(input, empId) {
+    const emp = bulkMentorEmployees.find(e => e.id === empId);
     if (!emp) return;
     const optionsEl = document.getElementById(`options-${empId}`);
     if (optionsEl) {
-        optionsEl.innerHTML = renderManagerOptions(empId, emp.manager_ids || [], input.value);
+        optionsEl.innerHTML = renderMentorOptions(empId, emp.Mentor_ids || [], input.value);
     }
 }
 
-function toggleManagerDropdown(empId) {
+function toggleMentorDropdown(empId) {
     const dropdown = document.getElementById(`dropdown-${empId}`);
     if (!dropdown) return;
 
     const isHidden = dropdown.classList.contains('hidden');
 
     // Close other dropdowns
-    document.querySelectorAll('.bulk-manager-dropdown').forEach(d => d.classList.add('hidden'));
+    document.querySelectorAll('.bulk-Mentor-dropdown').forEach(d => d.classList.add('hidden'));
 
     if (isHidden) {
         dropdown.classList.remove('hidden');
@@ -6676,40 +6736,40 @@ function toggleManagerDropdown(empId) {
 
 // Global click handler to close dropdowns
 document.addEventListener('click', (e) => {
-    if (!e.target.closest('.manager-select-container')) {
-        document.querySelectorAll('.bulk-manager-dropdown').forEach(d => d.classList.add('hidden'));
+    if (!e.target.closest('.Mentor-select-container')) {
+        document.querySelectorAll('.bulk-Mentor-dropdown').forEach(d => d.classList.add('hidden'));
     }
 });
 
-function toggleManagerSelection(event, empId, managerId) {
+function toggleMentorSelection(event, empId, MentorId) {
     event.stopPropagation();
-    const emp = bulkManagerEmployees.find(e => e.id === empId);
+    const emp = bulkMentorEmployees.find(e => e.id === empId);
     if (!emp) return;
 
-    if (!emp.manager_ids) emp.manager_ids = [];
+    if (!emp.Mentor_ids) emp.Mentor_ids = [];
 
-    if (emp.manager_ids.includes(managerId)) {
-        emp.manager_ids = emp.manager_ids.filter(id => id !== managerId);
+    if (emp.Mentor_ids.includes(MentorId)) {
+        emp.Mentor_ids = emp.Mentor_ids.filter(id => id !== MentorId);
     } else {
-        emp.manager_ids.push(managerId);
+        emp.Mentor_ids.push(MentorId);
     }
 
     // Update chips
     const chipsEl = document.getElementById(`chips-${empId}`);
     if (chipsEl) {
-        chipsEl.innerHTML = renderManagerChips(emp.manager_ids) + '<span style="margin-left:auto; color:#94a3b8; font-size:10px;">▼</span>';
+        chipsEl.innerHTML = renderMentorChips(emp.Mentor_ids) + '<span style="margin-left:auto; color:#94a3b8; font-size:10px;">▼</span>';
     }
 
     // Update options list (to sync checkboxes)
     const optionsEl = document.getElementById(`options-${empId}`);
     if (optionsEl) {
         const searchInput = document.getElementById(`dropdown-${empId}`).querySelector('input');
-        optionsEl.innerHTML = renderManagerOptions(empId, emp.manager_ids, searchInput ? searchInput.value : '');
+        optionsEl.innerHTML = renderMentorOptions(empId, emp.Mentor_ids, searchInput ? searchInput.value : '');
     }
 }
 
-async function saveManagersForEmployee(empId) {
-    const emp = bulkManagerEmployees.find(e => e.id === empId);
+async function saveMentorsForEmployee(empId) {
+    const emp = bulkMentorEmployees.find(e => e.id === empId);
     if (!emp) return;
 
     const btn = document.getElementById(`btn-save-${empId}`);
@@ -6720,11 +6780,11 @@ async function saveManagersForEmployee(empId) {
 
     try {
         const res = await apiCall(`admin-user/${empId}`, 'POST', {
-            manager_ids: emp.manager_ids.length > 0 ? emp.manager_ids : ['none']
+            Mentor_ids: emp.Mentor_ids.length > 0 ? emp.Mentor_ids : ['none']
         });
 
         if (res && res.success) {
-            showNotification(`Updated managers for ${emp.name}`, 'success');
+            showNotification(`Updated Mentors for ${emp.name}`, 'success');
             refreshAdminUsers(); // Update background tables
         } else {
             showNotification(res.message || 'Update failed', 'error');
@@ -6740,19 +6800,19 @@ async function saveManagersForEmployee(empId) {
     }
 }
 
-async function refreshManagerDropdown() {
-    const sel = document.getElementById('newUserReportingManager');
+async function refreshMentorDropdown() {
+    const sel = document.getElementById('newUserReportingMentor');
     if (!sel) return;
     try {
         const res = await apiCall('employees-simple', 'GET');
         if (res && res.success && Array.isArray(res.employees)) {
-            // Filter for admins and managers
-            const potentials = res.employees.filter(emp => emp.role === 'admin' || emp.role === 'manager');
-            sel.innerHTML = '<option value="none">No Manager</option>' +
+            // Filter for admins and Mentors
+            const potentials = res.employees.filter(emp => emp.role === 'admin' || emp.role === 'Mentor');
+            sel.innerHTML = '<option value="none">No Mentor</option>' +
                 potentials.map(emp => `<option value="${emp.id}">${emp.name} (${emp.role})</option>`).join('');
         }
     } catch (e) {
-        console.error('Failed to refresh manager dropdown', e);
+        console.error('Failed to refresh Mentor dropdown', e);
     }
 }
 
@@ -6790,7 +6850,7 @@ async function submitNewUser() {
         department: document.getElementById('newUserDepartment').value,
         primary_office: document.getElementById('newUserPrimaryOffice').value,
         role: document.getElementById('newUserRole').value,
-        manager_id: document.getElementById('newUserReportingManager').value,
+        Mentor_id: document.getElementById('newUserReportingMentor').value,
     };
 
     const passwordVal = document.getElementById('newUserPassword').value.trim();
@@ -6841,7 +6901,7 @@ function clearUserForm() {
     document.getElementById('newUserDepartment').value = '';
     document.getElementById('newUserPrimaryOffice').value = '';
     document.getElementById('newUserRole').value = 'employee';
-    document.getElementById('newUserReportingManager').value = 'none';
+    document.getElementById('newUserReportingMentor').value = 'none';
     document.getElementById('addUserMsg').textContent = '';
 }
 
@@ -6865,7 +6925,7 @@ async function startEditUser(id) {
         document.getElementById('newUserDepartment').value = u.department || '';
         document.getElementById('newUserPrimaryOffice').value = u.primary_office || '';
         document.getElementById('newUserRole').value = u.role || 'employee';
-        document.getElementById('newUserReportingManager').value = u.manager_id || 'none';
+        document.getElementById('newUserReportingMentor').value = u.Mentor_id || 'none';
         document.getElementById('newUserPassword').value = ''; // don't prefill password
 
         document.getElementById('addUserMsg').textContent = 'Editing user #' + u.id;
@@ -6968,7 +7028,7 @@ async function loadEmployeeProfile() {
         setFieldValue('profileHomeAddress', p.home_address);
         setFieldValue('profileCurrentAddress', p.current_address);
         setFieldValue('profileDoj', p.date_of_joining);
-        setFieldValue('profileReportingMgr', p.reporting_manager);
+        setFieldValue('profileReportingMgr', p.reporting_Mentor);
 
         setFieldValue('profileSkillSet', p.skill_set);
 
@@ -7063,7 +7123,7 @@ async function saveProfile() {
             home_address: getFieldValue('profileHomeAddress'),
             current_address: getFieldValue('profileCurrentAddress'),
             date_of_joining: getFieldValue('profileDoj'),
-            reporting_manager: getFieldValue('profileReportingMgr'),
+            reporting_Mentor: getFieldValue('profileReportingMgr'),
             skill_set: getFieldValue('profileSkillSet'),
             bank_account_number: getFieldValue('profileBankAccount'),
             bank_name: getFieldValue('profileBankName'),
@@ -7424,7 +7484,7 @@ async function deleteSelectedDocuments() {
 // Add this function near other export functions
 function openExportModal() {
     // Admin only
-    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'manager')) {
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'Mentor')) {
         showNotification('Export feature is available for admin users only', 'warning');
         return;
     }
@@ -7733,7 +7793,7 @@ function filterAdminProfiles() {
         (p.department && p.department.toLowerCase().includes(query)) ||
         (p.personal_email && p.personal_email.toLowerCase().includes(query)) ||
         (p.id && p.id.toString().includes(query)) ||
-        (p.reporting_manager && p.reporting_manager.toLowerCase().includes(query))
+        (p.reporting_Mentor && p.reporting_Mentor.toLowerCase().includes(query))
     );
     box.innerHTML = renderProfilesTable(filtered);
 }
@@ -7765,7 +7825,7 @@ function renderProfilesTable(profiles) {
             <td>${p.gender || ''}</td>
             <td>${p.date_of_birth || ''}</td>
             <td>${p.date_of_joining || ''}</td>
-            <td>${p.reporting_manager || ''}</td>
+            <td>${p.reporting_Mentor || ''}</td>
 
             <td style="white-space:nowrap;">
                 <button class="btn btn-secondary" onclick="exportSingleProfileExcel(${p.id})">
@@ -7791,7 +7851,7 @@ function renderProfilesTable(profiles) {
                         <th>Gender</th>
                         <th>DOB</th>
                         <th>DOJ</th>
-                        <th>Reporting Manager</th>
+                        <th>Reporting Mentor</th>
                         <th>Export</th>
                     </tr>
                 </thead>
@@ -7989,7 +8049,7 @@ async function exportSingleProfileExcel(employeeId) {
             ['Home Address', p.home_address || ''],
             ['Current Address', p.current_address || ''],
             ['Date of Joining', p.date_of_joining || ''],
-            ['Reporting Manager', p.reporting_manager || ''],
+            ['Reporting Mentor', p.reporting_Mentor || ''],
             ['Skill Set', p.skill_set || ''],
             ['Professional Training', p.professional_training || ''],
             ['Aadhaar Number', p.aadhar_number || ''],
@@ -8173,7 +8233,7 @@ async function exportAllProfilesExcel() {
                 ['Home Address', p.home_address || ''],
                 ['Current Address', p.current_address || ''],
                 ['Date of Joining', p.date_of_joining || ''],
-                ['Reporting Manager', p.reporting_manager || ''],
+                ['Reporting Mentor', p.reporting_Mentor || ''],
                 ['Skill Set', p.skill_set || ''],
                 ['Professional Training', p.professional_training || ''],
                 ['Aadhaar Number', p.aadhar_number || ''],
@@ -8505,7 +8565,7 @@ function selectRequest(requestId) {
                         ${req.status !== 'pending' ? `
                             <div style="text-align:right;">
                                 <span class="premium-badge" style="background: ${req.status === 'approved' ? '#dcfce7' : '#fee2e2'}; color: ${req.status === 'approved' ? '#166534' : '#991b1b'}; border-radius: 8px; padding: 6px 14px; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; display:inline-block; margin-bottom:4px;">${req.status}</span>
-                                ${req.reviewed_by_name ? `<div style="font-size:0.7rem; color:#94a3b8; font-weight:600;">By ${req.is_manager ? 'Manager: ' : ''}${req.reviewed_by_name}</div>` : ''}
+                                ${req.reviewed_by_name ? `<div style="font-size:0.7rem; color:#94a3b8; font-weight:600;">By ${req.is_Mentor ? 'Mentor: ' : ''}${req.reviewed_by_name}</div>` : ''}
                             </div>
                         ` : ''}
                     </div>
@@ -8762,7 +8822,7 @@ async function loadTeams() {
     if (!select) return;
 
     try {
-        const res = await apiCall('get-teams', 'GET', { manager_id: currentUser.id });
+        const res = await apiCall('get-teams', 'GET', { Mentor_id: currentUser.id });
         if (res && res.success && Array.isArray(res.teams)) {
             window.allTeams = res.teams;
             select.innerHTML = '<option value="">Select Team...</option>' +
@@ -8874,7 +8934,7 @@ async function saveNewTeam() {
         const endpoint = editingId ? 'update-team' : 'create-team';
         const payload = {
             name: name,
-            manager_id: currentUser.id,
+            Mentor_id: currentUser.id,
             members: selectedTeamMemberIds
         };
         if (editingId) payload.team_id = editingId;

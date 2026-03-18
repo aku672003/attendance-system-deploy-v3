@@ -26,14 +26,14 @@ class EmployeeAdminForm(forms.ModelForm):
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
     form = EmployeeAdminForm
-    list_display = ['id', 'username', 'name', 'email', 'department', 'role', 'get_managers', 'is_active']
+    list_display = ['id', 'username', 'name', 'email', 'department', 'role', 'get_mentors', 'is_active']
     list_filter = ['department', 'role', 'is_active']
     search_fields = ['username', 'name', 'email']
-    filter_horizontal = ('managers',)
+    filter_horizontal = ('mentors',)
 
-    def get_managers(self, obj):
-        return ", ".join([m.username for m in obj.managers.all()])
-    get_managers.short_description = 'Managers'
+    def get_mentors(self, obj):
+        return ", ".join([m.username for m in obj.mentors.all()])
+    get_mentors.short_description = 'Mentors'
 
 
 @admin.register(EmployeeProfile)
@@ -107,5 +107,5 @@ class TaskCommentAdmin(admin.ModelAdmin):
 
 @admin.register(Team)
 class TeamAdmin(admin.ModelAdmin):
-    list_display = ('name', 'manager', 'created_at')
+    list_display = ('name', 'mentor', 'created_at')
     filter_horizontal = ('members',)

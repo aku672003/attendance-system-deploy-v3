@@ -1,61 +1,41 @@
 {
-    "average_rate": 74.63,
-    "stability_factor": 0.9472,
-    "momentum": 0.9666,
+    "average_rate": 77.59,
+    "stability_factor": 0.9322,
     "dow_patterns": {
-        "0": 73.92,
-        "1": 74.68,
-        "2": 77.22,
-        "3": 73.92,
-        "4": 71.9
+        "0": 78.29,
+        "1": 79.04,
+        "2": 79.48,
+        "3": 75.97,
+        "4": 75.11
     },
-    "data_points": 23,
-    "last_trained": "2026-03-06 16:25:04",
-    "version": "1.1.0",
+    "data_points": 31,
+    "last_trained": "2026-03-17 16:21:52",
+    "ml_model_active": true,
+    "version": "2.0.0 (SLM Engine)",
     "logs": [
         {
-            "timestamp": "16:25:04",
-            "message": "Initializing enhanced model training sequence..."
+            "timestamp": "16:21:52",
+            "message": "Initializing SLM-powered intelligence training sequence..."
         },
         {
-            "timestamp": "16:25:04",
-            "message": "System identified 79 active employees."
+            "timestamp": "16:21:52",
+            "message": "Accessing history for 77 personnel."
         },
         {
-            "timestamp": "16:25:04",
-            "message": "Retrieved 33 days of attendance history."
+            "timestamp": "16:21:52",
+            "message": "Retrieved 44 days of historical vectors."
         },
         {
-            "timestamp": "16:25:04",
-            "message": "Step 1/4: Analyzing weekly cyclical patterns..."
+            "timestamp": "16:21:52",
+            "message": "Step 1/2: Training AttendanceMLModel (RandomForest)..."
         },
         {
-            "timestamp": "16:25:04",
-            "message": "Cyclical patterns identified for 5 working days."
+            "timestamp": "16:21:52",
+            "message": "Model trained successfully"
         },
         {
-            "timestamp": "16:25:04",
-            "message": "Step 2/4: Detecting and isolating statistical anomalies..."
-        },
-        {
-            "timestamp": "16:25:04",
-            "message": "Filtered 1 outliers. Optimized dataset contains 23 points."
-        },
-        {
-            "timestamp": "16:25:04",
-            "message": "Step 3/4: Calculating organizational momentum..."
-        },
-        {
-            "timestamp": "16:25:04",
-            "message": "Current momentum factor: 0.9666."
-        },
-        {
-            "timestamp": "16:25:04",
-            "message": "Step 4/4: Performing volatility and stability evaluation..."
-        },
-        {
-            "timestamp": "16:25:04",
-            "message": "Training complete. Final stability index: 0.9472."
+            "timestamp": "16:21:52",
+            "message": "Step 2/2: Updating organizational performance metrics..."
         }
     ]
 }

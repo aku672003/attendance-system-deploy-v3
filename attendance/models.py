@@ -3,7 +3,7 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 from django.core.validators import RegexValidator
 
 
-class EmployeeManager(BaseUserManager):
+class EmployeeMentor(BaseUserManager):
     def create_user(self, username, password=None, **extra_fields):
         if not username:
             raise ValueError('The Username field must be set')
@@ -30,7 +30,7 @@ class Employee(models.Model):
     
     ROLE_CHOICES = [
         ('employee', 'Employee'),
-        ('manager', 'Manager'),
+        ('mentor', 'Mentor'),
         ('admin', 'Admin'),
     ]
 
@@ -42,7 +42,7 @@ class Employee(models.Model):
     department = models.CharField(max_length=20, choices=DEPARTMENT_CHOICES)
     primary_office = models.CharField(max_length=10)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='employee')
-    managers = models.ManyToManyField('self', symmetrical=False, blank=True, related_name='subordinates')
+    mentors = models.ManyToManyField('self', symmetrical=False, blank=True, related_name='subordinates')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -115,7 +115,7 @@ class EmployeeProfile(models.Model):
     current_address = models.TextField(null=True, blank=True)
     date_of_joining = models.DateField(null=True, blank=True)
     skill_set = models.TextField(null=True, blank=True)
-    reporting_manager = models.CharField(max_length=100, null=True, blank=True)
+    reporting_mentor = models.CharField(max_length=100, null=True, blank=True)
     planned_leaves = models.IntegerField(default=0)
     unplanned_leaves = models.IntegerField(default=0)
     professional_training = models.TextField(null=True, blank=True)
@@ -320,7 +320,7 @@ class Task(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='todo')
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='medium')
 
-    manager = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='supervised_tasks')
+    mentor = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='supervised_tasks')
     created_by = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='created_tasks')
     due_date = models.DateField(null=True, blank=True)
     accuracy = models.IntegerField(null=True, blank=True) # Task accuracy score (0-100)
@@ -380,16 +380,16 @@ class BirthdayWish(models.Model):
 
 class Team(models.Model):
     name = models.CharField(max_length=100)
-    manager = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='managed_teams')
+    mentor = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='managed_teams')
     members = models.ManyToManyField(Employee, related_name='teams')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = 'teams'
-        unique_together = [['name', 'manager']]
+        unique_together = [['name', 'mentor']]
 
     def __str__(self):
-        return f"{self.name} (Manager: {self.manager.username})"
+        return f"{self.name} (Mentor: {self.mentor.username})"
 
 
 class TemporaryTag(models.Model):

@@ -762,7 +762,38 @@
                 </div>
 
                 <!-- Intelligence Hub Card (Employee Version) -->
-                {% include 'intelligence_hub_employee_card.html' %}
+                <div class="stat-card intelligence-hub-card hidden" id="intelligenceHubCardEmployee" draggable="false" style="grid-column: span 2;">
+                    <div class="intelligence-hub-header">
+                        <div class="intelligence-hub-title-group">
+                            <span class="intelligence-hub-icon">🧠</span>
+                            <span class="intelligence-hub-title">INTELLIGENCE HUB</span>
+                        </div>
+                    </div>
+
+                    <div class="intelligence-hub-content-row">
+                        <div class="intelligence-hub-main">
+                            <div class="intelligence-hub-percentage">
+                                <span id="hubRegularityEmployee">--%</span>
+                            </div>
+                            <div class="intelligence-hub-subtitle">Regularity Percentage</div>
+                        </div>
+                        <div class="intelligence-hub-actions">
+                            <button class="intelligence-hub-btn" style="flex: 1;"
+                                onclick="event.stopPropagation(); viewTrends();">
+                                <span class="btn-icon">📊</span> Analysis
+                            </button>
+                            <button class="intelligence-hub-btn" style="flex: 1;"
+                                onclick="event.stopPropagation(); viewMyStats();">
+                                <span class="btn-icon">👤</span> Personnel
+                            </button>
+                        </div>
+                    </div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCardEmployee', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCardEmployee', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCardEmployee', 'lg')">L</button>
+                    </div>
+                </div>
             </div>
 
             <!-- Admin Stats Grid (shown only for admin users) -->
@@ -801,8 +832,8 @@
                         <button class="resize-btn" onclick="resizeWidget('widget-admin-requests', 'lg')">L</button>
                     </div>
                 </div>
-                <div class="stat-card" onclick="openTaskManager()" id="widget-admin-tasks" draggable="false">
-                    <div class="stat-card-title">📝 Task Manager</div>
+                <div class="stat-card" onclick="openTaskMentor()" id="widget-admin-tasks" draggable="false">
+                    <div class="stat-card-title">📝 Task Mentor</div>
                     <div class="stat-card-value" id="activeTasks">0</div>
                     <div class="stat-card-timing">Active tasks</div>
                     <div class="stat-card-subtext">Trello-style board</div>
@@ -813,8 +844,86 @@
                     </div>
                 </div>
 
-                <!-- Intelligence Hub Card (Admin Version) -->
-                {% include 'intelligence_hub_admin_cards.html' %}
+                <!-- Intelligence Hub Card (Triple Width Admin Version) -->
+                <div class="stat-card intelligence-hub-card" id="intelligenceHubCard" style="grid-column: span 2;">
+                    <div class="intelligence-hub-header">
+                        <div class="intelligence-hub-title-group">
+                            <span class="intelligence-hub-icon">🧠</span>
+                            <span class="intelligence-hub-title">INTELLIGENCE HUB</span>
+                        </div>
+                    </div>
+
+                    <div class="intelligence-hub-content-row">
+                        <div class="intelligence-hub-main">
+                            <div class="intelligence-hub-percentage">
+                                <span id="hubForecast">--%</span>
+                                <div class="info-tooltip">
+                                    <span class="info-icon"
+                                        style="background: rgba(255,255,255,0.2); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: help; color: white;">?</span>
+                                    <div class="tooltip-content">Predicted attendance percentage based on historical patterns.</div>
+                                </div>
+                            </div>
+                            <div class="intelligence-hub-subtitle" id="hubSubtitle">Attendance Forecast</div>
+                        </div>
+
+                        <div class="intelligence-hub-stats-v2">
+                            <div class="intelligence-hub-confidence">
+                                <span>Confidence: <span id="hubConfidence">--%</span></span>
+                                <div class="info-tooltip">
+                                    <span class="info-icon"
+                                        style="background: rgba(255,255,255,0.1); width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: help;">i</span>
+                                    <div class="tooltip-content">Confidence score reflects how consistent and complete the recent data is.</div>
+                                </div>
+                            </div>
+
+                            <div class="intelligence-hub-actions">
+                                <button class="intelligence-hub-btn" onclick="event.stopPropagation(); viewTrends();">
+                                    <span class="btn-icon">📊</span> View Analysis
+                                </button>
+                                <button id="hubMyStatsBtn" class="intelligence-hub-btn"
+                                    onclick="event.stopPropagation(); viewMyStats();">
+                                    <span class="btn-icon">👤</span> My Stats
+                                </button>
+                                <button class="intelligence-hub-btn"
+                                    onclick="event.stopPropagation(); searchPersonnel();">
+                                    <span class="btn-icon">🔍</span> Search Personnel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- NEW: AI Insight Row -->
+                    <div id="hubAiInsightWrapper" class="hidden" style="margin-top: 15px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <div style="display: flex; align-items: flex-start; gap: 10px;">
+                            <span style="font-size: 18px;">🤖</span>
+                            <div style="font-size: 11px; line-height: 1.5; color: rgba(255,255,255,0.9); font-weight: 500;" id="hubAiInsight">
+                                Aggregating real-time organizational intelligence...
+                            </div>
+                        </div>
+                    </div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCard', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCard', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCard', 'lg')">L</button>
+                    </div>
+                </div>
+
+                <!-- Train Forecast Model Action Card -->
+                <div class="action-card hidden" onclick="trainPredictionModel()" id="trainModelCard" draggable="false">
+                    <span class="action-card-icon">🧠</span>
+                    <div class="action-card-title">Train Forecast Model</div>
+                    <div class="action-card-description">Retrain the prediction model with recent data (Admin only)</div>
+                    <div id="trainModelStatus" style="font-size: 11px; margin-top: 8px; color: var(--primary-color); font-weight: 500;">
+                        <span id="lastTrainedText">Checking model status...</span>
+                        <span id="trainSpinner" class="loading-spinner hidden"
+                            style="display:inline-block; width:10px; height:10px; vertical-align:middle; margin-left:5px;"></span>
+                    </div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('trainModelCard', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('trainModelCard', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('trainModelCard', 'lg')">L</button>
+                    </div>
+                </div>
             </div>
 
             <div class="actions-grid" id="actionsGrid">
@@ -912,15 +1021,15 @@
                         <button class="resize-btn" onclick="resizeWidget('temporaryTagsCard', 'lg')">L</button>
                     </div>
                 </div>
-                <div class="action-card hidden" onclick="openAssignManagerModal()" id="assignManagerDashboardCard" draggable="false">
+                <div class="action-card hidden" onclick="openAssignMentorModal()" id="assignMentorDashboardCard" draggable="false">
                     <span class="action-card-icon">🔗</span>
-                    <div class="action-card-title">Assign Manager</div>
+                    <div class="action-card-title">Assign Mentor</div>
                     <div class="action-card-description">Link employees to their reporting supervisors (Admin only)
                     </div>
                     <div class="widget-resize-controls" onclick="event.stopPropagation()">
-                        <button class="resize-btn" onclick="resizeWidget('assignManagerDashboardCard', 'sm')">S</button>
-                        <button class="resize-btn" onclick="resizeWidget('assignManagerDashboardCard', 'md')">M</button>
-                        <button class="resize-btn" onclick="resizeWidget('assignManagerDashboardCard', 'lg')">L</button>
+                        <button class="resize-btn" onclick="resizeWidget('assignMentorDashboardCard', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('assignMentorDashboardCard', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('assignMentorDashboardCard', 'lg')">L</button>
                     </div>
                 </div>
                 <!-- Train Forecast Model Action Card -->
@@ -1090,7 +1199,7 @@
                         <input id="profileDoj" type="date" class="form-control">
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Reporting Manager / Lead</label>
+                        <label class="form-label">Reporting Mentor / Lead</label>
                         <input id="profileReportingMgr" class="form-control" readonly
                             style="background-color: #f8fafc; cursor: default;">
                     </div>
@@ -1584,7 +1693,7 @@
                             <label class="form-label">Role</label>
                             <select id="newUserRole" class="form-control">
                                 <option value="employee">Employee</option>
-                                <option value="manager">Manager</option>
+                                <option value="Mentor">Mentor</option>
                                 <option value="admin">Admin</option>
                             </select>
                         </div>
@@ -1594,9 +1703,9 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Reporting Manager</label>
-                        <select id="newUserReportingManager" class="form-control">
-                            <option value="none">No Manager</option>
+                        <label class="form-label">Reporting Mentor</label>
+                        <select id="newUserReportingMentor" class="form-control">
+                            <option value="none">No Mentor</option>
                         </select>
                     </div>
                     <div style="display:flex; gap:8px;">
@@ -1646,7 +1755,7 @@
                                     <th>Mobile</th>
                                     <th>Department</th>
                                     <th>Role</th>
-                                    <th>Manager</th>
+                                    <th>Mentor</th>
                                     <th style="width:160px">Actions</th>
                                 </tr>
                             </thead>
@@ -1733,31 +1842,31 @@
     </div>
 
     <!-- Export Attendance Modal -->
-    <!-- Assign Manager Modal (Bulk) -->
-    <div id="assignManagerModal" class="modal">
+    <!-- Assign Mentor Modal (Bulk) -->
+    <div id="assignMentorModal" class="modal">
         <div class="modal-content"
             style="max-width:700px; width:95%; height:600px; max-height:90vh; display:flex; flex-direction:column; padding:0; overflow:hidden;">
             <div style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding:24px; color:white;">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <h3 style="margin:0; color:white; font-size:1.5rem;">🔗 Assign Managers</h3>
-                    <button class="btn-close" onclick="closeModal('assignManagerModal')"
+                    <h3 style="margin:0; color:white; font-size:1.5rem;">🔗 Assign Mentors</h3>
+                    <button class="btn-close" onclick="closeModal('assignMentorModal')"
                         style="color:white; font-size:24px;">×</button>
                 </div>
-                <p style="margin:8px 0 0; opacity:0.8; font-size:0.9rem;">Assign reporting managers to employees. You
-                    can select multiple managers for each employee.</p>
+                <p style="margin:8px 0 0; opacity:0.8; font-size:0.9rem;">Assign reporting Mentors to employees. You
+                    can select multiple Mentors for each employee.</p>
             </div>
 
             <div style="padding:20px; background:#f8fafc; border-bottom:1px solid #e2e8f0;">
                 <div style="position:relative;">
-                    <input type="text" id="assignManagerSearch" class="form-control" placeholder="Search employees..."
+                    <input type="text" id="assignMentorSearch" class="form-control" placeholder="Search employees..."
                         style="padding-left:40px; height:48px; border-radius:12px; font-size:1rem;"
-                        oninput="filterAssignManagerList()">
+                        oninput="filterAssignMentorList()">
                     <span
                         style="position:absolute; left:14px; top:50%; transform:translateY(-50%); color:#94a3b8; font-size:1.2rem;">🔍</span>
                 </div>
             </div>
 
-            <div id="assignManagerList" style="flex:1; overflow-y:auto; padding:0;">
+            <div id="assignMentorList" style="flex:1; overflow-y:auto; padding:0;">
                 <!-- Employee rows will be injected here -->
                 <div style="display:flex; align-items:center; justify-content:center; padding:40px; color:#64748b;">
                     <span class="loading-spinner" style="border-top-color:#1e293b; margin-right:12px;"></span>
@@ -1767,7 +1876,7 @@
 
             <div
                 style="padding:20px; background:white; border-top:1px solid #e2e8f0; display:flex; justify-content:flex-end; gap:12px;">
-                <button class="btn btn-secondary" onclick="closeModal('assignManagerModal')"
+                <button class="btn btn-secondary" onclick="closeModal('assignMentorModal')"
                     style="min-width:120px;">Close</button>
             </div>
         </div>
@@ -1963,13 +2072,13 @@
         </div>
     </div>
 
-    <!-- Task Manager Modal -->
-    <div id="taskManagerModal" class="modal">
+    <!-- Task Mentor Modal -->
+    <div id="taskMentorModal" class="modal">
         <div class="modal-content"
             style="max-width: 1200px; max-height: 90vh; overflow-y: auto; padding: 0; border-radius: 24px;">
             <div class="modal-header">
                 <div style="display: flex; flex-direction: column;">
-                    <h3 style="margin: 0; font-size: 1.8rem; color: #1e293b;">Task Manager</h3>
+                    <h3 style="margin: 0; font-size: 1.8rem; color: #1e293b;">Task Mentor</h3>
                     <p style="margin: 4px 0 0; color: var(--gray-500); font-size: 0.9rem; font-weight: 500;">Oversee and
                         allocate team tasks</p>
                 </div>
@@ -1977,7 +2086,7 @@
                     <button class="btn btn-primary" onclick="addNewTask()">➕ Add Task</button>
                     <button class="btn btn-secondary" onclick="exportTasksToExcel()">📤 Export</button>
                     <button class="btn btn-secondary" onclick="refreshTasks()">🔄 Refresh</button>
-                    <button class="btn btn-secondary" onclick="closeModal('taskManagerModal')">✕ Close</button>
+                    <button class="btn btn-secondary" onclick="closeModal('taskMentorModal')">✕ Close</button>
                 </div>
             </div>
 
@@ -2214,7 +2323,7 @@
                 </div>
 
                 <div class="premium-field-group">
-                    <label class="premium-label">Assigned Manager (Overseer)</label>
+                    <label class="premium-label">Assigned Mentor (Overseer)</label>
                     <div class="multi-select-container">
                         <div id="overseerDisplay" class="multi-select-display" onclick="toggleOverseerSelect()"
                             style="min-height: 48px; border-radius: 12px;">
@@ -2653,7 +2762,7 @@
                         <label class="form-label">Role</label>
                         <select id="tempTagRole" class="form-control">
                             <option value="employee">Employee</option>
-                            <option value="manager">Manager</option>
+                            <option value="Mentor">Mentor</option>
                             <option value="admin">Admin</option>
                         </select>
                     </div>
@@ -2694,8 +2803,86 @@
         </div>
     </div>
 
-    <!-- Intelligence Hub Partials (Modals) -->
-    {% include 'predictive_modals_partial.html' %}
+    <!-- Intelligence Hub Modals -->
+
+    <!-- Training Modal -->
+    <div id="trainModelModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0;">Forecast Model Training</h3>
+                <button onclick="closeModal('trainModelModal')"
+                    style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--gray-500); padding: 4px 8px; line-height: 1;">&times;</button>
+            </div>
+
+            <div class="training-container">
+                <div class="training-status-card">
+                    <div class="training-progress-wrapper">
+                        <div class="progress-bar-container"
+                            style="width: 100%; height: 12px; background: #e5e7eb; border-radius: 6px; overflow: hidden; margin-top: 10px;">
+                            <div id="trainingProgressBar" class="progress-bar-fill"
+                                style="width: 0%; height: 100%; background: var(--primary-color); transition: width 0.3s ease;">
+                            </div>
+                        </div>
+                        <div id="trainingProgressText"
+                            style="font-size: 12px; color: var(--gray-500); margin-top: 8px; text-align: center; font-weight: 500;">
+                            Ready to calibrate model using historical data</div>
+                    </div>
+                    <button id="btnStartTraining" class="btn btn-primary" style="width: 100%; margin-top: 20px;"
+                        onclick="startTrainingProcess()">
+                        Start Training Session
+                    </button>
+                </div>
+
+                <div class="training-tabs" style="margin-top: 24px;">
+                    <div class="tabs-header"
+                        style="display: flex; border-bottom: 1px solid #e5e7eb; margin-bottom: 16px;">
+                        <button class="training-tab-btn active" id="tabLogsBtn" onclick="switchTrainingTab('logs')"
+                            style="padding: 10px 16px; border: none; background: none; cursor: pointer; border-bottom: 2px solid var(--primary-color); font-weight: 600; color: var(--primary-color);">Live Logs</button>
+                        <button class="training-tab-btn" id="tabHistoryBtn" onclick="switchTrainingTab('history')"
+                            style="padding: 10px 16px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; font-weight: 500; color: var(--gray-500);">Training History</button>
+                    </div>
+
+                    <div id="trainingLogTab" class="tab-content">
+                        <div id="trainingLogs" class="log-console"
+                            style="background: #111827; color: #10b981; padding: 16px; border-radius: 8px; font-family: 'Courier New', Courier, monospace; font-size: 12px; height: 200px; overflow-y: auto; line-height: 1.5;">
+                            <div class="log-entry" style="color: #9ca3af;">[SYSTEM] Waiting for training sequence to start...</div>
+                        </div>
+                    </div>
+
+                    <div id="trainingHistoryTab" class="tab-content hidden">
+                        <div style="text-align: right; margin-bottom: 8px;">
+                            <button class="btn btn-subtle btn-sm" onclick="clearTrainingHistory()"
+                                style="font-size: 11px; color: var(--error-color);">
+                                <span class="btn-icon">🗑️</span> Clear History
+                            </button>
+                        </div>
+                        <div id="trainingHistoryItems" class="history-list" style="max-height: 200px; overflow-y: auto;">
+                            <!-- History populated by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Clear History Confirmation Modal -->
+    <div id="clearHistoryModal" class="modal" style="z-index: 99999;">
+        <div class="modal-content" style="max-width: 400px; text-align: center;">
+            <div style="font-size: 48px; margin-bottom: 12px;">🗑️</div>
+            <h3 style="color: var(--gray-900); margin-bottom: 8px;">Clear Training History?</h3>
+            <p style="color: var(--gray-500); font-size: 14px; margin-bottom: 24px; line-height: 1.5;">
+                This will permanently delete all past AI model training records. This action <strong>cannot be undone</strong>.
+            </p>
+            <div style="display: flex; gap: 12px; justify-content: center;">
+                <button class="btn btn-secondary" onclick="closeModal('clearHistoryModal')" style="flex: 1;">Cancel</button>
+                <button class="btn btn-primary" onclick="confirmClearHistory()" id="confirmClearBtn"
+                    style="flex: 1; background: var(--error-color); border-color: var(--error-color);">
+                    <span id="confirmClearText">Yes, Clear All</span>
+                    <span id="confirmClearSpinner" class="loading-spinner hidden"></span>
+                </button>
+            </div>
+        </div>
+    </div>
 
     <div id="calendarModal" class="modal">
         <div class="modal-content calendar-modal-content">
@@ -2806,6 +2993,20 @@
 
     <!-- Notification -->
     <div id="notification" class="notification"></div>
+
+    <!-- Global Loading Screen -->
+    <div id="globalLoader" class="global-loader">
+        <div class="loader-content">
+            <div class="loader-visual">
+                <div class="loader-ring"></div>
+                <div class="loader-pulse"></div>
+            </div>
+            <div class="loader-text-group">
+                <h3 class="loader-title">HanuAI</h3>
+                <p class="loader-subtitle">Loading your dashboard...</p>
+            </div>
+        </div>
+    </div>
 
     <!-- External JavaScript -->
     <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>

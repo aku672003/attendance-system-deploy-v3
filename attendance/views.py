@@ -241,13 +241,13 @@ def register(request):
             is_active=True
         )
         
-        # Handle multiple managers if provided as list, or single manager_id
-        manager_ids = data.get('manager_ids') or []
-        if not manager_ids and data.get('manager_id') and data.get('manager_id') != 'none':
-            manager_ids = [data.get('manager_id')]
+        # Handle multiple Mentors if provided as list, or single mentor_id
+        mentor_ids = data.get('mentor_ids') or []
+        if not mentor_ids and data.get('mentor_id') and data.get('mentor_id') != 'none':
+            mentor_ids = [data.get('mentor_id')]
             
-        if manager_ids:
-            employee.managers.set(Employee.objects.filter(id__in=manager_ids))
+        if mentor_ids:
+            employee.mentors.set(Employee.objects.filter(id__in=mentor_ids))
         return Response({
             'success': True,
             'message': 'Account created successfully',
@@ -477,7 +477,7 @@ def create_task(request):
             description=data.get('description'),
             priority=data.get('priority', 'Medium'),
             due_date=data.get('due_date'),
-            manager=creator, # Assuming creator is manager
+            Mentor=creator, # Assuming creator is Mentor
             created_by=creator
         )
         
@@ -493,15 +493,15 @@ def create_task(request):
 def create_team(request):
     try:
         data = request.data
-        manager_id = data.get('manager_id')
+        mentor_id = data.get('mentor_id')
         name = data.get('name')
         member_ids = data.get('members', [])
 
-        manager = Employee.objects.filter(id=manager_id).first()
-        if not manager:
-            return Response({'success': False, 'message': 'Manager not found'})
+        Mentor = Employee.objects.filter(id=mentor_id).first()
+        if not Mentor:
+            return Response({'success': False, 'message': 'Mentor not found'})
 
-        team = Team.objects.create(name=name, manager=manager)
+        team = Team.objects.create(name=name, Mentor=Mentor)
         
         if member_ids:
             members = Employee.objects.filter(id__in=member_ids)
@@ -552,11 +552,11 @@ def delete_team(request):
 @api_view(['GET'])
 def get_teams(request):
     try:
-        manager_id = request.query_params.get('manager_id')
-        if not manager_id:
-             return Response({'success': False, 'message': 'Manager ID required'})
+        mentor_id = request.query_params.get('mentor_id')
+        if not mentor_id:
+             return Response({'success': False, 'message': 'Mentor ID required'})
              
-        teams = Team.objects.filter(manager_id=manager_id).prefetch_related('members')
+        teams = Team.objects.filter(mentor_id=mentor_id).prefetch_related('members')
         data = []
         for t in teams:
             data.append({
@@ -719,8 +719,8 @@ def attendance_records(request):
 
     user_id = request.GET.get('user_id')
     user = Employee.objects.filter(id=user_id).first() if user_id else None
-    # Include de-facto managers (any user who has subordinates)
-    is_manager = user and (user.role == 'manager' or (user.role != 'admin' and user.subordinates.exists()))
+    # Include de-facto Mentors (any user who has subordinates)
+    is_mentor = user and (user.role == 'mentor' or (user.role != 'admin' and user.subordinates.exists()))
 
     # Auto-mark absentees only after 6 PM (scheduler handles the main trigger)
     now = timezone.localtime(timezone.now())
@@ -731,9 +731,9 @@ def attendance_records(request):
     try:
         records_qs = AttendanceRecord.objects.select_related('employee', 'office').all()
 
-        if is_manager:
+        if is_mentor:
             from django.db.models import Q
-            records_qs = records_qs.filter(Q(employee__managers=user) | Q(employee=user))
+            records_qs = records_qs.filter(Q(employee__Mentors=user) | Q(employee=user))
 
         if employee_id:
             records_qs = records_qs.filter(employee_id=employee_id)
@@ -1008,8 +1008,8 @@ def employee_profile(request, employee_id=None):
                 profile.date_of_joining = data.get('date_of_joining')
             if 'skill_set' in data:
                 profile.skill_set = data.get('skill_set')
-            if 'reporting_manager' in data:
-                profile.reporting_manager = data.get('reporting_manager')
+            if 'reporting_mentor' in data:
+                profile.reporting_mentor = data.get('reporting_mentor')
             if 'professional_training' in data:
                 profile.professional_training = data.get('professional_training')
             if 'family_details' in data:
@@ -1110,7 +1110,7 @@ def employee_profile(request, employee_id=None):
             'current_address': profile.current_address,
             'date_of_joining': str(profile.date_of_joining) if profile.date_of_joining else None,
             'skill_set': profile.skill_set,
-            'reporting_manager': ", ".join([m.name for m in employee.managers.all()]) if employee.managers.exists() else profile.reporting_manager,
+            'reporting_mentor': ", ".join([m.name for m in employee.mentors.all()]) if employee.mentors.exists() else profile.reporting_mentor,
             'professional_training': profile.professional_training,
             'family_details': profile.family_details,
             'marital_status': profile.marital_status,
@@ -1200,13 +1200,13 @@ def admin_profiles_list(request):
     """List all employee profiles (admin)"""
     user_id = request.GET.get('user_id')
     user = Employee.objects.filter(id=user_id).first() if user_id else None
-    # Include de-facto managers (any user who has subordinates)
-    is_manager = user and (user.role == 'manager' or (user.role != 'admin' and user.subordinates.exists()))
+    # Include de-facto Mentors (any user who has subordinates)
+    is_mentor = user and (user.role == 'mentor' or (user.role != 'admin' and user.subordinates.exists()))
 
     try:
         employees_qs = Employee.objects.filter(is_active=True)
-        if is_manager:
-            employees_qs = employees_qs.filter(managers=user)
+        if is_mentor:
+            employees_qs = employees_qs.filter(Mentors=user)
 
         employees = employees_qs.select_related('profile')\
             .annotate(docs_count=Count('documents'))\
@@ -1227,7 +1227,7 @@ def admin_profiles_list(request):
                 'date_of_birth': str(profile.date_of_birth) if profile and profile.date_of_birth else None,
                 'date_of_joining': str(profile.date_of_joining) if profile and profile.date_of_joining else None,
                 'skill_set': profile.skill_set if profile else None,
-                'reporting_manager': profile.reporting_manager if profile else None,
+                'reporting_mentor': profile.reporting_mentor if profile else None,
                 'docs_count': emp.docs_count,
             })
 
@@ -1248,13 +1248,13 @@ def admin_users(request):
     """Get all users (admin)"""
     user_id = request.GET.get('user_id')
     user = Employee.objects.filter(id=user_id).first() if user_id else None
-    # Include de-facto managers (any user who has subordinates)
-    is_manager = user and (user.role == 'manager' or (user.role != 'admin' and user.subordinates.exists()))
+    # Include de-facto Mentors (any user who has subordinates)
+    is_mentor = user and (user.role == 'mentor' or (user.role != 'admin' and user.subordinates.exists()))
 
     try:
         users = Employee.objects.all().order_by('-id').prefetch_related('profile')
-        if is_manager:
-            users = users.filter(managers=user)
+        if is_mentor:
+            users = users.filter(Mentors=user)
         
         users_data = []
         for u in users:
@@ -1272,7 +1272,7 @@ def admin_users(request):
                 'phone': u.phone,
                 'department': u.department,
                 'role': u.role,
-                'manager_name': ", ".join([m.name for m in u.managers.all()]) if u.managers.all() else None,
+                'Mentor_name': ", ".join([m.name for m in u.mentors.all()]) if u.mentors.all() else None,
                 'is_active': u.is_active,
                 'date_of_birth': dob,
                 'gender': gender
@@ -1312,10 +1312,10 @@ def admin_user_detail(request, user_id):
                 'phone': employee.phone,
                 'department': employee.department,
                 'role': employee.role,
-                'manager_ids': [m.id for m in employee.managers.all()],
-                'manager_names': [m.name for m in employee.managers.all()],
-                'manager_id': employee.managers.all()[0].id if employee.managers.exists() else None,
-                'manager_name': employee.managers.all()[0].name if employee.managers.exists() else None,
+                'mentor_ids': [m.id for m in employee.mentors.all()],
+                'Mentor_names': [m.name for m in employee.mentors.all()],
+                'mentor_id': employee.mentors.all()[0].id if employee.mentors.exists() else None,
+                'Mentor_name': employee.mentors.all()[0].name if employee.mentors.exists() else None,
                 'is_active': employee.is_active,
             }
         })
@@ -1342,24 +1342,24 @@ def admin_user_detail(request, user_id):
             employee.department = data['department']
         if data.get('role'):
             employee.role = data['role']
-        if data.get('manager_ids'):
-            manager_ids = data.get('manager_ids')
-            if isinstance(manager_ids, list):
-                if 'none' in manager_ids:
-                    employee.managers.clear()
+        if data.get('mentor_ids'):
+            mentor_ids = data.get('mentor_ids')
+            if isinstance(mentor_ids, list):
+                if 'none' in mentor_ids:
+                    employee.mentors.clear()
                 else:
-                    employee.managers.set(Employee.objects.filter(id__in=manager_ids))
-        elif data.get('manager_id'):
-            if data['manager_id'] == 'none':
-                employee.managers.clear()
+                    employee.mentors.set(Employee.objects.filter(id__in=mentor_ids))
+        elif data.get('mentor_id'):
+            if data['mentor_id'] == 'none':
+                employee.mentors.clear()
             else:
                 try:
-                    manager_emp = Employee.objects.get(id=data['manager_id'])
-                    employee.managers.set([manager_emp])
+                    Mentor_emp = Employee.objects.get(id=data['mentor_id'])
+                    employee.mentors.set([Mentor_emp])
                 except Employee.DoesNotExist:
                     pass
-        elif 'manager_id' in data and not data.get('manager_id'):
-            employee.managers.clear()
+        elif 'mentor_id' in data and not data.get('mentor_id'):
+            employee.mentors.clear()
 
         if 'is_active' in data:
             employee.is_active = bool(data['is_active'])
@@ -1789,8 +1789,8 @@ def admin_summary(request):
     """Get admin dashboard summary"""
     user_id = request.GET.get('user_id')
     user = Employee.objects.filter(id=user_id).first() if user_id else None
-    # Include de-facto managers (any user who has subordinates)
-    is_manager = user and (user.role == 'manager' or (user.role != 'admin' and user.subordinates.exists()))
+    # Include de-facto Mentors (any user who has subordinates)
+    is_mentor = user and (user.role == 'mentor' or (user.role != 'admin' and user.subordinates.exists()))
 
     try:
         today = date.today()
@@ -1798,9 +1798,9 @@ def admin_summary(request):
         employees_qs = Employee.objects.filter(is_active=True)
         records_qs = AttendanceRecord.objects.filter(date=today)
         
-        if is_manager:
-            employees_qs = employees_qs.filter(managers=user)
-            records_qs = records_qs.filter(employee__managers=user)
+        if is_mentor:
+            employees_qs = employees_qs.filter(Mentors=user)
+            records_qs = records_qs.filter(employee__Mentors=user)
 
         # Total employees
         total_employees = employees_qs.count()
@@ -2161,7 +2161,7 @@ def employee_performance_analysis(request, employee_id):
             else:
                 task_score += 20 # Neutral score if no due date set
 
-            # Blend with manual manager accuracy if it exists (50/50 balance)
+            # Blend with manual Mentor accuracy if it exists (50/50 balance)
             if t.accuracy:
                 task_score = (task_score + t.accuracy) / 2
 
@@ -2460,8 +2460,8 @@ def pending_requests(request):
     """Get pending or history (approved/rejected) WFH and leave requests"""
     user_id = request.GET.get('user_id')
     user = Employee.objects.filter(id=user_id).first() if user_id else None
-    # Include de-facto managers (any user who has subordinates)
-    is_manager = user and (user.role == 'manager' or (user.role != 'admin' and user.subordinates.exists()))
+    # Include de-facto Mentors (any user who has subordinates)
+    is_mentor = user and (user.role == 'mentor' or (user.role != 'admin' and user.subordinates.exists()))
 
     try:
         status_param = request.GET.get('status', 'pending')
@@ -2477,8 +2477,8 @@ def pending_requests(request):
                 status='pending'
             ).select_related('employee').order_by('start_date')
 
-        if is_manager:
-            requests_obj = requests_obj.filter(employee__managers=user)
+        if is_mentor:
+            requests_obj = requests_obj.filter(employee__Mentors=user)
 
         requests_data = []
         for req in requests_obj:
@@ -2494,7 +2494,7 @@ def pending_requests(request):
                 'reason': req.reason,
                 'status': req.status,
                 'reviewed_by_name': req.reviewed_by.name if req.reviewed_by else None,
-                'is_manager': req.reviewed_by in req.employee.managers.all() if req.reviewed_by else False,
+                'is_mentor': req.reviewed_by in req.employee.mentors.all() if req.reviewed_by else False,
                 'created_at': req.created_at.isoformat()
             })
 
@@ -2538,7 +2538,7 @@ def my_requests(request):
                 'status': req.status,
                 'admin_response': req.admin_response,
                 'reviewed_by_name': req.reviewed_by.name if req.reviewed_by else None,
-                'is_manager': req.reviewed_by in req.employee.managers.all() if req.reviewed_by else False,
+                'is_mentor': req.reviewed_by in req.employee.mentors.all() if req.reviewed_by else False,
                 'created_at': req.created_at.isoformat()
             })
 
@@ -2564,15 +2564,15 @@ def active_tasks(request):
         if employee_id:
             try:
                 emp = Employee.objects.get(id=employee_id)
-                # Treat de-facto managers (employees with subordinates) like official managers
-                is_emp_manager = emp.role.lower() == 'manager' or (emp.role.lower() != 'admin' and emp.subordinates.exists())
-                if is_emp_manager:
-                    query = query.filter(Q(assignees__managers=emp) | Q(manager=emp) | Q(created_by=emp) | Q(assignees=emp)).distinct()
+                # Treat de-facto Mentors (employees with subordinates) like official Mentors
+                is_emp_Mentor = emp.role.lower() == 'Mentor' or (emp.role.lower() != 'admin' and emp.subordinates.exists())
+                if is_emp_Mentor:
+                    query = query.filter(Q(assignees__Mentors=emp) | Q(Mentor=emp) | Q(created_by=emp) | Q(assignees=emp)).distinct()
                 elif emp.role.lower() != 'admin':
                     try:
-                        query = query.filter(Q(assignees=emp) | Q(manager=emp)).distinct()
+                        query = query.filter(Q(assignees=emp) | Q(Mentor=emp)).distinct()
                     except Exception:
-                        query = query.filter(Q(assignees=emp) | Q(manager=emp)).distinct()
+                        query = query.filter(Q(assignees=emp) | Q(Mentor=emp)).distinct()
             except Employee.DoesNotExist:
                 pass # Or return 0
 
@@ -2589,23 +2589,23 @@ def active_tasks(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-def _get_admin_task_manager_data():
-    """Helper: Get all tasks for Admin Task Manager"""
-    tasks = Task.objects.select_related('created_by', 'manager').prefetch_related('assignees').order_by('-created_at')
+def _get_admin_task_Mentor_data():
+    """Helper: Get all tasks for Admin Task Mentor"""
+    tasks = Task.objects.select_related('created_by', 'Mentor').prefetch_related('assignees').order_by('-created_at')
     return _serialize_tasks(tasks)
 
 def _get_employee_my_tasks_data(employee):
     """Helper: Get assigned tasks + overseen tasks for Employee My Tasks"""
     tasks = Task.objects.filter(
-        Q(assignees=employee) | Q(manager=employee)
-    ).distinct().select_related('created_by', 'manager').prefetch_related('assignees').order_by('-created_at')
+        Q(assignees=employee) | Q(Mentor=employee)
+    ).distinct().select_related('created_by', 'Mentor').prefetch_related('assignees').order_by('-created_at')
     return _serialize_tasks(tasks)
 
-def _get_manager_employees_tasks_data(manager):
-    """Helper: Get tasks for employees reporting to this manager + tasks explicitly managed by them"""
+def _get_Mentor_employees_tasks_data(Mentor):
+    """Helper: Get tasks for employees reporting to this Mentor + tasks explicitly managed by them"""
     tasks = Task.objects.filter(
-        Q(assignees__managers=manager) | Q(manager=manager)
-    ).distinct().select_related('created_by', 'manager').prefetch_related('assignees').order_by('-created_at')
+        Q(assignees__Mentors=Mentor) | Q(Mentor=Mentor)
+    ).distinct().select_related('created_by', 'Mentor').prefetch_related('assignees').order_by('-created_at')
     return _serialize_tasks(tasks)
 
 def _serialize_tasks(tasks):
@@ -2638,8 +2638,8 @@ def _serialize_tasks(tasks):
             'priority': task.priority,
             'assignees': assignees_info,
             'overseers': [{'id': o.id, 'name': o.name} for o in task.overseers.all()],
-            'manager_id': task.manager.id if task.manager else None,
-            'manager_name': task.manager.name if task.manager else None,
+            'mentor_id': task.mentor.id if task.mentor else None,
+            'Mentor_name': task.mentor.name if task.mentor else None,
             'created_by': task.created_by.id,
             'created_by_name': task.created_by.name,
             'due_date': str(task.due_date) if task.due_date else None,
@@ -2661,20 +2661,20 @@ def _create_task_admin(data, creator):
     assigned_input = data.get('assignees') or data.get('assigned_to')
     assigned_ids = assigned_input if isinstance(assigned_input, list) else [assigned_input] if assigned_input else []
     
-    manager_id = data.get('manager_id')
+    mentor_id = data.get('mentor_id')
     overseer_ids = data.get('overseer_ids') or []
-    if not overseer_ids and manager_id and manager_id != 'none':
-        overseer_ids = [manager_id]
+    if not overseer_ids and mentor_id and mentor_id != 'none':
+        overseer_ids = [mentor_id]
 
-    manager_employee = None
-    if manager_id and manager_id != 'none':
+    Mentor_employee = None
+    if mentor_id and mentor_id != 'none':
         try:
-            manager_employee = Employee.objects.get(id=manager_id)
+            Mentor_employee = Employee.objects.get(id=mentor_id)
         except:
             pass
     elif overseer_ids:
         try:
-            manager_employee = Employee.objects.get(id=overseer_ids[0])
+            Mentor_employee = Employee.objects.get(id=overseer_ids[0])
         except:
             pass
 
@@ -2683,7 +2683,7 @@ def _create_task_admin(data, creator):
         description=data.get('description', ''),
         status=data.get('status', 'todo'),
         priority=data.get('priority', 'medium'),
-        manager=manager_employee,
+        Mentor=Mentor_employee,
         created_by=creator,
         due_date=data.get('due_date')
     )
@@ -2710,11 +2710,11 @@ def tasks_api(request):
 
                 if emp.role == 'admin':
                     # ADMIN PATH
-                    tasks_data = _get_admin_task_manager_data()
-                elif emp.role == 'manager':
-                    # MANAGER PATH - Sees their own tasks + their employees' tasks
+                    tasks_data = _get_admin_task_Mentor_data()
+                elif emp.role == 'mentor':
+                    # Mentor PATH - Sees their own tasks + their employees' tasks
                     own_tasks = _get_employee_my_tasks_data(emp)
-                    subordinate_tasks = _get_manager_employees_tasks_data(emp)
+                    subordinate_tasks = _get_Mentor_employees_tasks_data(emp)
                     # Merge and remove duplicates if any (though shouldn't be)
                     tasks_data = own_tasks + [t for t in subordinate_tasks if t['id'] not in [ot['id'] for ot in own_tasks]]
                 else:
@@ -2765,7 +2765,7 @@ def tasks_api(request):
         except ValueError as e:
             return Response({'success': False, 'message': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Employee.DoesNotExist:
-            return Response({'success': False, 'message': 'Assigned employee or manager not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'success': False, 'message': 'Assigned employee or Mentor not found'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             # More helpful error for debugging
             return Response({
@@ -2775,17 +2775,17 @@ def tasks_api(request):
 
 
 def _update_task_admin(task, data, user=None):
-    """Helper: Admin/Overseer/Reporting Manager updates task details"""
+    """Helper: Admin/Overseer/Reporting Mentor updates task details"""
     user_role = str(user.role).lower() if user else 'none'
     is_admin = user_role == 'admin'
-    is_overseer = task.manager and user and task.manager.id == user.id
+    is_overseer = task.mentor and user and task.mentor.id == user.id
     
-    # Manager check: user manages at least one of the assignees
-    is_reporting_manager = False
+    # Mentor check: user manages at least one of the assignees
+    is_reporting_mentor = False
     if user:
-        is_reporting_manager = task.assignees.filter(managers=user).exists()
+        is_reporting_mentor = task.assignees.filter(Mentors=user).exists()
 
-    if task.status == 'completed' and not (is_admin or is_overseer or is_reporting_manager):
+    if task.status == 'completed' and not (is_admin or is_overseer or is_reporting_mentor):
         # We allow Admins and the Overseer to bypass this for correction/reopening
         raise ValueError(f"Cannot modify a completed task.")
 
@@ -2810,28 +2810,28 @@ def _update_task_admin(task, data, user=None):
         assigned_ids = assigned_input if isinstance(assigned_input, list) else [assigned_input] if assigned_input else []
         task.assignees.set(Employee.objects.filter(id__in=assigned_ids))
 
-    if 'manager_id' in data or 'overseer_ids' in data:
+    if 'mentor_id' in data or 'overseer_ids' in data:
         overseer_ids = data.get('overseer_ids')
-        manager_id = data.get('manager_id')
+        mentor_id = data.get('mentor_id')
         
         if overseer_ids is not None:
             # Multi-overseer update
             overseer_qs = Employee.objects.filter(id__in=overseer_ids)
             task.overseers.set(overseer_qs)
-            # Sync backward compatibility field 'manager'
+            # Sync backward compatibility field 'Mentor'
             if overseer_qs.exists():
-                task.manager = overseer_qs.first()
+                task.mentor = overseer_qs.first()
             else:
-                task.manager = None
-        elif manager_id:
-            if manager_id == 'none':
-                task.manager = None
+                task.mentor = None
+        elif mentor_id:
+            if mentor_id == 'none':
+                task.mentor = None
                 task.overseers.clear()
             else:
                 try:
-                    manager_emp = Employee.objects.get(id=manager_id)
-                    task.manager = manager_emp
-                    task.overseers.set([manager_emp])
+                    Mentor_emp = Employee.objects.get(id=mentor_id)
+                    task.mentor = Mentor_emp
+                    task.overseers.set([Mentor_emp])
                 except:
                     pass
     task.save()
@@ -2869,7 +2869,7 @@ def _update_task_employee(task, data, user=None):
 def task_detail_api(request, task_id):
     """Update, delete or fetch a task (Separated Admin/Employee Logic)"""
     try:
-        task = Task.objects.prefetch_related('assignees').select_related('manager').get(id=task_id)
+        task = Task.objects.prefetch_related('assignees').select_related('Mentor').get(id=task_id)
     except Task.DoesNotExist:
         return Response({
             'success': False,
@@ -2897,8 +2897,8 @@ def task_detail_api(request, task_id):
         if request.method == 'POST':
             # Check for DELETE method simulation
             if data.get('_method') == 'DELETE':
-                is_task_manager = task.manager and task.manager.id == requesting_user.id
-                if requesting_user.role != 'admin' and not is_task_manager:
+                is_task_Mentor = task.mentor and task.mentor.id == requesting_user.id
+                if requesting_user.role != 'admin' and not is_task_Mentor:
                     return Response({'success': False, 'message': 'Unauthorized to delete this task'}, status=status.HTTP_403_FORBIDDEN)
 
                 task.delete()
@@ -2907,21 +2907,21 @@ def task_detail_api(request, task_id):
             # Update Logic
             role = str(requesting_user.role).lower()
             is_assignee = task.assignees.filter(id=requesting_user.id).exists()
-            is_manager_of_assignee = task.assignees.filter(managers=requesting_user).exists()
+            is_mentor_of_assignee = task.assignees.filter(Mentors=requesting_user).exists()
 
             if role == 'admin':
                 _update_task_admin(task, data, requesting_user)
                 return Response({'success': True, 'message': 'Task updated (Admin)'})
 
-            elif task.manager and task.manager.id == requesting_user.id:
+            elif task.mentor and task.mentor.id == requesting_user.id:
                 # Task Overseer can also perform full updates
                 _update_task_admin(task, data, requesting_user)
                 return Response({'success': True, 'message': 'Task updated (Overseer)'})
 
-            elif is_manager_of_assignee:
-                # Assignee's Reporting Manager can also perform full updates
+            elif is_mentor_of_assignee:
+                # Assignee's Reporting Mentor can also perform full updates
                 _update_task_admin(task, data, requesting_user)
-                return Response({'success': True, 'message': 'Task updated (Manager)'})
+                return Response({'success': True, 'message': 'Task updated (Mentor)'})
 
             elif is_assignee:
                 _update_task_employee(task, data, requesting_user)
@@ -2952,22 +2952,22 @@ def task_comment_api(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        task = Task.objects.prefetch_related('assignees').select_related('manager').get(id=task_id)
+        task = Task.objects.prefetch_related('assignees').select_related('Mentor').get(id=task_id)
         author = Employee.objects.get(id=author_id)
 
         # Updated permission checks for hybrid assignment
         is_assignee = task.assignees.filter(id=author.id).exists()
-        is_manager_of_assignee = task.assignees.filter(managers=author).exists()
+        is_mentor_of_assignee = task.assignees.filter(Mentors=author).exists()
 
         can_comment = False
         role = str(author.role).lower()
         if role == 'admin':
             can_comment = True
-        elif task.manager and task.manager.id == author.id:
+        elif task.mentor and task.mentor.id == author.id:
             can_comment = True
         elif is_assignee:
             can_comment = True
-        elif is_manager_of_assignee:
+        elif is_mentor_of_assignee:
             can_comment = True
 
         if not can_comment:
@@ -3055,7 +3055,7 @@ def employees_simple_list(request):
                 'id': emp.id,
                 'name': emp.name,
                 'role': emp.role,
-                'manager_ids': [m.id for m in emp.managers.all()]
+                'mentor_ids': [m.id for m in emp.mentors.all()]
             })
             
         return Response({
@@ -3394,7 +3394,7 @@ def attendance_predictions(request):
 def intelligence_hub_forecast(request):
     """Get current attendance forecast with confidence and trend"""
     try:
-        from .intelligence_hub import calculate_forecast, get_current_day_name, load_model_state
+        from .intelligence_hub import calculate_forecast, get_current_day_name, load_model_state, SLMInsightGenerator
         
         forecast, confidence, trend = calculate_forecast()
         day_name = get_current_day_name()
@@ -3408,7 +3408,13 @@ def intelligence_hub_forecast(request):
                 'trend': trend,
                 'day_name': day_name,
                 'subtitle': f"{day_name}'s Forecast",
-                'model_state': model_state
+                'model_state': model_state,
+                'ai_insight': SLMInsightGenerator.generate_insight({
+                    'forecast': forecast,
+                    'confidence': confidence,
+                    'trend': trend,
+                    'attendance_streak': model_state.get('attendance_streak', 0) if model_state else 0
+                })
             }
         })
     except Exception as e:
@@ -3865,7 +3871,7 @@ def mentor_status(request):
         
     try:
         employee = Employee.objects.get(id=employee_id)
-        mentors = employee.managers.all()
+        mentors = employee.mentors.all()
         
         mentor_data = []
         today = timezone.localtime(timezone.now()).date()

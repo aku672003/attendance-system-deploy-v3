@@ -1833,9 +1833,9 @@ body {
     background: #cfcfcf;
 }
 
-/* ==================== TASK MANAGER PREMIUM STYLING ==================== */
+/* ==================== TASK mentor PREMIUM STYLING ==================== */
 
-#taskManagerModal .modal-content {
+#taskmentorModal .modal-content {
     max-width: 1200px;
     max-height: 90vh;
     padding: 0;
@@ -1876,7 +1876,7 @@ body {
     align-items: center;
 }
 
-.task-manager-board {
+.task-mentor-board {
     display: flex;
     gap: 24px;
     padding: 32px;
@@ -2189,7 +2189,7 @@ body {
 }
 
 @media (max-width: 1024px) {
-    .task-manager-board {
+    .task-mentor-board {
         padding: 24px;
         gap: 16px;
     }
@@ -2201,12 +2201,12 @@ body {
 }
 
 @media (max-width: 768px) {
-    #taskManagerModal .modal-content {
+    #taskmentorModal .modal-content {
         max-width: 95%;
         max-height: 95vh;
     }
 
-    .task-manager-board {
+    .task-mentor-board {
         flex-direction: column;
         padding: 16px;
         gap: 16px;
@@ -2249,7 +2249,7 @@ body {
         justify-content: center;
     }
 
-    .task-manager-board {
+    .task-mentor-board {
         padding: 12px;
     }
 
@@ -4376,7 +4376,7 @@ body {
     }
 }
 
-/* --- Premium Task Manager Styles --- */
+/* --- Premium Task mentor Styles --- */
 
 .premium-task-board {
     display: grid;
@@ -4530,8 +4530,8 @@ body {
     color: #0ea5e9;
 }
 
-/* Modal Override for Task Manager */
-#taskManagerModal .modal-content {
+/* Modal Override for Task mentor */
+#taskmentorModal .modal-content {
     max-width: 1400px !important;
     width: 95% !important;
     height: 90vh !important;
@@ -4539,7 +4539,7 @@ body {
     background: #ffffff !important;
 }
 
-#taskManagerModal .modal-header,
+#taskmentorModal .modal-header,
 #myTasksModal .modal-header {
     padding: 28px 32px;
     background: rgba(255, 255, 255, 0.8);
@@ -7241,45 +7241,45 @@ body.birthday-mode-active .status-badge {
     }
 }
 
-/* Bulk Manager Assignment Styles */
-.assign-manager-row {
+/* Bulk mentor Assignment Styles */
+.assign-mentor-row {
     border-bottom: 1px solid #f1f5f9;
 }
 
-.assign-manager-row:last-child {
+.assign-mentor-row:last-child {
     border-bottom: none;
 }
 
-.bulk-manager-chips {
+.bulk-mentor-chips {
     transition: all 0.2s ease;
 }
 
-.bulk-manager-chips:hover {
+.bulk-mentor-chips:hover {
     border-color: var(--primary-color) !important;
 }
 
-.manager-option:hover {
+.mentor-option:hover {
     background: #f1f5f9;
 }
 
-.manager-select-container .hidden {
+.mentor-select-container .hidden {
     display: none !important;
 }
 
-#assignManagerList::-webkit-scrollbar {
+#assignmentorList::-webkit-scrollbar {
     width: 6px;
 }
 
-#assignManagerList::-webkit-scrollbar-track {
+#assignmentorList::-webkit-scrollbar-track {
     background: #f1f5f9;
 }
 
-#assignManagerList::-webkit-scrollbar-thumb {
+#assignmentorList::-webkit-scrollbar-thumb {
     background: #cbd5e1;
     border-radius: 3px;
 }
 
-#assignManagerList::-webkit-scrollbar-thumb:hover {
+#assignmentorList::-webkit-scrollbar-thumb:hover {
     background: #94a3b8;
 }
 
@@ -9567,11 +9567,11 @@ body.dark-mode #mentorStatusSection h4 {
 /* ==================== TRUE DARK MODAL OVERRIDES ==================== */
 body.dark-mode #employeePerformanceModal .modal-content,
 body.dark-mode #myTasksModal .modal-content,
-body.dark-mode #taskManagerModal .modal-content,
+body.dark-mode #taskmentorModal .modal-content,
 body.dark-mode #calendarModal .modal-content,
 body.dark-mode #requestsModal .modal-content,
 body.dark-mode #docsModal .docs-modal-content,
-body.dark-mode #assignManagerModal .modal-content,
+body.dark-mode #assignmentorModal .modal-content,
 body.dark-mode #taskExportModal .modal-content,
 body.dark-mode #addTaskModal .premium-modal-content {
     background: #000000 !important;
@@ -10056,7 +10056,7 @@ body.dark-mode .text-muted {
     color: #a1a1aa !important;
 }
 
-/* Fix for the white gap at the top of columns in task manager */
+/* Fix for the white gap at the top of columns in task mentor */
 body.dark-mode .premium-column {
     border: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
@@ -10243,7 +10243,7 @@ body.dark-mode .modal-content {
     overflow-y: auto !important;
 }
 
-/* Ensure the Task Manager content doesn't overflow horizontally while scrolling vertically */
+/* Ensure the Task mentor content doesn't overflow horizontally while scrolling vertically */
 body.dark-mode #myTasksModal .modal-content {
     overflow-x: hidden !important;
 }
@@ -10439,4 +10439,116 @@ body.dark-mode .user-welcome {
 
 body.dark-mode #userAvatar {
     filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.2)) !important;
+}
+
+/* ==================== GLOBAL LOADER ==================== */
+.global-loader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.15s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.global-loader.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.loader-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    transform: translateY(20px);
+    transition: transform 0.2s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.global-loader.active .loader-content {
+    transform: translateY(0);
+}
+
+.loader-visual {
+    position: relative;
+    width: 80px;
+    height: 80px;
+}
+
+.loader-ring {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border: 4px solid var(--gray-200);
+    border-top: 4px solid var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.loader-pulse {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 40px;
+    height: 40px;
+    background: var(--primary-color);
+    border-radius: 50%;
+    opacity: 0.2;
+    animation: pulse-ring 1.5s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
+}
+
+.loader-text-group {
+    text-align: center;
+}
+
+.loader-title {
+    font-size: 1.8rem;
+    font-weight: 800;
+    margin: 0;
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.02em;
+}
+
+.loader-subtitle {
+    font-size: 0.95rem;
+    color: var(--gray-500);
+    font-weight: 500;
+    margin: 4px 0 0;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse-ring {
+    0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.5; }
+    100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+}
+
+/* Dark mode support for loader */
+body.dark-mode .global-loader {
+    background: rgba(15, 23, 42, 0.8);
+}
+
+body.dark-mode .loader-subtitle {
+    color: var(--gray-400);
+}
+
+body.dark-mode .loader-ring {
+    border-color: rgba(255, 255, 255, 0.1);
+    border-top-color: var(--primary-color);
 }
