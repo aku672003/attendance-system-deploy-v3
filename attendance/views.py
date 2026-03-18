@@ -851,6 +851,14 @@ def monthly_stats(request):
             start_date__month=month
         ).count()
 
+        half_day_requests = EmployeeRequest.objects.filter(
+            employee_id=employee_id,
+            request_type='half_day',
+            status='approved',
+            start_date__year=year,
+            start_date__month=month
+        ).count()
+
         from django.db.models import Count, Case, When, Sum, Q
 
         stats_data = records.aggregate(
@@ -3407,6 +3415,35 @@ def intelligence_hub_forecast(request):
         forecast, confidence, trend = calculate_forecast()
         day_name = get_current_day_name()
         model_state = load_model_state()
+        
+        employee_id = request.GET.get('employee_id')
+        if employee_id:
+            try:
+                from .models import AttendanceRecord
+                from datetime import date, timedelta
+                
+                today = date.today()
+                start_date = today - timedelta(days=30)
+                
+                records = AttendanceRecord.objects.filter(
+                    employee_id=employee_id,
+                    date__range=[start_date, today]
+                )
+                
+                passed_days = (today - start_date).days + 1
+                working_days_passed = sum(1 for d in range(passed_days) if (start_date + timedelta(days=d)).weekday() < 5)
+                
+                weekday_present_days = records.filter(
+                    date__week_day__in=[2, 3, 4, 5, 6],
+                    status__in=['present', 'half_day', 'wfh', 'client']
+                ).count()
+                
+                if working_days_passed > 0:
+                    forecast = round((weekday_present_days / working_days_passed) * 100)
+                else:
+                    forecast = 0
+            except Exception as e:
+                print(f"Error calculating personal forecast: {e}")
         
         return Response({
             'success': True,

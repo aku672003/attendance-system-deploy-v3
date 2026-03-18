@@ -81,7 +81,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadIntelligenceHubData() {
     try {
-        const result = await apiCall('intelligence-hub-forecast', 'GET', {});
+        const payload = typeof currentUser !== 'undefined' && currentUser ? { employee_id: currentUser.id } : {};
+        const result = await apiCall('intelligence-hub-forecast', 'GET', payload);
 
         if (result.success && result.forecast) {
             intelligenceHubData = result.forecast;
@@ -128,13 +129,15 @@ function updateIntelligenceHubUI(data) {
         const regularityEl = document.getElementById('hubRegularityEmployee');
         if (regularityEl) regularityEl.textContent = `${f.percentage}%`;
 
-        // Display AI Insight if available
+        // Display AI Insight if available (Commented out to show in Analysis only)
+        /*
         const insightEl = document.getElementById('hubAiInsight');
         const insightWrapper = document.getElementById('hubAiInsightWrapper');
         if (insightEl && insightWrapper && f.ai_insight) {
             insightEl.textContent = f.ai_insight;
             insightWrapper.classList.remove('hidden');
         }
+        */
     }
 }
 
@@ -611,7 +614,12 @@ function openPredictiveAnalysisModal(data) {
 
 function closePredictiveModal() {
     const modal = document.getElementById('predictiveModal');
-    if (modal) modal.classList.remove('active');
+    if (modal) {
+        modal.classList.remove('active');
+        // Restore scrollability
+        document.body.style.overflow = 'auto';
+        document.documentElement.style.overflow = 'auto';
+    }
 }
 
 function getForecastDayName() {
@@ -708,7 +716,12 @@ function renderPersonnelResults(results) {
 
 function closePersonnelSearchModal() {
     const modal = document.getElementById('personnelSearchModal');
-    if (modal) modal.classList.remove('active');
+    if (modal) {
+        modal.classList.remove('active');
+        // Restore scrollability
+        document.body.style.overflow = 'auto';
+        document.documentElement.style.overflow = 'auto';
+    }
 }
 
 // ========== Employee Performance Analysis ==========
@@ -762,37 +775,90 @@ function renderEmployeePerformanceModal(data, employeeId) {
     modal.style.zIndex = '2100';
 
     modal.innerHTML = `
-        <div class="predictive-modal modal-content" style="width: 850px; max-width: 95vw; max-height: 90vh; padding: 0 !important; overflow: hidden; background: white; border: none; display: flex; flex-direction: column;">
-            <div class="predictive-header" style="background: linear-gradient(135deg, #4f46e5, #6366f1); color: white; padding: 24px; margin-bottom: 0;">
+        <div class="predictive-modal modal-content" style="width: 850px; max-width: 95vw; max-height: 90vh; padding: 0 !important; overflow: hidden; background: white; border: none; display: flex; flex-direction: column; border-radius: 32px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+            <div class="predictive-header" style="background: linear-gradient(135deg, #4f46e5, #6366f1); color: white; padding: 32px; margin-bottom: 0; border-radius: 32px 32px 0 0;">
                 <div style="display: flex; justify-content: space-between; align-items: start; width: 100%;">
-                    <div style="display: flex; align-items: center; gap: 16px;">
-                        <div id="perfModalAvatar" style="background: rgba(255,255,255,0.2); width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; border-radius: 12px; font-size: 32px;">👤</div>
+                    <div style="display: flex; align-items: center; gap: 20px;">
+                        <div id="perfModalAvatar" style="background: rgba(255,255,255,0.2); width: 70px; height: 70px; display: flex; align-items: center; justify-content: center; border-radius: 20px; font-size: 36px; box-shadow: 0 8px 16px rgba(0,0,0,0.1);">👤</div>
                         <div>
-                            <h2 style="margin: 0; font-size: 18px; color: white !important;">${data.employee_name}</h2>
-                            <p style="margin: 0; opacity: 0.9; font-size: 12px;">${data.department}</p>
+                            <h2 style="margin: 0; font-size: 26px; font-weight: 900; color: white !important; letter-spacing: -0.5px;">${data.employee_name}</h2>
+                            <p style="margin: 4px 0 0; opacity: 0.9; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${data.department}</p>
                         </div>
                     </div>
-                    <button onclick="document.getElementById('employeePerformanceModal').remove()" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">✕</button>
+                    <button onclick="document.body.style.overflow='auto';document.documentElement.style.overflow='auto';document.getElementById('employeePerformanceModal').remove()" style="background: rgba(255,255,255,0.2); border: none; font-size: 20px; width: 40px; height: 40px; border-radius: 12px; cursor: pointer; color: white; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">✕</button>
                 </div>
             </div>
 
-            <div style="padding: 24px; overflow-y: auto;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
-                    <!-- Attendance -->
-                    <div style="background: #f8fafc; padding: 20px; border-radius: 20px; border: 1px solid #eef2f6;">
-                        <h3 style="margin-top: 0; font-size: 14px;">Regularity: ${regularityScore}%</h3>
-                        <div style="font-size: 13px; color: var(--gray-600);">Avg. Check-In: ${m.avg_check_in || '--:--'}</div>
-                        <div style="font-size: 13px; color: var(--gray-600);">Likelihood Tomorrow: ${p.likelihood}%</div>
+            <div style="padding: 32px; overflow-y: auto; background: #ffffff;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px;">
+                    
+                    <!-- Attendance / Regularity -->
+                    <div class="main-forecast-card" style="padding: 24px; background: #ffffff; border: 1px solid #f1f5f9; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.02); border-radius: 28px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;">
+                        <div style="font-size: 14px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1px;">Attendance</div>
+                        
+                        <div style="position: relative; width: 160px; height: 160px; display: flex; align-items: center; justify-content: center;">
+                            <svg viewBox="0 0 100 100" style="width: 160px; height: 160px; transform: rotate(-90deg); position: absolute;">
+                                <circle cx="50" cy="50" r="45" fill="none" stroke="#f1f5f9" stroke-width="10" />
+                                <circle id="myStatsRegularityGauge" cx="50" cy="50" r="45" fill="none" stroke="url(#regRegGrad)" stroke-width="10" stroke-linecap="round" stroke-dasharray="283" stroke-dashoffset="283" style="transition: stroke-dashoffset 1.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);" />
+                                <defs>
+                                    <linearGradient id="regRegGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stop-color="#10b981" />
+                                        <stop offset="100%" stop-color="#059669" />
+                                    </linearGradient>
+                                </defs>
+                            </svg>
+                            <div style="text-align: center; z-index: 1;">
+                                <div id="myStatsRegularityValue" style="color: #059669; font-size: 38px; font-weight: 900; letter-spacing: -1px;">0%</div>
+                                <div style="font-size: 9px; font-weight: 850; color: #94a3b8; letter-spacing: 1px; margin-top: -4px;">REGULARITY</div>
+                            </div>
+                        </div>
+
+                        <div style="width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 8px;">
+                            <div style="background: #f8fafc; padding: 12px; border-radius: 16px; text-align: center;">
+                                <div style="font-size: 16px; font-weight: 800; color: #1e293b;">${m.avg_check_in || '--:--'}</div>
+                                <div style="font-size: 10px; color: #64748b; font-weight: 800;">AVG CHECK-IN</div>
+                            </div>
+                            <div style="background: #f8fafc; padding: 12px; border-radius: 16px; text-align: center;">
+                                <div style="font-size: 16px; font-weight: 800; color: #1e293b;">${p.likelihood}%</div>
+                                <div style="font-size: 10px; color: #64748b; font-weight: 800;">LIKELIHOOD TOMORROW</div>
+                            </div>
+                        </div>
                     </div>
-                    <!-- Tasks -->
-                    <div style="background: #f8fafc; padding: 20px; border-radius: 20px; border: 1px solid #eef2f6;">
-                        <h3 style="margin-top: 0; font-size: 14px;">Task Accuracy: ${t.avg_accuracy}%</h3>
-                        <div style="font-size: 13px; color: var(--gray-600);">Completed: ${t.completed} / ${t.total_assigned}</div>
+                    
+                    <!-- Task Accuracy -->
+                    <div class="main-forecast-card" style="padding: 24px; background: #ffffff; border: 1px solid #f1f5f9; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.02); border-radius: 28px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;">
+                        <div style="font-size: 14px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1px;">Work Efficiency</div>
+                        
+                        <div style="position: relative; width: 160px; height: 160px; display: flex; align-items: center; justify-content: center;">
+                            <svg viewBox="0 0 100 100" style="width: 160px; height: 160px; transform: rotate(-90deg); position: absolute;">
+                                <circle cx="50" cy="50" r="45" fill="none" stroke="#f1f5f9" stroke-width="10" />
+                                <circle id="myStatsAccuracyGauge" cx="50" cy="50" r="45" fill="none" stroke="url(#accGrad)" stroke-width="10" stroke-linecap="round" stroke-dasharray="283" stroke-dashoffset="283" style="transition: stroke-dashoffset 1.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);" />
+                                <defs>
+                                    <linearGradient id="accGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stop-color="#3b82f6" />
+                                        <stop offset="100%" stop-color="#2563eb" />
+                                    </linearGradient>
+                                </defs>
+                            </svg>
+                            <div style="text-align: center; z-index: 1;">
+                                <div id="myStatsAccuracyValue" style="color: #2563eb; font-size: 38px; font-weight: 900; letter-spacing: -1px;">0%</div>
+                                <div style="font-size: 9px; font-weight: 850; color: #94a3b8; letter-spacing: 1px; margin-top: -4px;">ACCURACY</div>
+                            </div>
+                        </div>
+
+                        <div style="width: 100%; display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 8px;">
+                            <div style="background: #f8fafc; padding: 12px; border-radius: 16px; text-align: center;">
+                                <div style="font-size: 16px; font-weight: 800; color: #1e293b;">${t.completed} / ${t.total_assigned}</div>
+                                <div style="font-size: 10px; color: #64748b; font-weight: 800;">TASKS COMPLETED</div>
+                            </div>
+                        </div>
                     </div>
+
                 </div>
             </div>
-            <div style="padding: 16px; text-align: center; border-top: 1px solid #eee;">
-                <button class="btn btn-secondary" onclick="document.getElementById('employeePerformanceModal').remove()">Close Analysis</button>
+            
+            <div style="text-align: center; margin-top: 10px; margin-bottom: 30px;">
+                <button onclick="document.body.style.overflow='auto';document.documentElement.style.overflow='auto';document.getElementById('employeePerformanceModal').remove()" style="width: auto; padding: 20px 100px; font-size: 15px; font-weight: 900; background: #0f172a; color: white; border: none; border-radius: 24px; cursor: pointer; transition: transform 0.2s, background 0.2s; box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.3);" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">CLOSE ANALYSIS</button>
             </div>
         </div>
     `;
@@ -803,6 +869,34 @@ function renderEmployeePerformanceModal(data, employeeId) {
     if (avatarContainer && data.avatar_emoji) {
         renderAvatar(data.avatar_emoji, avatarContainer);
     }
+
+    // Process animations after a short delay
+    setTimeout(() => {
+        const regGauge = document.getElementById('myStatsRegularityGauge');
+        const regValue = document.getElementById('myStatsRegularityValue');
+        if (regGauge) {
+            const radius = 45;
+            const circumference = 2 * Math.PI * radius;
+            const offset = circumference - (regularityScore / 100) * circumference;
+            regGauge.style.strokeDashoffset = offset;
+        }
+        if (regValue) {
+            animateValue(regValue, 0, regularityScore, 1000);
+        }
+
+        const accGauge = document.getElementById('myStatsAccuracyGauge');
+        const accValue = document.getElementById('myStatsAccuracyValue');
+        const taskAcc = t.avg_accuracy || 0;
+        if (accGauge) {
+            const radius = 45;
+            const circumference = 2 * Math.PI * radius;
+            const offset = circumference - (taskAcc / 100) * circumference;
+            accGauge.style.strokeDashoffset = offset;
+        }
+        if (accValue) {
+            animateValue(accValue, 0, taskAcc, 1000);
+        }
+    }, 100);
 }
 
 // ========== Shared Helpers ==========

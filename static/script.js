@@ -185,7 +185,8 @@ function closeModal(id) {
     const el = document.getElementById(id);
     if (!el) return;
     el.classList.remove('active');
-    document.body.style.overflow = '';
+    document.body.style.overflow = 'auto';
+    document.documentElement.style.overflow = 'auto';
 
     // Refresh dashboard stats when closing requests/calendar modals
     // This ensures that if a request was made/approved, the dashboard counters update.
@@ -515,7 +516,8 @@ function hideLoading() {
     
     // Only restore overflow if no modals are active
     if (!document.querySelector('.modal.active')) {
-        document.body.style.overflow = '';
+        document.body.style.overflow = 'auto';
+        document.documentElement.style.overflow = 'auto';
     }
 }
 
@@ -2595,22 +2597,27 @@ function renderTaskBoard() {
                     <h5 class="premium-task-title" style="margin: 0; font-size: 1.1rem; line-height: 1.5;">${task.title}</h5>
                     <p style="font-size:0.9rem; color:#64748b; margin: 0; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${task.description || ''}</p>
                     
-                    <div class="premium-task-meta" style="margin-top: 4px; padding-top: 12px; border-top: 1px solid #f1f5f9;">
-                        <div style="display:flex; align-items:center; flex-grow: 1;">
+                    <div class="premium-task-meta" style="margin-top: 8px; padding-top: 12px; border-top: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                        <div style="display:flex; align-items:center;">
                             <div style="display:flex;">${avatarGroup}</div>
-                            <span style="font-size:0.85rem; color:#475569; font-weight: 500; margin-left: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px;">${assigneeNames}</span>
+                            <span style="font-size:0.85rem; color:#475569; font-weight: 500; margin-left: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;" title="${assigneeNames}">${assigneeNames}</span>
                         </div>
-                        ${task.Mentor_name ? `
-                        <div style="display:flex; align-items:center; gap:6px; margin-top: 4px;">
-                            <span style="font-size:0.75rem; color:#64748b; font-weight: 600; background:#f1f5f9; padding:2px 8px; border-radius:4px;">👁 Overseer: ${task.Mentor_name}</span>
-                        </div>
-                        ` : ''}
-                        <div style="display:flex; flex-direction:column; align-items:flex-end;">
-                            <span style="font-size:0.8rem; color:#94a3b8; font-weight: 600; display: flex; align-items: center; gap: 4px;">
-                                <span style="font-size: 1rem;">📅</span> ${task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No date'}
+                        
+                        <div style="display:flex; align-items:center; gap: 8px;">
+                            ${task.Mentor_name ? `
+                            <span style="font-size:0.75rem; color:#64748b; font-weight: 600; background:#f1f5f9; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;" title="Overseer: ${task.Mentor_name}">
+                                👁 <span style="max-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${task.Mentor_name}</span>
                             </span>
+                            ` : ''}
+                            
+                            <span style="font-size:0.8rem; color:#94a3b8; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                                <span style="font-size: 0.9rem;">📅</span> ${task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No date'}
+                            </span>
+                            
                             ${task.comments && task.comments.length > 0 ? `
-                                <span style="font-size:0.75rem; color:#3b82f6; font-weight: 600; margin-top: 4px;">💬 ${task.comments.length} comments</span>
+                                <span style="font-size:0.75rem; color:#3b82f6; font-weight: 600; display:flex; align-items:center; gap:2px;" title="${task.comments.length} comments">
+                                    💬 ${task.comments.length}
+                                </span>
                             ` : ''}
                         </div>
                     </div>

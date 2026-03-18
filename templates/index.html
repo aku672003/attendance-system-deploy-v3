@@ -875,6 +875,12 @@
                                     <div class="tooltip-content">Confidence score reflects how consistent and complete the recent data is.</div>
                                 </div>
                             </div>
+                            <!-- Model Status moved inside the Intelligence Hub -->
+                            <div id="trainModelStatus" style="font-size: 11px; margin-top: 8px; color: rgba(255,255,255,0.7); font-weight: 500;">
+                                <span id="lastTrainedText">Checking model status...</span>
+                                <span id="trainSpinner" class="loading-spinner hidden"
+                                    style="display:inline-block; width:10px; height:10px; vertical-align:middle; margin-left:5px;"></span>
+                            </div>
 
                             <div class="intelligence-hub-actions">
                                 <button class="intelligence-hub-btn" onclick="event.stopPropagation(); viewTrends();">
@@ -893,7 +899,8 @@
                     </div>
                     
                     <!-- NEW: AI Insight Row -->
-                    <div id="hubAiInsightWrapper" class="hidden" style="margin-top: 15px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <!-- AI Insight Row - Removed from card, moved to Intelligence Hub Analysis only -->
+                    <div id="hubAiInsightWrapper" class="hidden" style="display: none; margin-top: 15px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
                         <div style="display: flex; align-items: flex-start; gap: 10px;">
                             <span style="font-size: 18px;">🤖</span>
                             <div style="font-size: 11px; line-height: 1.5; color: rgba(255,255,255,0.9); font-weight: 500;" id="hubAiInsight">
@@ -913,11 +920,7 @@
                     <span class="action-card-icon">🧠</span>
                     <div class="action-card-title">Train Forecast Model</div>
                     <div class="action-card-description">Retrain the prediction model with recent data (Admin only)</div>
-                    <div id="trainModelStatus" style="font-size: 11px; margin-top: 8px; color: var(--primary-color); font-weight: 500;">
-                        <span id="lastTrainedText">Checking model status...</span>
-                        <span id="trainSpinner" class="loading-spinner hidden"
-                            style="display:inline-block; width:10px; height:10px; vertical-align:middle; margin-left:5px;"></span>
-                    </div>
+
                     <div class="widget-resize-controls" onclick="event.stopPropagation()">
                         <button class="resize-btn" onclick="resizeWidget('trainModelCard', 'sm')">S</button>
                         <button class="resize-btn" onclick="resizeWidget('trainModelCard', 'md')">M</button>
