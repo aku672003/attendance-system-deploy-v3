@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadIntelligenceHubData() {
     try {
-        const payload = typeof currentUser !== 'undefined' && currentUser ? { employee_id: currentUser.id } : {};
+        const payload = typeof currentUser !== 'undefined' && currentUser && currentUser.role !== 'admin' ? { employee_id: currentUser.id } : {};
         const result = await apiCall('intelligence-hub-forecast', 'GET', payload);
 
         if (result.success && result.forecast) {
