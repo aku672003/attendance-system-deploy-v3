@@ -388,6 +388,7 @@ function showScreen(screenId) {
             dashboardStatsGrid.parentNode.insertBefore(statsGrid, dashboardStatsGrid);
             statsGrid.style.marginBottom = ''; // reset inline style
         }
+        updateDashboardVisibility();
     }
 }
 
@@ -2766,30 +2767,37 @@ function updateDashboardVisibility() {
     const adminStatsGrid = document.getElementById('adminStatsGrid');
     const employeeStatsGrid = document.getElementById('employeeStatsGrid');
 
-    if (currentUser.role === 'admin' || currentUser.role === 'mentor' || currentUser.has_subordinates) {
-        // Show Task Mentor (Admin), Hide My Tasks
+    if (currentUser.role === 'admin') {
+        // Admin sees Admin Stats Grid and intelligenceHubCard
         if (taskMentorCard) taskMentorCard.classList.remove('hidden');
         if (myTasksCard) myTasksCard.classList.add('hidden');
 
-        // Admin defaults
         if (intelligenceHubCard) intelligenceHubCard.classList.remove('hidden');
         if (intelligenceHubCardEmployee) intelligenceHubCardEmployee.classList.add('hidden');
         if (hubMyStatsBtn) hubMyStatsBtn.classList.add('hidden');
 
-        // Ensure Admin Stats Grid is visible for Admin
         if (adminStatsGrid) adminStatsGrid.classList.remove('hidden');
         if (employeeStatsGrid) employeeStatsGrid.classList.add('hidden');
-    } else {
-        // Hide Task Mentor (Admin), Show My Tasks (Employee/Mentor)
-        if (taskMentorCard) taskMentorCard.classList.add('hidden');
+    } else if (currentUser.role === 'Mentor' || currentUser.role === 'mentor' || currentUser.has_subordinates) {
+        // Mentor sees Employee Stats Grid but retains Task Mentor access
+        if (taskMentorCard) taskMentorCard.classList.remove('hidden');
         if (myTasksCard) myTasksCard.classList.remove('hidden');
 
-        // Employee Intelligence Hub
         if (intelligenceHubCard) intelligenceHubCard.classList.add('hidden');
         if (intelligenceHubCardEmployee) intelligenceHubCardEmployee.classList.remove('hidden');
         if (hubMyStatsBtn) hubMyStatsBtn.classList.remove('hidden');
 
-        // Ensure Employee Stats Grid is visible for Employee/Mentor
+        if (adminStatsGrid) adminStatsGrid.classList.add('hidden');
+        if (employeeStatsGrid) employeeStatsGrid.classList.remove('hidden');
+    } else {
+        // Regular Employee logic
+        if (taskMentorCard) taskMentorCard.classList.add('hidden');
+        if (myTasksCard) myTasksCard.classList.remove('hidden');
+
+        if (intelligenceHubCard) intelligenceHubCard.classList.add('hidden');
+        if (intelligenceHubCardEmployee) intelligenceHubCardEmployee.classList.remove('hidden');
+        if (hubMyStatsBtn) hubMyStatsBtn.classList.remove('hidden');
+
         if (adminStatsGrid) adminStatsGrid.classList.add('hidden');
         if (employeeStatsGrid) employeeStatsGrid.classList.remove('hidden');
     }
@@ -10880,6 +10888,24 @@ document.addEventListener('DOMContentLoaded', () => {
 let isEditMode = false;
 let originalLayoutSnapshot = null;
 let draggedWidget = null;
+
+// Intercept clicks during Edit Mode to disable card actions
+document.addEventListener('click', function(e) {
+    if (typeof isEditMode !== 'undefined' && isEditMode) {
+        // Check if we clicked a dashboard card (stat-card or action-card)
+        const card = e.target.closest('.stat-card, .action-card');
+        if (card) {
+            // Check if we clicked on resize controls, which should remain interactive
+            const isResizeControl = e.target.closest('.widget-resize-controls, .resize-btn');
+            
+            if (!isResizeControl) {
+                // If it's a click anywhere else inside the card during Edit Mode, block it
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }
+    }
+}, true); // Use capture phase to intercept before HTML onclick/bubble listeners
 
 // Initialize Widget Sizes on Load
 function initWidgetSizes() {

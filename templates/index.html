@@ -782,11 +782,12 @@
                                 onclick="event.stopPropagation(); viewTrends();">
                                 <span class="btn-icon">📊</span> Analysis
                             </button>
-                            <button class="intelligence-hub-btn" style="flex: 1;"
+                            <button class="intelligence-hub-btn" style="flex: 1; display: none;" id="myStatsBtnEmployee"
                                 onclick="event.stopPropagation(); viewMyStats();">
-                                <span class="btn-icon">👤</span> Personnel
+                                <span class="btn-icon">👤</span> My Stats
                             </button>
                         </div>
+
                     </div>
                     <div class="widget-resize-controls" onclick="event.stopPropagation()">
                         <button class="resize-btn" onclick="resizeWidget('intelligenceHubCardEmployee', 'sm')">S</button>
@@ -990,6 +991,16 @@
                         <button class="resize-btn" onclick="resizeWidget('manageEmployeesCard', 'sm')">S</button>
                         <button class="resize-btn" onclick="resizeWidget('manageEmployeesCard', 'md')">M</button>
                         <button class="resize-btn" onclick="resizeWidget('manageEmployeesCard', 'lg')">L</button>
+                    </div>
+                </div>
+                <div class="action-card hidden" onclick="openTaskMentor()" id="taskMentorCard" draggable="false">
+                    <span class="action-card-icon">📝</span>
+                    <div class="action-card-title">Team Tasks</div>
+                    <div class="action-card-description">Manage tasks for your team</div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('taskMentorCard', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('taskMentorCard', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('taskMentorCard', 'lg')">L</button>
                     </div>
                 </div>
                 <div class="action-card hidden" onclick="openProfile()" id="profileCard" draggable="false">

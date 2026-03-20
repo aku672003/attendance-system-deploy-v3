@@ -14,8 +14,6 @@ let intelligenceHubRefreshInterval = null;
 function initIntelligenceHubVisibility() {
     if (typeof currentUser === 'undefined' || !currentUser) return;
 
-    const isAdmin = currentUser.role === 'admin' || currentUser.role === 'mentor' || currentUser.has_subordinates;
-
     const employeeCard = document.getElementById('intelligenceHubCardEmployee');
     const adminCard    = document.getElementById('intelligenceHubCard');
     const trainCard    = document.getElementById('trainModelCard');
@@ -26,8 +24,12 @@ function initIntelligenceHubVisibility() {
     const adminGrid    = document.getElementById('adminStatsGrid');
     // Actions grid (for train model card)
     const actionsGrid  = document.getElementById('actionsGrid');
+    
+    const myStatsBtn = document.getElementById('hubMyStatsBtn');
+    const mentorSearchBtnEmployee = document.getElementById('mentorSearchBtnEmployee');
+    const myStatsBtnEmployee = document.getElementById('myStatsBtnEmployee');
 
-    if (isAdmin) {
+    if (currentUser.role === 'admin') {
         // Show admin card; hide employee card
         if (employeeCard) employeeCard.classList.add('hidden');
         if (adminCard) {
@@ -44,12 +46,9 @@ function initIntelligenceHubVisibility() {
             }
         }
 
-        // Show the hubMyStatsBtn for admins
-        const myStatsBtn = document.getElementById('hubMyStatsBtn');
-        if (myStatsBtn) myStatsBtn.classList.remove('hidden');
-
+        if (myStatsBtn) myStatsBtn.classList.add('hidden');
     } else {
-        // Regular employee — show employee card; hide admin-specific cards
+        // Mentors and regular employees — show employee card; hide admin-specific cards
         if (adminCard) adminCard.classList.add('hidden');
         if (trainCard) trainCard.classList.add('hidden');
         if (employeeCard) {
@@ -59,6 +58,12 @@ function initIntelligenceHubVisibility() {
                 employeeGrid.appendChild(employeeCard);
             }
         }
+        
+        // Everyone sees "My Stats"
+        if (myStatsBtnEmployee) myStatsBtnEmployee.style.display = 'flex';
+
+
+        if (myStatsBtn) myStatsBtn.classList.remove('hidden');
     }
 
     // Load Intelligence Hub data regardless of role
@@ -671,7 +676,14 @@ async function performPersonnelSearch() {
     resultsContainer.innerHTML = '<div style="text-align: center; padding: 40px;"><div class="loading-spinner"></div></div>';
 
     try {
-        const result = await apiCall('intelligence-hub-search', 'POST', { query: query });
+        const payload = { query: query };
+        
+        // If mentor/has_subordinates but NOT admin, filter by mentor_id
+        if ((currentUser.role === 'Mentor' || currentUser.has_subordinates) && currentUser.role !== 'admin') {
+            payload.mentor_id = currentUser.id;
+        }
+
+        const result = await apiCall('intelligence-hub-search', 'POST', payload);
         if (result.success && result.results) {
             renderPersonnelResults(result.results);
         } else {
@@ -763,102 +775,196 @@ function renderEmployeePerformanceModal(data, employeeId) {
     const m = data.metrics;
     const t = data.tasks;
     const p = data.prediction;
-    const f = data.filter;
-    const viewType = f.view_type || 'period';
+    const history = data.history || [];
+    
+    // Calculate Streak from history
+    let streak = 0;
+    for (const record of history) {
+        if (['present', 'wfh', 'client', 'half_day'].includes(record.status)) {
+            streak++;
+        } else {
+            break;
+        }
+    }
 
     const regularityScore = m.working_days_passed > 0 ? Math.round((m.weekday_present_days / m.working_days_passed) * 100) : 0;
-    const prodColor = regularityScore >= 80 ? 'var(--success)' : regularityScore >= 60 ? 'var(--warning)' : 'var(--error)';
+    
+    // Helper for Bezier curve (same as in openPredictiveAnalysisModal)
+    const getControlPoints = (p0, p1, p2, t = 0.2) => {
+        const d01 = Math.sqrt(Math.pow(p1.x - p0.x, 2) + Math.pow(p1.y - p0.y, 2));
+        const d12 = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+        const fa = t * d01 / (d01 + d12);
+        const fb = t * d12 / (d01 + d12);
+        const p1x = p1.x - fa * (p2.x - p0.x);
+        const p1y = p1.y - fa * (p2.y - p0.y);
+        const p2x = p1.x + fb * (p2.x - p0.x);
+        const p2y = p1.y + fb * (p2.y - p0.y);
+        return [p1x, p1y, p2x, p2y];
+    };
+
+    // Graph points from last 6 entries in history
+    const graphData = [...history].reverse().slice(-6);
+    const graphPoints = graphData.map((v, i) => ({ 
+        x: i * 115, 
+        y: 120 - (Math.min(v.hours, 12) / 12 * 100) 
+    }));
+    
+    let bezierPath = "";
+    if (graphPoints.length > 0) {
+        bezierPath = `M ${graphPoints[0].x} ${graphPoints[0].y}`;
+        for (let i = 0; i < graphPoints.length - 1; i++) {
+            const p0 = graphPoints[i - 1] || graphPoints[i];
+            const p1 = graphPoints[i];
+            const p2 = graphPoints[i + 1];
+            const p3 = graphPoints[i + 2] || p2;
+            const [cp1x, cp1y, cp2x, cp2y] = getControlPoints(p0, p1, p2);
+            const [nextCp1x, nextCp1y, nextCp2x, nextCp2y] = getControlPoints(p1, p2, p3);
+            bezierPath += ` C ${cp2x} ${cp2y}, ${nextCp1x} ${nextCp1y}, ${graphPoints[i+1].x} ${graphPoints[i+1].y}`;
+        }
+    }
 
     const modal = document.createElement('div');
     modal.id = 'employeePerformanceModal';
     modal.className = 'modal active';
-    modal.style.zIndex = '2100';
+    modal.style.zIndex = '2101';
 
     modal.innerHTML = `
-        <div class="predictive-modal modal-content" style="width: 850px; max-width: 95vw; max-height: 90vh; padding: 0 !important; overflow: hidden; background: white; border: none; display: flex; flex-direction: column; border-radius: 32px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
-            <div class="predictive-header" style="background: linear-gradient(135deg, #4f46e5, #6366f1); color: white; padding: 32px; margin-bottom: 0; border-radius: 32px 32px 0 0;">
-                <div style="display: flex; justify-content: space-between; align-items: start; width: 100%;">
-                    <div style="display: flex; align-items: center; gap: 20px;">
-                        <div id="perfModalAvatar" style="background: rgba(255,255,255,0.2); width: 70px; height: 70px; display: flex; align-items: center; justify-content: center; border-radius: 20px; font-size: 36px; box-shadow: 0 8px 16px rgba(0,0,0,0.1);">👤</div>
+        <div class="predictive-modal modal-content" style="width: 680px; max-width: 95vw; max-height: 96vh; padding: 0 !important; overflow: hidden; background: white; border: none; display: flex; flex-direction: column; border-radius: 32px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+            <div style="padding: 32px; overflow-y: auto; flex: 1; background: #ffffff;">
+                <!-- Header -->
+                <div class="predictive-header" style="margin-bottom: 28px; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <div id="perfModalAvatar" style="background: rgba(99, 102, 241, 0.1); width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; border-radius: 18px; font-size: 28px;">👤</div>
                         <div>
-                            <h2 style="margin: 0; font-size: 26px; font-weight: 900; color: white !important; letter-spacing: -0.5px;">${data.employee_name}</h2>
-                            <p style="margin: 4px 0 0; opacity: 0.9; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${data.department}</p>
+                            <div style="font-size: 24px; font-weight: 900; color: #0f172a; letter-spacing: -0.8px;">${data.employee_name}</div>
+                            <div style="font-size: 11px; font-weight: 700; color: #94a3b8; margin-top: 2px; text-transform: uppercase; letter-spacing: 1px;">${data.department} • Personnel Analysis</div>
                         </div>
                     </div>
-                    <button onclick="document.body.style.overflow='auto';document.documentElement.style.overflow='auto';document.getElementById('employeePerformanceModal').remove()" style="background: rgba(255,255,255,0.2); border: none; font-size: 20px; width: 40px; height: 40px; border-radius: 12px; cursor: pointer; color: white; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">✕</button>
+                    <button onclick="document.body.style.overflow='auto';document.documentElement.style.overflow='auto';document.getElementById('employeePerformanceModal').remove()" style="background: #f1f5f9; border: none; font-size: 20px; width: 40px; height: 40px; border-radius: 12px; cursor: pointer; color: #64748b; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">&times;</button>
+                </div>
+
+                <!-- Top Summary Cards -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 16px; margin-bottom: 24px;">
+                    <div style="background: #f8fafc; padding: 20px; border-radius: 24px; border: 1px solid #e2e8f0; position: relative;">
+                        <div style="position: absolute; top: 12px; right: 12px; font-size: 14px;">⚡</div>
+                        <div style="font-size: 10px; font-weight: 850; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Trust Factor</div>
+                        <div style="font-size: 24px; font-weight: 900; color: #0f172a;">${t.avg_accuracy}%</div>
+                        <div style="font-size: 10px; font-weight: 700; color: #10b981; margin-top: 4px;">High Probability</div>
+                    </div>
+                    <div style="background: #f8fafc; padding: 20px; border-radius: 24px; border: 1px solid #e2e8f0; position: relative;">
+                        <div style="position: absolute; top: 12px; right: 12px; font-size: 14px;">🔥</div>
+                        <div style="font-size: 10px; font-weight: 850; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Streak</div>
+                        <div style="font-size: 24px; font-weight: 900; color: #0f172a;">${streak}D</div>
+                        <div style="font-size: 10px; font-weight: 700; color: #6366f1; margin-top: 4px;">Active Pattern</div>
+                    </div>
+                    <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 20px; border-radius: 24px; color: white;">
+                        <div style="font-size: 10px; font-weight: 850; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Tomorrow's Load</div>
+                        <div style="font-size: 24px; font-weight: 900;">${p.likelihood}% <span style="font-size: 14px; font-weight: 600; opacity: 0.8;">Expected</span></div>
+                        <div style="font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.9); margin-top: 4px;">Prediction Logic Active</div>
+                    </div>
+                </div>
+
+                <!-- Main Analysis Section -->
+                <div style="background: #ffffff; border: 1px solid #f1f5f9; border-radius: 28px; padding: 32px; margin-bottom: 24px; display: flex; align-items: center; gap: 40px;">
+                    <div style="position: relative; width: 140px; height: 140px; flex-shrink: 0;">
+                        <svg viewBox="0 0 100 100" style="transform: rotate(-90deg); width: 140px; height: 140px;">
+                            <circle cx="50" cy="50" r="44" fill="none" stroke="#f1f5f9" stroke-width="12"/>
+                            <circle id="perfGauge" cx="50" cy="50" r="44" fill="none" stroke="url(#perfGrad)" stroke-width="12" stroke-linecap="round" stroke-dasharray="276" stroke-dashoffset="276" style="transition: stroke-dashoffset 2s cubic-bezier(0.19, 1, 0.22, 1);"/>
+                            <defs>
+                                <linearGradient id="perfGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                    <stop offset="0%" stop-color="#6366f1" />
+                                    <stop offset="100%" stop-color="#8b5cf6" />
+                                </linearGradient>
+                            </defs>
+                        </svg>
+                        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+                            <div id="perfValue" style="font-size: 32px; font-weight: 950; color: #4338ca; letter-spacing: -1px;">0%</div>
+                            <div style="font-size: 8px; font-weight: 850; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;">Turnout</div>
+                        </div>
+                    </div>
+
+                    <div style="flex: 1;">
+                        <div style="font-size: 11px; font-weight: 850; color: #94a3b8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                            Analysis Summary <span style="height: 1px; flex: 1; background: #f1f5f9;"></span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div>
+                                <div style="font-size: 18px; font-weight: 900; color: #0f172a;">${regularityScore}%</div>
+                                <div style="font-size: 9px; font-weight: 800; color: #10b981; text-transform: uppercase; letter-spacing: 0.5px;">Punctuality</div>
+                                <div style="font-size: 18px; font-weight: 900; color: #0f172a; margin-top: 12px;">${m.avg_check_in || '10:00'}</div>
+                                <div style="font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Peak Start</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 18px; font-weight: 900; color: #0f172a;">+${Math.round(m.weekly_avg_hours)}h</div>
+                                <div style="font-size: 9px; font-weight: 800; color: #8b5cf6; text-transform: uppercase; letter-spacing: 0.5px;">Vibrancy</div>
+                                <div style="font-size: 18px; font-weight: 900; color: #0f172a; margin-top: 12px;">${p.tomorrow_day.substring(0,3)}</div>
+                                <div style="font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Best Day</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Section -->
+                <div style="background: #ffffff; border: 1px solid #f1f5f9; border-radius: 28px; padding: 24px; margin-bottom: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <div style="font-size: 14px; font-weight: 900; color: #0f172a;">Engagement Velocity</div>
+                        <div style="font-size: 10px; font-weight: 800; color: #64748b; background: #f8fafc; padding: 6px 12px; border-radius: 10px; display: flex; align-items: center; gap: 6px;">
+                            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236366f1' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 3v18h18'/%3E%3Cpath d='M7 16l4-4 4 4 6-6'/%3E%3C/svg%3E" style="width: 12px;"/> Bezier Interpolation
+                        </div>
+                    </div>
+                    
+                    <div style="height: 160px; width: 100%; position: relative; margin-top: 30px;">
+                        <svg viewBox="0 0 580 140" style="width: 100%; height: 100%; overflow: visible;">
+                            <!-- Vertical Grid Lines -->
+                            ${graphPoints.map(p => `
+                                <line x1="${p.x}" y1="0" x2="${p.x}" y2="140" stroke="#f1f5f9" stroke-width="1" />
+                            `).join('')}
+                            
+                            <!-- Bezier Path -->
+                            <path d="${bezierPath}" fill="none" stroke="#6366f1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+                            
+                            <!-- Area under curve -->
+                            <path d="${bezierPath} L ${graphPoints[graphPoints.length-1].x} 140 L ${graphPoints[0].x} 140 Z" fill="url(#areaGrad)" opacity="0.1" />
+                            
+                            <defs>
+                                <linearGradient id="areaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" stop-color="#6366f1" />
+                                    <stop offset="100%" stop-color="#ffffff" />
+                                </linearGradient>
+                            </defs>
+                            
+                            <!-- Points -->
+                            ${graphPoints.map((p, i) => `
+                                <circle cx="${p.x}" cy="${p.y}" r="6" fill="#6366f1" stroke="white" stroke-width="3" />
+                                <text x="${p.x}" y="170" text-anchor="middle" style="font-size: 11px; font-weight: 800; fill: #94a3b8; text-transform: uppercase;">
+                                    ${graphData[i].date.substring(5)}
+                                </text>
+                                <text x="${p.x}" y="${p.y - 15}" text-anchor="middle" style="font-size: 11px; font-weight: 900; fill: #6366f1;">
+                                    ${Math.round(graphData[i].hours)}%
+                                </text>
+                            `).join('')}
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- AI Insight -->
+                <div style="background: rgba(99, 102, 241, 0.03); border: 1px solid rgba(99, 102, 241, 0.1); border-radius: 28px; padding: 24px; display: flex; gap: 20px; align-items: flex-start; position: relative; overflow: hidden;">
+                    <div style="position: absolute; top: -20px; right: -20px; font-size: 80px; opacity: 0.03; font-weight: 900; pointer-events: none;">INSIGHT</div>
+                    <div style="width: 48px; height: 48px; background: white; border-radius: 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); flex-shrink: 0;">💡</div>
+                    <div>
+                        <div style="font-size: 14px; font-weight: 900; color: #0f172a; margin-bottom: 6px;">Executive Intelligence:</div>
+                        <div style="font-size: 13px; color: #475569; line-height: 1.6; font-weight: 600;">
+                            ${p.habit_summary}. Performance is on an ${regularityScore > 75 ? 'upward' : 'consistent'} trajectory, with a ${p.likelihood}% turnout predicted for tomorrow. ${streak > 3 ? 'Strong consistency streak detected.' : 'Maintains a standard engagement pattern.'} Recommend ${t.avg_accuracy > 85 ? 'maintaining current load' : 'monitoring task complexity'} due to ${t.avg_accuracy}% accuracy rating.
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div style="padding: 32px; overflow-y: auto; background: #ffffff;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px;">
-                    
-                    <!-- Attendance / Regularity -->
-                    <div class="main-forecast-card" style="padding: 24px; background: #ffffff; border: 1px solid #f1f5f9; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.02); border-radius: 28px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;">
-                        <div style="font-size: 14px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1px;">Attendance</div>
-                        
-                        <div style="position: relative; width: 160px; height: 160px; display: flex; align-items: center; justify-content: center;">
-                            <svg viewBox="0 0 100 100" style="width: 160px; height: 160px; transform: rotate(-90deg); position: absolute;">
-                                <circle cx="50" cy="50" r="45" fill="none" stroke="#f1f5f9" stroke-width="10" />
-                                <circle id="myStatsRegularityGauge" cx="50" cy="50" r="45" fill="none" stroke="url(#regRegGrad)" stroke-width="10" stroke-linecap="round" stroke-dasharray="283" stroke-dashoffset="283" style="transition: stroke-dashoffset 1.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);" />
-                                <defs>
-                                    <linearGradient id="regRegGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                                        <stop offset="0%" stop-color="#10b981" />
-                                        <stop offset="100%" stop-color="#059669" />
-                                    </linearGradient>
-                                </defs>
-                            </svg>
-                            <div style="text-align: center; z-index: 1;">
-                                <div id="myStatsRegularityValue" style="color: #059669; font-size: 38px; font-weight: 900; letter-spacing: -1px;">0%</div>
-                                <div style="font-size: 9px; font-weight: 850; color: #94a3b8; letter-spacing: 1px; margin-top: -4px;">REGULARITY</div>
-                            </div>
-                        </div>
-
-                        <div style="width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 8px;">
-                            <div style="background: #f8fafc; padding: 12px; border-radius: 16px; text-align: center;">
-                                <div style="font-size: 16px; font-weight: 800; color: #1e293b;">${m.avg_check_in || '--:--'}</div>
-                                <div style="font-size: 10px; color: #64748b; font-weight: 800;">AVG CHECK-IN</div>
-                            </div>
-                            <div style="background: #f8fafc; padding: 12px; border-radius: 16px; text-align: center;">
-                                <div style="font-size: 16px; font-weight: 800; color: #1e293b;">${p.likelihood}%</div>
-                                <div style="font-size: 10px; color: #64748b; font-weight: 800;">LIKELIHOOD TOMORROW</div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Task Accuracy -->
-                    <div class="main-forecast-card" style="padding: 24px; background: #ffffff; border: 1px solid #f1f5f9; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.02); border-radius: 28px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;">
-                        <div style="font-size: 14px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1px;">Work Efficiency</div>
-                        
-                        <div style="position: relative; width: 160px; height: 160px; display: flex; align-items: center; justify-content: center;">
-                            <svg viewBox="0 0 100 100" style="width: 160px; height: 160px; transform: rotate(-90deg); position: absolute;">
-                                <circle cx="50" cy="50" r="45" fill="none" stroke="#f1f5f9" stroke-width="10" />
-                                <circle id="myStatsAccuracyGauge" cx="50" cy="50" r="45" fill="none" stroke="url(#accGrad)" stroke-width="10" stroke-linecap="round" stroke-dasharray="283" stroke-dashoffset="283" style="transition: stroke-dashoffset 1.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);" />
-                                <defs>
-                                    <linearGradient id="accGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                                        <stop offset="0%" stop-color="#3b82f6" />
-                                        <stop offset="100%" stop-color="#2563eb" />
-                                    </linearGradient>
-                                </defs>
-                            </svg>
-                            <div style="text-align: center; z-index: 1;">
-                                <div id="myStatsAccuracyValue" style="color: #2563eb; font-size: 38px; font-weight: 900; letter-spacing: -1px;">0%</div>
-                                <div style="font-size: 9px; font-weight: 850; color: #94a3b8; letter-spacing: 1px; margin-top: -4px;">ACCURACY</div>
-                            </div>
-                        </div>
-
-                        <div style="width: 100%; display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 8px;">
-                            <div style="background: #f8fafc; padding: 12px; border-radius: 16px; text-align: center;">
-                                <div style="font-size: 16px; font-weight: 800; color: #1e293b;">${t.completed} / ${t.total_assigned}</div>
-                                <div style="font-size: 10px; color: #64748b; font-weight: 800;">TASKS COMPLETED</div>
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-            
-            <div style="text-align: center; margin-top: 10px; margin-bottom: 30px;">
-                <button onclick="document.body.style.overflow='auto';document.documentElement.style.overflow='auto';document.getElementById('employeePerformanceModal').remove()" style="width: auto; padding: 20px 100px; font-size: 15px; font-weight: 900; background: #0f172a; color: white; border: none; border-radius: 24px; cursor: pointer; transition: transform 0.2s, background 0.2s; box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.3);" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">CLOSE ANALYSIS</button>
+            <div style="padding: 24px 32px; background: #ffffff; border-top: 1px solid #f1f5f9; display: flex; justify-content: center;">
+                <button onclick="document.body.style.overflow='auto';document.documentElement.style.overflow='auto';document.getElementById('employeePerformanceModal').remove()" 
+                   style="width: 100%; padding: 18px; font-size: 14px; font-weight: 900; background: #0f172a; color: white; border: none; border-radius: 20px; cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 1px;">
+                   Acknowledge Analysis
+                </button>
             </div>
         </div>
     `;
@@ -870,31 +976,17 @@ function renderEmployeePerformanceModal(data, employeeId) {
         renderAvatar(data.avatar_emoji, avatarContainer);
     }
 
-    // Process animations after a short delay
+    // Process animations
     setTimeout(() => {
-        const regGauge = document.getElementById('myStatsRegularityGauge');
-        const regValue = document.getElementById('myStatsRegularityValue');
-        if (regGauge) {
-            const radius = 45;
-            const circumference = 2 * Math.PI * radius;
-            const offset = circumference - (regularityScore / 100) * circumference;
-            regGauge.style.strokeDashoffset = offset;
+        const gauge = document.getElementById('perfGauge');
+        const value = document.getElementById('perfValue');
+        if (gauge) {
+            const circumference = 276;
+            const offset = circumference - (p.likelihood / 100) * circumference;
+            gauge.style.strokeDashoffset = offset;
         }
-        if (regValue) {
-            animateValue(regValue, 0, regularityScore, 1000);
-        }
-
-        const accGauge = document.getElementById('myStatsAccuracyGauge');
-        const accValue = document.getElementById('myStatsAccuracyValue');
-        const taskAcc = t.avg_accuracy || 0;
-        if (accGauge) {
-            const radius = 45;
-            const circumference = 2 * Math.PI * radius;
-            const offset = circumference - (taskAcc / 100) * circumference;
-            accGauge.style.strokeDashoffset = offset;
-        }
-        if (accValue) {
-            animateValue(accValue, 0, taskAcc, 1000);
+        if (value) {
+            animateValue(value, 0, p.likelihood, 1500);
         }
     }, 100);
 }

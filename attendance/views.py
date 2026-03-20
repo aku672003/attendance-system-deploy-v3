@@ -3505,8 +3505,9 @@ def intelligence_hub_search(request):
         department = data.get('department')
         min_attendance = data.get('min_attendance')
         max_attendance = data.get('max_attendance')
+        mentor_id = data.get('mentor_id')
         
-        results = search_personnel(query, department, min_attendance, max_attendance)
+        results = search_personnel(query, department, min_attendance, max_attendance, mentor_id)
         
         return Response({
             'success': True,

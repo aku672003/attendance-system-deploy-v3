@@ -1,7 +1,7 @@
 import time
 import os
 from pathlib import Path
-from itsdangerous import URLSafeTimedSerializer
+from itsdangerous import URLSafeTimedSerializer  # type: ignore
 
 # Load .env if it exists
 def load_env():
@@ -17,7 +17,7 @@ def load_env():
 
 def generate_gated_token(user_id=1):
     load_env()
-    secret_key = os.getenv('ATTENDANCE_SECRET_KEY', 'hanuai-attendance-secret-shared-key')
+    secret_key = str(os.getenv('ATTENDANCE_SECRET_KEY', 'hanuai-attendance-secret-shared-key'))
     
     serializer = URLSafeTimedSerializer(secret_key)
     
@@ -32,7 +32,7 @@ def generate_gated_token(user_id=1):
     print(f"Gated Access Token Generator (itsdangerous)")
     print("-" * 60)
     print(f"Payload: {payload}")
-    print(f"Secret: {secret_key[:4]}...{secret_key[-4:]}")
+    print(f"Secret: {secret_key[:4]}...{secret_key[-4:]}")  # type: ignore
     print(f"\nGENERATED TOKEN:\n{token}")
     print("-" * 60)
     print(f"\nGATED URL PREVIEW (Valid for 1h):")

@@ -83,7 +83,7 @@ def calculate_forecast():
     Returns: (forecast_percentage, confidence_score, trend_indicator)
     """
     daily_data = calculate_daily_attendance_rates(30)
-    valid_rates = [d['rate'] for d in daily_data if d['rate'] > 0]
+    valid_rates = [float(d['rate']) for d in daily_data if isinstance(d.get('rate'), (int, float)) and d['rate'] > 0]
     
     if not valid_rates:
         return 0, 0, "STABLE"
@@ -95,12 +95,12 @@ def calculate_forecast():
     # Fallback to heuristic if ML model not available
     if forecast is None:
         recent_count = min(7, len(valid_rates))
-        forecast = sum(valid_rates[-recent_count:]) / recent_count
+        forecast = sum(list(valid_rates)[-recent_count:]) / recent_count
 
     # Confidence calculation (Stability based)
     try:
-        std_dev = statistics.stdev(valid_rates) if len(valid_rates) > 1 else 5
-        consistency = max(0, 100 - (std_dev * 3))
+        std_dev = statistics.stdev(valid_rates) if len(valid_rates) > 1 else 5.0
+        consistency = max(0.0, 100.0 - (std_dev * 3.0))
         # ML model presence increases confidence
         confidence_bonus = 1.1 if ml_engine.model else 1.0
         confidence = min(round(consistency * confidence_bonus, 0), 99)
@@ -137,7 +137,7 @@ def calculate_multi_day_forecast(days=7):
         # Fallback to heuristic (Moving Average)
         if pred is None:
             recent_count = min(7, len(temp_history))
-            pred = sum(temp_history[-recent_count:]) / recent_count
+            pred = sum(list(temp_history)[-recent_count:]) / recent_count
         
         pred = round(float(pred), 1)
         predictions.append({
@@ -208,7 +208,7 @@ def calculate_hybrid_forecast(predict_days=4):
         # Fallback to Moving Average
         if pred is None:
             recent_count = min(7, len(temp_history))
-            pred = sum(temp_history[-recent_count:]) / recent_count
+            pred = sum(list(temp_history)[-recent_count:]) / recent_count
         
         pred = round(float(pred), 1)
         predictions.append({
@@ -250,8 +250,8 @@ class AttendanceMLModel:
                 'avg_7d': sum(historical_rates[-7:]) / len(historical_rates[-7:]) if historical_rates else 0
             }
             return pd.DataFrame([features])
-        except ImportError:
-            # Re-raise to be caught by predict() or other callers
+        except (ImportError, Exception):
+            # Re-raise or handle pd properly
             raise
 
     def predict(self, date_obj, historical_rates):
@@ -260,8 +260,10 @@ class AttendanceMLModel:
         
         try:
             X = self._prepare_features(date_obj, historical_rates)
-            prediction = self.model.predict(X)[0]
-            return round(float(prediction), 1)
+            if self.model is not None:
+                prediction = self.model.predict(X)[0]
+                return round(float(prediction), 1)
+            return None
         except Exception as e:
             # Fallback to heuristic if prediction fails for any reason
             return None
@@ -288,7 +290,7 @@ class AttendanceMLModel:
                     'month': day['date'].month,
                     'is_weekend': 1 if day['date'].weekday() >= 5 else 0,
                     'prev_day_rate': rates[i-1],
-                    'avg_7d': sum(rates[i-7:i]) / 7,
+                    'avg_7d': sum(list(rates)[i-7:i]) / 7,
                     'target': rate
                 }
                 data.append(features)
@@ -411,8 +413,8 @@ def train_forecast_model():
     if len(all_valid_rates) > 2:
         final_avg = sum(all_valid_rates) / len(all_valid_rates)
         final_std = statistics.stdev(all_valid_rates)
-        cv = final_std / final_avg if final_avg > 0 else 1
-        stability = max(0, min(1.0, 1.0 - cv))
+        cv = final_std / final_avg if final_avg > 0 else 1.0
+        stability = max(0.0, min(1.0, 1.0 - cv))
     else:
         final_avg = sum(all_valid_rates) / len(all_valid_rates) if all_valid_rates else 0
         stability = 0.5
@@ -498,7 +500,7 @@ def get_trend_data(days=30):
         
         # Calculate moving average (using inclusive window)
         # We look back at the actual trend_data we've built so far
-        window = [t['attendance_rate'] for t in trend_data[-(6):]] + [rate]
+        window = [float(t['attendance_rate']) for t in list(trend_data)[-(6):]] + [float(rate)]
         moving_avg = sum(window) / len(window)
         
         trend_data.append({
@@ -511,7 +513,7 @@ def get_trend_data(days=30):
     return trend_data
 
 
-def search_personnel(query=None, department=None, min_attendance=None, max_attendance=None):
+def search_personnel(query=None, department=None, min_attendance=None, max_attendance=None, mentor_id=None):
     """
     Search personnel with attendance predictions (OPTIMIZED)
     Returns: list of employees with their attendance stats
@@ -519,6 +521,9 @@ def search_personnel(query=None, department=None, min_attendance=None, max_atten
     employees = Employee.objects.filter(role='employee')
     
     # Apply filters
+    if mentor_id:
+        employees = employees.filter(mentor_id=mentor_id)
+        
     if query:
         employees = employees.filter(
             Q(name__icontains=query) | 
@@ -740,10 +745,10 @@ def get_company_overview(days=30):
     
     hour_counts = {}
     for t in recent_check_ins:
-        h = t.hour
-        hour_counts[h] = hour_counts.get(h, 0) + 1
+        h = int(t.hour)
+        hour_counts[h] = int(hour_counts.get(h, 0)) + 1
     
-    peak_hour = max(hour_counts, key=hour_counts.get) if hour_counts else 9
+    peak_hour = max(hour_counts, key=lambda k: hour_counts[k]) if hour_counts else 9
     peak_hour_str = f"{peak_hour:02d}:00 - {peak_hour+1:02d}:00"
     
     # NEW: Weekly Pattern (Mon-Fri Average) - FIXED: Filter out zero days to avoid skewing
@@ -751,9 +756,10 @@ def get_company_overview(days=30):
         weekly_pattern_rates = {0: [], 1: [], 2: [], 3: [], 4: []} # Mon=0 to Fri=4
         weekly_pattern_counts = {0: [], 1: [], 2: [], 3: [], 4: []}
         for t in trend_data:
-            d = datetime.strptime(t['date'], '%Y-%m-%d').date()
+            d = datetime.strptime(str(t['date']), '%Y-%m-%d').date()
             w = d.weekday()
-            if w < 5 and t['present_count'] > 0: # Only count active workdays
+            present_val = t.get('present_count', 0)
+            if w < 5 and isinstance(present_val, (int, float)) and present_val > 0: # Only count active workdays
                 weekly_pattern_rates[w].append(t['attendance_rate'])
                 weekly_pattern_counts[w].append(t['present_count'])
         
@@ -862,7 +868,7 @@ def get_company_overview(days=30):
         'trend_history': trend_history,
         'attendance_streak': streak,
         'busiest_impact': busiest_impact,
-        'model_accuracy': load_model_state().get('stability_factor', 0.95) * 100 if load_model_state() else 95.0,
+        'model_accuracy': (load_model_state() or {}).get('stability_factor', 0.95) * 100,
         'forecast_7d': calculate_multi_day_forecast(7),
         'hybrid_forecast': calculate_hybrid_forecast(4),
         'ai_insight': ai_insight
