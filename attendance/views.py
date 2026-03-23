@@ -2018,12 +2018,31 @@ def employee_performance_analysis(request, employee_id):
             date__range=[start_date, end_date]
         ).order_by('-date')
 
-        history = [{
-            'date': r.date.strftime('%Y-%m-%d'),
-            'status': r.status,
-            'type': r.type,
-            'hours': float(r.total_hours)
-        } for r in records]
+        history = []
+        now_local = timezone.localtime(timezone.now())
+        
+        for r in records:
+            hours = float(r.total_hours)
+            
+            # If currently checked in but not checked out, calculate hours so far
+            if not r.check_out_time and r.check_in_time and r.date == now_local.date():
+                try:
+                    check_in_t = datetime.strptime(str(r.check_in_time), '%H:%M:%S').time()
+                    check_in_dt = timezone.make_aware(datetime.combine(r.date, check_in_t))
+                    # Calculate hours since check-in
+                    hours = round((now_local - check_in_dt).total_seconds() / 3600, 2)
+                    # Cap at a reasonable max (e.g. 14h) to avoid outliers if they forgot to check out yesterday 
+                    # (though r.date == now_local.date() handles today)
+                    hours = max(0.0, min(hours, 14.0))
+                except Exception:
+                    pass
+            
+            history.append({
+                'date': r.date.strftime('%Y-%m-%d'),
+                'status': r.status,
+                'type': r.type,
+                'hours': hours
+            })
 
         # 2. Performance Metrics
         num_days = (end_date - start_date).days + 1
@@ -2181,13 +2200,19 @@ def employee_performance_analysis(request, employee_id):
 
         avg_accuracy = total_accuracy_points / (tasks_evaluated or 1)
         avg_span_h = total_span_hours / (spans_counted or 1)
+        
+        total_assigned = tasks_base.count()
+        completed_count = completed_tasks.count()
+        completion_rate = (completed_count / total_assigned * 100) if total_assigned > 0 else 100.0
+        work_efficiency = (completion_rate * 0.4) + (avg_accuracy * 0.6)
 
         task_stats = {
-            'total_assigned': tasks_base.count(),
+            'total_assigned': total_assigned,
             'todo': tasks_base.filter(status='todo').count(),
             'in_progress': tasks_base.filter(status='in_progress').count(),
-            'completed': completed_tasks.count(),
+            'completed': completed_count,
             'avg_accuracy': round(float(avg_accuracy), 1),
+            'work_efficiency': round(float(work_efficiency), 1),
             'avg_span_hours': round(float(avg_span_h), 1)
         }
 

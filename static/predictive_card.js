@@ -474,24 +474,11 @@ function openPredictiveAnalysisModal(data) {
                     <button onclick="closePredictiveModal()" style="background: #f1f5f9; border: none; font-size: 20px; width: 40px; height: 40px; border-radius: 12px; cursor: pointer; color: #64748b; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">&times;</button>
                 </div>
 
-                <!-- Executive Summary Cards -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 16px; margin-bottom: 24px;">
-                    <div style="background: #f8fafc; padding: 20px; border-radius: 24px; border: 1px solid #e2e8f0; position: relative;">
-                        <div style="position: absolute; top: 12px; right: 12px; font-size: 14px;">⚡</div>
-                        <div style="font-size: 10px; font-weight: 850; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Trust Factor</div>
-                        <div style="font-size: 24px; font-weight: 900; color: #0f172a;">${Math.round(summary.model_accuracy || 95)}%</div>
-                        <div style="font-size: 10px; font-weight: 700; color: #10b981; margin-top: 4px;">High Probability</div>
-                    </div>
-                    <div style="background: #f8fafc; padding: 20px; border-radius: 24px; border: 1px solid #e2e8f0; position: relative;">
-                        <div style="position: absolute; top: 12px; right: 12px; font-size: 14px;">🔥</div>
-                        <div style="font-size: 10px; font-weight: 850; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Streak</div>
-                        <div style="font-size: 24px; font-weight: 900; color: #0f172a;">${summary.attendance_streak}D</div>
-                        <div style="font-size: 10px; font-weight: 700; color: #6366f1; margin-top: 4px;">Active Pattern</div>
-                    </div>
-                    <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 20px; border-radius: 24px; color: white;">
-                        <div style="font-size: 10px; font-weight: 850; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Tomorrow's Load</div>
-                        <div style="font-size: 24px; font-weight: 900;">${predictedEmployees} <span style="font-size: 14px; font-weight: 600; opacity: 0.8;">Expected</span></div>
-                        <div style="font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.9); margin-top: 4px;">Out of ${summary.total_employees} Personnel</div>
+                <div style="display: flex; justify-content: center; margin-bottom: 24px;">
+                    <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 24px 40px; border-radius: 28px; color: white; min-width: 320px; text-align: center; box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.4);">
+                        <div style="font-size: 11px; font-weight: 850; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Tomorrow's Expected Load</div>
+                        <div style="font-size: 32px; font-weight: 900;">${predictedEmployees} <span style="font-size: 16px; font-weight: 600; opacity: 0.8;">Personnel</span></div>
+                        <div style="font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.9); margin-top: 6px;">Out of ${summary.total_employees} Total Force</div>
                     </div>
                 </div>
 
@@ -802,10 +789,22 @@ function renderEmployeePerformanceModal(data, employeeId) {
         return [p1x, p1y, p2x, p2y];
     };
 
-    // Graph points from last 6 entries in history
+    // Graph points from last 6 entries in history + 1 prediction for tomorrow
     const graphData = [...history].reverse().slice(-6);
+    
+    // Add prediction for tomorrow
+    const tomorrowDate = new Date();
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    const predictedHours = (p.likelihood / 100) * 8;
+    
+    graphData.push({
+        date: tomorrowDate.toISOString().split('T')[0],
+        hours: predictedHours,
+        is_prediction: true
+    });
+
     const graphPoints = graphData.map((v, i) => ({ 
-        x: i * 115, 
+        x: i * 95, 
         y: 120 - (Math.min(v.hours, 12) / 12 * 100) 
     }));
     
@@ -843,24 +842,11 @@ function renderEmployeePerformanceModal(data, employeeId) {
                     <button onclick="document.body.style.overflow='auto';document.documentElement.style.overflow='auto';document.getElementById('employeePerformanceModal').remove()" style="background: #f1f5f9; border: none; font-size: 20px; width: 40px; height: 40px; border-radius: 12px; cursor: pointer; color: #64748b; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">&times;</button>
                 </div>
 
-                <!-- Top Summary Cards -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 16px; margin-bottom: 24px;">
-                    <div style="background: #f8fafc; padding: 20px; border-radius: 24px; border: 1px solid #e2e8f0; position: relative;">
-                        <div style="position: absolute; top: 12px; right: 12px; font-size: 14px;">⚡</div>
-                        <div style="font-size: 10px; font-weight: 850; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Trust Factor</div>
-                        <div style="font-size: 24px; font-weight: 900; color: #0f172a;">${t.avg_accuracy}%</div>
-                        <div style="font-size: 10px; font-weight: 700; color: #10b981; margin-top: 4px;">High Probability</div>
-                    </div>
-                    <div style="background: #f8fafc; padding: 20px; border-radius: 24px; border: 1px solid #e2e8f0; position: relative;">
-                        <div style="position: absolute; top: 12px; right: 12px; font-size: 14px;">🔥</div>
-                        <div style="font-size: 10px; font-weight: 850; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Streak</div>
-                        <div style="font-size: 24px; font-weight: 900; color: #0f172a;">${streak}D</div>
-                        <div style="font-size: 10px; font-weight: 700; color: #6366f1; margin-top: 4px;">Active Pattern</div>
-                    </div>
-                    <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 20px; border-radius: 24px; color: white;">
-                        <div style="font-size: 10px; font-weight: 850; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Tomorrow's Load</div>
-                        <div style="font-size: 24px; font-weight: 900;">${p.likelihood}% <span style="font-size: 14px; font-weight: 600; opacity: 0.8;">Expected</span></div>
-                        <div style="font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.9); margin-top: 4px;">Prediction Logic Active</div>
+                <div style="display: flex; justify-content: center; margin-bottom: 24px;">
+                    <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 24px 40px; border-radius: 28px; color: white; min-width: 320px; text-align: center; box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.4);">
+                        <div style="font-size: 11px; font-weight: 850; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Attendance Probability</div>
+                        <div style="font-size: 32px; font-weight: 900;">${p.likelihood}% <span style="font-size: 16px; font-weight: 600; opacity: 0.8;">Likely</span></div>
+                        <div style="font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.9); margin-top: 6px;">AI Predicted Pattern</div>
                     </div>
                 </div>
 
@@ -891,13 +877,21 @@ function renderEmployeePerformanceModal(data, employeeId) {
                             <div>
                                 <div style="font-size: 18px; font-weight: 900; color: #0f172a;">${regularityScore}%</div>
                                 <div style="font-size: 9px; font-weight: 800; color: #10b981; text-transform: uppercase; letter-spacing: 0.5px;">Punctuality</div>
-                                <div style="font-size: 18px; font-weight: 900; color: #0f172a; margin-top: 12px;">${m.avg_check_in || '10:00'}</div>
-                                <div style="font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Peak Start</div>
                             </div>
                             <div>
                                 <div style="font-size: 18px; font-weight: 900; color: #0f172a;">+${Math.round(m.weekly_avg_hours)}h</div>
                                 <div style="font-size: 9px; font-weight: 800; color: #8b5cf6; text-transform: uppercase; letter-spacing: 0.5px;">Vibrancy</div>
-                                <div style="font-size: 18px; font-weight: 900; color: #0f172a; margin-top: 12px;">${p.tomorrow_day.substring(0,3)}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 18px; font-weight: 900; color: #0f172a;">${t.work_efficiency}%</div>
+                                <div style="font-size: 9px; font-weight: 800; color: #4338ca; text-transform: uppercase; letter-spacing: 0.5px;">Work Efficiency</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 18px; font-weight: 900; color: #0f172a;">${m.avg_check_in || '10:00'}</div>
+                                <div style="font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Peak Start</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 18px; font-weight: 900; color: #0f172a;">${p.tomorrow_day.substring(0,3)}</div>
                                 <div style="font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Best Day</div>
                             </div>
                         </div>
@@ -916,8 +910,8 @@ function renderEmployeePerformanceModal(data, employeeId) {
                     <div style="height: 160px; width: 100%; position: relative; margin-top: 30px;">
                         <svg viewBox="0 0 580 140" style="width: 100%; height: 100%; overflow: visible;">
                             <!-- Vertical Grid Lines -->
-                            ${graphPoints.map(p => `
-                                <line x1="${p.x}" y1="0" x2="${p.x}" y2="140" stroke="#f1f5f9" stroke-width="1" />
+                            ${graphPoints.map((pt, i) => `
+                                <line x1="${pt.x}" y1="0" x2="${pt.x}" y2="140" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="${graphData[i].is_prediction ? '4,4' : '0'}" />
                             `).join('')}
                             
                             <!-- Bezier Path -->
@@ -934,13 +928,13 @@ function renderEmployeePerformanceModal(data, employeeId) {
                             </defs>
                             
                             <!-- Points -->
-                            ${graphPoints.map((p, i) => `
-                                <circle cx="${p.x}" cy="${p.y}" r="6" fill="#6366f1" stroke="white" stroke-width="3" />
-                                <text x="${p.x}" y="170" text-anchor="middle" style="font-size: 11px; font-weight: 800; fill: #94a3b8; text-transform: uppercase;">
-                                    ${graphData[i].date.substring(5)}
+                            ${graphPoints.map((pt, i) => `
+                                <circle cx="${pt.x}" cy="${pt.y}" r="6" fill="${graphData[i].is_prediction ? 'white' : '#6366f1'}" stroke="#6366f1" stroke-width="3" />
+                                <text x="${pt.x}" y="170" text-anchor="middle" style="font-size: 11px; font-weight: 850; fill: ${graphData[i].is_prediction ? '#6366f1' : '#94a3b8'}; text-transform: uppercase;">
+                                    ${new Date(graphData[i].date).toLocaleDateString('en-US', {weekday: 'short'}).toUpperCase()}
                                 </text>
-                                <text x="${p.x}" y="${p.y - 15}" text-anchor="middle" style="font-size: 11px; font-weight: 900; fill: #6366f1;">
-                                    ${Math.round(graphData[i].hours)}%
+                                <text x="${pt.x}" y="${pt.y - 15}" text-anchor="middle" style="font-size: 11px; font-weight: 900; fill: #6366f1;">
+                                    ${graphData[i].hours.toFixed(1)}h
                                 </text>
                             `).join('')}
                         </svg>
