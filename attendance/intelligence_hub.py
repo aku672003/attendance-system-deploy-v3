@@ -869,19 +869,27 @@ def get_company_overview(days=30):
     # Get trend data (already optimized)
     trend_data = get_trend_data(days)
     
-    # NEW: Calculate Peak Operational Hours (Company-wide)
+    # NEW: Calculate Peak Operational Hours (Company-wide) and Average Check-in
     recent_check_ins = AttendanceRecord.objects.filter(
         date__gte=start_date,
         check_in_time__isnull=False
     ).values_list('check_in_time', flat=True)
     
     hour_counts = {}
+    total_sec = 0
     for t in recent_check_ins:
         h = int(t.hour)
         hour_counts[h] = int(hour_counts.get(h, 0)) + 1
+        total_sec += (h * 3600 + t.minute * 60 + t.second)
     
     peak_hour = max(hour_counts, key=lambda k: hour_counts[k]) if hour_counts else 9
     peak_hour_str = f"{peak_hour:02d}:00 - {peak_hour+1:02d}:00"
+    
+    if recent_check_ins:
+        avg_sec = total_sec / len(recent_check_ins)
+        avg_check_in_str = f"{int(avg_sec // 3600):02d}:{int((avg_sec % 3600) // 60):02d}"
+    else:
+        avg_check_in_str = "09:30"
     
     # NEW: Weekly Pattern (Mon-Fri Average) - FIXED: Filter out zero days to avoid skewing
     try:
@@ -990,6 +998,7 @@ def get_company_overview(days=30):
         'confidence': confidence,
         'trend': trend_indicator,
         'peak_hour': peak_hour_str,
+        'avg_check_in': avg_check_in_str,
         'peak_day': peak_day,
         'wfh_ratio': wfh_ratio,
         'late_rate': late_rate,

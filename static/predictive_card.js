@@ -523,8 +523,8 @@ function openPredictiveAnalysisModal(data) {
                                 <div style="font-size: 10px; color: #8b5cf6; font-weight: 800;">VIBRANCY</div>
                             </div>
                             <div>
-                                <div style="font-size: 18px; font-weight: 800; color: #1e293b;">${summary.peak_hour ? summary.peak_hour.split(' - ')[0] : 'N/A'}</div>
-                                <div style="font-size: 10px; color: #64748b; font-weight: 800;">PEAK START</div>
+                                <div style="font-size: 18px; font-weight: 800; color: #1e293b;">${summary.avg_check_in || 'N/A'}</div>
+                                <div style="font-size: 10px; color: #64748b; font-weight: 800;">AVG CHECK-IN</div>
                             </div>
                             <div>
                                 <div style="font-size: 18px; font-weight: 800; color: #1e293b;">${(summary.peak_day || 'N/A').substring(0, 3)}</div>
@@ -882,7 +882,7 @@ function renderEmployeePerformanceModal(data, employeeId) {
                         <div style="font-size: 11px; font-weight: 850; color: #94a3b8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
                             Analysis Summary <span style="height: 1px; flex: 1; background: #f1f5f9;"></span>
                         </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;">
                             <div>
                                 <div style="font-size: 18px; font-weight: 900; color: #0f172a;">${regularityScore}%</div>
                                 <div style="font-size: 9px; font-weight: 800; color: #10b981; text-transform: uppercase; letter-spacing: 0.5px;">Punctuality</div>
@@ -897,7 +897,11 @@ function renderEmployeePerformanceModal(data, employeeId) {
                             </div>
                             <div>
                                 <div style="font-size: 18px; font-weight: 900; color: #0f172a;">${m.avg_check_in || '10:00'}</div>
-                                <div style="font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Peak Start</div>
+                                <div style="font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Avg Check-in</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 18px; font-weight: 900; color: #0f172a;">${m.avg_hours_present || '0'}h</div>
+                                <div style="font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Avg Working Hrs</div>
                             </div>
                             <div>
                                 <div style="font-size: 18px; font-weight: 900; color: #0f172a;">${p.tomorrow_day.substring(0,3)}</div>
