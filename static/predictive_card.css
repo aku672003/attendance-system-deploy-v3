@@ -714,10 +714,7 @@ body.dark-mode #employeePerformanceModal .modal-content {
     color: #ffffff !important;
 }
 
-body.dark-mode #predictiveModal div[style*="background"],
-body.dark-mode #employeePerformanceModal div[style*="background"] {
-    background: transparent !important;
-}
+/* Removed aggressive transparent inline background override */
 
 body.dark-mode .predictive-header {
     background: #050505 !important;

@@ -649,9 +649,9 @@ function createPersonnelSearchModal() {
     modal.id = 'personnelSearchModal';
     modal.className = 'modal';
     modal.innerHTML = `
-        <div class="modal-content" style="max-width: 1000px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="margin: 0;">Personnel Search</h3>
+        <div class="modal-content" style="max-width: 1000px; padding: 32px; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.1);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h3 style="margin: 0; font-weight: 800; font-size: 1.5rem;">Personnel Search</h3>
                 <button onclick="closePersonnelSearchModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--gray-500);">×</button>
             </div>
             <div style="display: flex; gap: 12px; margin-bottom: 20px;">
@@ -834,7 +834,7 @@ function renderEmployeePerformanceModal(data, employeeId) {
     const modal = document.createElement('div');
     modal.id = 'employeePerformanceModal';
     modal.className = 'modal active';
-    modal.style.zIndex = '2101';
+    modal.style.zIndex = '999999';
 
     modal.innerHTML = `
         <div class="predictive-modal modal-content" style="width: 680px; max-width: 95vw; max-height: 96vh; padding: 0 !important; overflow: hidden; background: white; border: none; display: flex; flex-direction: column; border-radius: 32px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">

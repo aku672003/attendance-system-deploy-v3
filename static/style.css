@@ -10363,7 +10363,11 @@ body.dark-mode .modal-content .overview-footer-card {
 }
 
 /* Fix for any remaining semi-transparent modal backdrops if desired */
-/* body.dark-mode .modal { background: rgba(0, 0, 0, 0.8) !important; } */
+body.dark-mode .modal { 
+    background: rgba(0, 0, 0, 0.6) !important; 
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+}
 
 /* ==================== PERFORMANCE MODAL SOLID BLACK OVERRIDES ==================== */
 /* 
@@ -10371,6 +10375,8 @@ body.dark-mode .modal-content .overview-footer-card {
    light-mode styles in script.js.
 */
 
+body.dark-mode #predictiveModal .modal-content,
+body.dark-mode #predictiveModal .predictive-modal,
 body.dark-mode #employeePerformanceModal .modal-content,
 body.dark-mode #employeePerformanceModal .predictive-modal {
     background: #000000 !important;
@@ -10378,50 +10384,63 @@ body.dark-mode #employeePerformanceModal .predictive-modal {
 }
 
 /* Modal Header - Solid Black or very dark instead of Indigo */
+body.dark-mode #predictiveModal .predictive-header,
 body.dark-mode #employeePerformanceModal .predictive-header {
     background: #050505 !important;
     border-bottom: 2px solid rgba(255, 255, 255, 0.1) !important;
 }
 
 /* Regularity Summary Banner */
+body.dark-mode #predictiveModal div[style*="background: white; border-bottom: 1px solid #e2e8f0"],
 body.dark-mode #employeePerformanceModal div[style*="background: white; border-bottom: 1px solid #e2e8f0"] {
     background: #0a0a0a !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
 /* Modal Body Container */
+body.dark-mode #predictiveModal .stats-modal-body,
 body.dark-mode #employeePerformanceModal .stats-modal-body {
     background: #000000 !important;
 }
 
 /* Inner Glass Cards & Stat Boxes */
+body.dark-mode #predictiveModal .glass-card,
 body.dark-mode #employeePerformanceModal .glass-card {
     background: #0a0a0a !important;
     border: 1px solid rgba(255, 255, 255, 0.08) !important;
     box-shadow: none !important;
 }
 
+body.dark-mode #predictiveModal div[style*="background: #f1f5f9"],
 body.dark-mode #employeePerformanceModal div[style*="background: #f1f5f9"] {
     background: #111111 !important;
 }
 
 /* Progress Bar Backgrounds */
+body.dark-mode #predictiveModal div[style*="background: #e2e8f0"],
 body.dark-mode #employeePerformanceModal div[style*="background: #e2e8f0"] {
     background: #27272a !important;
 }
 
 /* Labels and text colors that usually get lost */
+body.dark-mode #predictiveModal div[style*="color: var(--gray-500)"],
+body.dark-mode #predictiveModal span[style*="color: var(--gray-500)"],
 body.dark-mode #employeePerformanceModal div[style*="color: var(--gray-500)"],
 body.dark-mode #employeePerformanceModal span[style*="color: var(--gray-500)"] {
     color: #a1a1aa !important;
 }
 
+body.dark-mode #predictiveModal h3,
+body.dark-mode #predictiveModal h2,
 body.dark-mode #employeePerformanceModal h3,
 body.dark-mode #employeePerformanceModal h2 {
     color: #ffffff !important;
 }
 
 /* Force dark on any div with background: white or #f8fafc inside this modal */
+body.dark-mode #predictiveModal div[style*="background: white"],
+body.dark-mode #predictiveModal div[style*="background: #f8fafc"],
+body.dark-mode #predictiveModal div[style*="background: #ffffff"],
 body.dark-mode #employeePerformanceModal div[style*="background: white"],
 body.dark-mode #employeePerformanceModal div[style*="background: #f8fafc"],
 body.dark-mode #employeePerformanceModal div[style*="background: #ffffff"] {
@@ -10429,11 +10448,13 @@ body.dark-mode #employeePerformanceModal div[style*="background: #ffffff"] {
 }
 
 /* Ensure the likelihood banner also looks dark */
+body.dark-mode #predictiveModal div[style*="background: rgba(16, 185, 129, 0.05)"],
 body.dark-mode #employeePerformanceModal div[style*="background: rgba(16, 185, 129, 0.05)"] {
     background: rgba(16, 185, 129, 0.1) !important;
     border-color: rgba(16, 185, 129, 0.2) !important;
 }
 
+body.dark-mode #predictiveModal div[style*="background: #f8fafc"],
 body.dark-mode #employeePerformanceModal div[style*="background: #f8fafc"] {
     background: #0a0a0a !important;
 }
@@ -10444,6 +10465,7 @@ body.dark-mode #employeePerformanceModal div[style*="background: #f8fafc"] {
    blue gradients or light-grey backgrounds in dark mode.
 */
 
+body.dark-mode #predictiveModal .predictive-header,
 body.dark-mode #employeePerformanceModal .predictive-header,
 body.dark-mode .predictive-header {
     background: #000000 !important;
@@ -10451,16 +10473,21 @@ body.dark-mode .predictive-header {
     border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
+body.dark-mode #predictiveModal div[style*="background: white"],
+body.dark-mode #predictiveModal div[style*="background: #ffffff"],
+body.dark-mode #predictiveModal div[style*="background:#ffffff"],
 body.dark-mode #employeePerformanceModal div[style*="background: white"],
 body.dark-mode #employeePerformanceModal div[style*="background: #ffffff"],
 body.dark-mode #employeePerformanceModal div[style*="background:#ffffff"] {
     background: #000000 !important;
 }
 
+body.dark-mode #predictiveModal .stats-modal-body,
 body.dark-mode #employeePerformanceModal .stats-modal-body {
     background: #000000 !important;
 }
 
+body.dark-mode #predictiveModal .glass-card,
 body.dark-mode #employeePerformanceModal .glass-card {
     background: #050505 !important;
     border: 1px solid rgba(255, 255, 255, 0.1) !important;
@@ -10468,19 +10495,19 @@ body.dark-mode #employeePerformanceModal .glass-card {
 }
 
 /* Specific fix for the Regularity Summary Banner background */
+body.dark-mode #predictiveModal div[style*="Regularity Score"],
 body.dark-mode #employeePerformanceModal div[style*="Regularity Score"] {
     background: #000000 !important;
 }
 
-/* Force dark on any child with light background inline styles */
-body.dark-mode #employeePerformanceModal *[style*="background: white"],
-body.dark-mode #employeePerformanceModal *[style*="background: #f"],
-body.dark-mode #employeePerformanceModal *[style*="background:#f"] {
-    background-color: #000000 !important;
-    background-image: none !important;
-}
+/* Removed aggressive wildcard override for [style*="background: #f"] which breaks gradients */
 
 /* Fix text contrast for solid black */
+body.dark-mode #predictiveModal h2,
+body.dark-mode #predictiveModal h3,
+body.dark-mode #predictiveModal div,
+body.dark-mode #predictiveModal span,
+body.dark-mode #predictiveModal p,
 body.dark-mode #employeePerformanceModal h2,
 body.dark-mode #employeePerformanceModal h3,
 body.dark-mode #employeePerformanceModal div,
@@ -10489,6 +10516,7 @@ body.dark-mode #employeePerformanceModal p {
     color: #ffffff !important;
 }
 
+body.dark-mode #predictiveModal div[style*="color: var(--gray-500)"],
 body.dark-mode #employeePerformanceModal div[style*="color: var(--gray-500)"] {
     color: #a1a1aa !important;
 }
