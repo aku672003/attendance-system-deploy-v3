@@ -125,14 +125,23 @@ function updateIntelligenceHubUI(data) {
             trendBadge.className = `intelligence-hub-trend-badge ${trend}`;
         }
 
-        // Update Last Trained Info
+        // Update Last Trained Info for Admin
         const lastTrainedEl = document.getElementById('lastTrainedText');
         if (lastTrainedEl && f.model_state && f.model_state.last_trained) {
             lastTrainedEl.textContent = `Last Trained: ${f.model_state.last_trained}`;
         }
 
+        // === Employee Card ===
         const regularityEl = document.getElementById('hubRegularityEmployee');
         if (regularityEl) regularityEl.textContent = `${f.percentage}%`;
+
+        const confidenceEmployeeEl = document.getElementById('hubConfidenceEmployee');
+        if (confidenceEmployeeEl) confidenceEmployeeEl.textContent = `${f.confidence}%`;
+
+        const lastTrainedEmployeeEl = document.getElementById('lastTrainedTextEmployee');
+        if (lastTrainedEmployeeEl && f.model_state && f.model_state.last_trained) {
+            lastTrainedEmployeeEl.textContent = `Last Trained: ${f.model_state.last_trained}`;
+        }
 
         // Display AI Insight if available (Commented out to show in Analysis only)
         /*

@@ -344,7 +344,7 @@ body {
 /* Stats Grid */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
     gap: 16px;
     margin-bottom: 24px;
 }
@@ -580,7 +580,7 @@ body {
 /* Actions Grid */
 .actions-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
     gap: 24px;
     margin-bottom: 32px;
 }
@@ -903,12 +903,22 @@ body {
 .modal-content {
     background: var(--white);
     border-radius: 16px;
-    padding: 32px;
+    padding: 0; /* Removed padding to allow header/footer to span full width */
     max-width: 500px;
     width: 90%;
-    max-height: 90vh;
-    overflow-y: auto;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Changed from overflow-y: auto to let children handle it if needed, but we'll see */
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    position: relative;
+}
+
+/* Base modal body for standard modals that don't use premium classes */
+.modal-body {
+    padding: 32px;
+    overflow-y: auto;
+    flex: 1;
 }
 
 .calendar-modal-content {
@@ -1500,23 +1510,31 @@ body {
     }
 
     .form-row {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr !important;
         gap: 12px;
     }
 
     .admin-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr !important;
     }
 
     .stats-grid,
     .actions-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr !important;
         gap: 16px;
     }
 
     .office-selection {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr !important;
         gap: 16px;
+    }
+
+    /* Force widgets to span only 1 column on mobile regardless of saved size */
+    .widget-sm,
+    .widget-md,
+    .widget-lg,
+    .widget-xl {
+        grid-column: span 1 !important;
     }
 
     .camera-controls {
@@ -5650,7 +5668,7 @@ input:checked+.slider:before {
     .modal-content {
         width: 95% !important;
         margin: 10px auto !important;
-        padding: 20px !important;
+        padding: 0 !important;
     }
 
     .btn,
@@ -5740,6 +5758,8 @@ input:checked+.slider:before {
 
 .modal-body-premium {
     padding: 32px;
+    overflow-y: auto; /* Ensure body is scrollable */
+    flex: 1; /* Take up available space */
 }
 
 .export-date-grid {
@@ -5801,7 +5821,9 @@ input:checked+.slider:before {
     display: flex;
     gap: 16px;
     justify-content: flex-end;
-    margin-top: 32px;
+    padding: 24px 32px; /* Added padding */
+    background: #f8fafc; /* Added background for footer */
+    border-top: 1px solid var(--gray-200); /* Added divider */
 }
 
 /* Responsive adjustments for Export Modal */
@@ -8529,15 +8551,27 @@ body.dark-mode #mentorStatusSection h4 {
 .widget-resize-controls {
     display: none;
     position: absolute;
-    bottom: 8px;
+    bottom: 12px;
     left: 50%;
     transform: translateX(-50%);
-    background: var(--primary-color);
-    border-radius: 20px;
-    padding: 4px 12px;
-    gap: 8px;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 30px;
+    padding: 6px 16px;
+    gap: 4px;
     z-index: 100;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.dark-mode .widget-resize-controls {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .editing .widget-resize-controls {
@@ -8547,12 +8581,23 @@ body.dark-mode #mentorStatusSection h4 {
 .editing.stat-card,
 .editing.action-card {
     cursor: grab;
-    border: 2px dashed rgba(var(--primary-rgb), 0.3) !important;
+    border: 2px solid var(--primary-color) !important;
+    box-shadow: 0 0 0 4px rgba(var(--primary-rgb), 0.1), 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    transform: scale(0.98);
+    transition: all 0.2s ease;
+}
+
+.editing.stat-card:hover,
+.editing.action-card:hover {
+    border-color: var(--secondary-color) !important;
+    box-shadow: 0 0 0 6px rgba(var(--secondary-rgb), 0.15), 0 15px 30px -10px rgba(0, 0, 0, 0.15);
+    background: rgba(var(--primary-rgb), 0.02);
 }
 
 .editing.stat-card:active,
 .editing.action-card:active {
     cursor: grabbing;
+    transform: scale(0.96);
 }
 
 .edit-mode-active .widget-resize-controls {
@@ -8562,22 +8607,32 @@ body.dark-mode #mentorStatusSection h4 {
 .resize-btn {
     background: transparent;
     border: none;
-    color: white;
-    font-size: 10px;
-    font-weight: 800;
+    color: var(--gray-700);
+    font-size: 11px;
+    font-weight: 700;
     cursor: pointer;
-    padding: 2px 6px;
-    border-radius: 4px;
-    text-transform: uppercase;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+body.dark-mode .resize-btn {
+    color: rgba(255, 255, 255, 0.8);
 }
 
 .resize-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(var(--primary-rgb), 0.1);
+    color: var(--primary-color);
 }
 
 .resize-btn.active {
-    background: white;
-    color: var(--primary-color);
+    background: var(--primary-color);
+    color: white;
+    box-shadow: 0 4px 10px rgba(var(--primary-rgb), 0.3);
 }
 
 /* Widget Sizing Classes */
@@ -8610,6 +8665,12 @@ body.dark-mode #mentorStatusSection h4 {
     height: 200px;
 }
 
+/* XL: 4-Column Area */
+.widget-xl {
+    grid-column: span 4;
+    height: 200px;
+}
+
 @media (max-width: 1200px) {
     .widget-md {
         grid-column: span 2;
@@ -8621,6 +8682,7 @@ body.dark-mode #mentorStatusSection h4 {
     .widget-sm,
     .widget-md,
     .widget-lg,
+    .widget-xl,
     .widget-full {
         grid-column: span 1;
         aspect-ratio: auto;
@@ -8649,14 +8711,21 @@ body.dark-mode #mentorStatusSection h4 {
 }
 
 .edit-btn-group {
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(10px);
-    padding: 8px 16px;
-    border-radius: 30px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(15px) saturate(160%);
+    -webkit-backdrop-filter: blur(15px) saturate(160%);
+    padding: 10px 20px;
+    border-radius: 40px;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2), inset 0 0 0 1px rgba(255, 255, 255, 0.4);
     display: flex;
-    gap: 8px;
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    gap: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+body.dark-mode .edit-btn-group {
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
 }
 /* Mentor Status Banner */
 #mentorStatusContainer {
@@ -10551,4 +10620,17 @@ body.dark-mode .loader-subtitle {
 body.dark-mode .loader-ring {
     border-color: rgba(255, 255, 255, 0.1);
     border-top-color: var(--primary-color);
+}
+
+/* Generic Widget Resizing Classes */
+.widget-sm {
+    grid-column: span 1 !important;
+}
+
+.widget-md {
+    grid-column: span 2 !important;
+}
+
+.widget-lg {
+    grid-column: span 3 !important;
 }

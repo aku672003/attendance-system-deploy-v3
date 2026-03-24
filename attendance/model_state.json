@@ -1,40 +1,40 @@
 {
-    "average_rate": 77.59,
-    "stability_factor": 0.9322,
+    "average_rate": 77.32,
+    "stability_factor": 0.9262,
     "dow_patterns": {
-        "0": 78.29,
-        "1": 79.04,
-        "2": 79.48,
-        "3": 75.97,
-        "4": 75.11
+        "0": 77.85,
+        "1": 79.11,
+        "2": 79.85,
+        "3": 75.77,
+        "4": 74.05
     },
-    "data_points": 31,
-    "last_trained": "2026-03-17 16:21:52",
+    "data_points": 36,
+    "last_trained": "2026-03-24 12:52:35",
     "ml_model_active": true,
     "version": "2.0.0 (SLM Engine)",
     "logs": [
         {
-            "timestamp": "16:21:52",
+            "timestamp": "12:52:32",
             "message": "Initializing SLM-powered intelligence training sequence..."
         },
         {
-            "timestamp": "16:21:52",
-            "message": "Accessing history for 77 personnel."
+            "timestamp": "12:52:33",
+            "message": "Accessing history for 79 personnel."
         },
         {
-            "timestamp": "16:21:52",
-            "message": "Retrieved 44 days of historical vectors."
+            "timestamp": "12:52:33",
+            "message": "Retrieved 56 days of historical weighted vectors."
         },
         {
-            "timestamp": "16:21:52",
-            "message": "Step 1/2: Training AttendanceMLModel (RandomForest)..."
+            "timestamp": "12:52:33",
+            "message": "Step 1/2: Training OrganizationSTLM..."
         },
         {
-            "timestamp": "16:21:52",
-            "message": "Model trained successfully"
+            "timestamp": "12:52:35",
+            "message": "STLM Organizational Model trained"
         },
         {
-            "timestamp": "16:21:52",
+            "timestamp": "12:52:35",
             "message": "Step 2/2: Updating organizational performance metrics..."
         }
     ]

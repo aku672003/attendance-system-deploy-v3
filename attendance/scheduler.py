@@ -16,8 +16,11 @@ def start():
     _scheduler_started = True
 
     from attendance.management.commands.auto_mark_absent import run_auto_mark_absent
+    from attendance.management.commands.train_forecast_model import run_train_forecast_model
 
     scheduler = BackgroundScheduler()
+    
+    # Job 1: Auto-mark absent employees at 6:00 PM IST
     scheduler.add_job(
         run_auto_mark_absent,
         trigger=CronTrigger(hour=18, minute=0, timezone='Asia/Kolkata'),
@@ -25,5 +28,15 @@ def start():
         name='Mark absent employees daily at 6 PM IST',
         replace_existing=True,
     )
+
+    # Job 2: Train forecast model at 6:30 PM IST (after data is finalized)
+    scheduler.add_job(
+        run_train_forecast_model,
+        trigger=CronTrigger(hour=18, minute=30, timezone='Asia/Kolkata'),
+        id='train_forecast_model',
+        name='Train forecast model daily at 6:30 PM IST',
+        replace_existing=True,
+    )
+
     scheduler.start()
-    logger.info("Auto-absent scheduler started (runs daily at 18:00 IST)")
+    logger.info("Scheduler started with auto-absent (18:00) and model training (18:30) jobs.")

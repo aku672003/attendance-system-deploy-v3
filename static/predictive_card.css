@@ -2,8 +2,9 @@
 
 /* ========== Intelligence Hub Card Styles ========== */
 .intelligence-hub-card {
-    grid-column: span 2;
-    background: linear-gradient(135deg, #e9d5ff 0%, #ddd6fe 50%, #c4b5fd 100%) !important;
+    grid-column: span 1;
+    background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%) !important;
+    border-radius: 24px !important;
     border: 1px solid rgba(168, 85, 247, 0.2) !important;
     padding: 20px !important;
     cursor: default !important;
@@ -11,8 +12,19 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    transition: all 0.3s ease;
+    justify-content: flex-start;
+    gap: 20px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 10px 15px -3px rgba(139, 92, 246, 0.1);
+}
+
+.intelligence-hub-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 25px -5px rgba(139, 92, 246, 0.2);
+}
+
+@media (max-width: 640px) {
+    /* Removed max-height and overflow to prevent internal scrolling */
 }
 
 .intelligence-hub-card.widget-sm {
@@ -52,12 +64,181 @@
     width: 100% !important;
 }
 
+/* Header Layout */
+.intelligence-hub-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important; /* Changed from flex-start for better horizontal alignment */
+    padding-bottom: 6px !important; /* Tightened from 8px */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
+    margin-bottom: 4px !important; /* Tightened from 6px */
+}
+
+.intelligence-hub-header-meta {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    text-align: right !important;
+    gap: 2px !important;
+}
+
+.intelligence-hub-confidence {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    color: #ffffff !important;
+    font-size: 11px !important; /* Reduced from 12px */
+    font-weight: 700 !important;
+    background: rgba(99, 102, 241, 0.4) !important;
+    padding: 2px 8px !important;
+    border-radius: 20px !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+.intelligence-hub-confidence span span {
+    color: #4ade80 !important;
+}
+
+.intelligence-hub-train-status {
+    font-size: 9px !important; /* Reduced from 10px */
+    color: rgba(255, 255, 255, 0.6) !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.02em !important;
+}
+
+/* Tooltip Fix - Show below icons and align to the RIGHT to avoid clipping */
+.info-tooltip {
+    position: relative;
+    display: inline-flex;
+}
+
+.info-tooltip .tooltip-content {
+    bottom: auto !important;
+    top: calc(100% + 8px) !important; /* Position below with spacing */
+    right: 0 !important; /* Align to the right of the icon */
+    left: auto !important;
+    width: 200px !important;
+    padding: 10px 14px !important;
+    background: rgba(15, 23, 42, 0.98) !important; /* Darker for contrast */
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4) !important;
+    transform: translateY(5px) !important; /* Subtle slide up animation */
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    z-index: 10000 !important;
+    text-align: left !important;
+    pointer-events: none !important;
+}
+
+.info-tooltip:hover .tooltip-content {
+    transform: translateY(0) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+.info-tooltip .tooltip-content::after {
+    display: none !important; /* Remove triangle to simplify alignment for now, or move to right */
+}
+
+/* Base Content Row (Small view) */
 .intelligence-hub-content-row {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: space-between;
-    gap: 20px;
-    flex: 1;
+    gap: 8px; /* Reduced from 12px */
+    width: 100%;
+}
+
+/* Horizontal Layout for MD and LG sizes */
+.intelligence-hub-card:not(.widget-sm) .intelligence-hub-content-row {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    gap: 15px !important; /* Reduced from 20px */
+}
+
+.intelligence-hub-card:not(.widget-sm) .intelligence-hub-main {
+    flex: 0 0 120px !important; /* Tightened from 140px */
+    align-items: flex-start !important;
+}
+
+.intelligence-hub-percentage {
+    color: #ffffff !important;
+    font-size: 40px !important; /* Slightly reduced from 42px */
+    font-weight: 800 !important;
+    line-height: 1 !important;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+}
+
+.intelligence-hub-subtitle {
+    color: rgba(255, 255, 255, 0.8) !important;
+    font-size: 10px !important; /* Reduced from 11px */
+    font-weight: 700 !important;
+    margin-top: 2px !important; /* Reduced from 4px */
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+}
+
+.intelligence-hub-card:not(.widget-sm) .intelligence-hub-stats-v2 {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    background: transparent !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    gap: 15px !important;
+}
+
+.intelligence-hub-card {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
+    color: white !important;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2) !important;
+    padding: 12px 15px !important; /* Reduced vertical padding from base stat-card */
+}
+
+.intelligence-hub-title {
+    color: #ffffff !important;
+    font-weight: 800 !important;
+    font-size: 14px !important; /* Slightly smaller title */
+    letter-spacing: 0.05em !important;
+}
+
+.intelligence-hub-btn {
+    background: rgba(255, 255, 255, 0.15) !important;
+    backdrop-filter: blur(4px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: white !important;
+    font-weight: 600 !important;
+    transition: all 0.3s ease !important;
+}
+
+.intelligence-hub-btn:hover {
+    background: rgba(255, 255, 255, 0.25) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+}
+
+.intelligence-hub-card:not(.widget-sm) .intelligence-hub-actions {
+    flex-direction: row !important;
+    gap: 10px !important;
+    width: auto !important;
+    margin-top: 0 !important;
+}
+
+/* Responsive adjustments for SM */
+.intelligence-hub-card.widget-sm .intelligence-hub-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 6px !important;
+}
+
+.intelligence-hub-card.widget-sm .intelligence-hub-header-meta {
+    align-items: flex-start !important;
+    text-align: left !important;
+    width: 100% !important;
+    padding-top: 3px !important;
 }
 
 .intelligence-hub-card::before {
@@ -112,6 +293,8 @@
 .intelligence-hub-main {
     display: flex;
     flex-direction: column;
+    align-items: center;
+    width: 100%;
 }
 
 .intelligence-hub-gauge-container {
@@ -183,32 +366,48 @@
 }
 
 .intelligence-hub-percentage {
-    font-size: 36px;
+    font-size: 32px;
     font-weight: 800;
     color: #581c87;
     line-height: 1;
-    margin-bottom: 2px;
+    margin-bottom: 4px;
     display: flex;
     align-items: center;
-    gap: 12px;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
 }
 
 .intelligence-hub-subtitle {
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
     color: #7c3aed;
     opacity: 0.9;
+    text-align: center;
+}
+
+/* Styles for the training status text for better visibility */
+#trainModelStatus {
+    font-size: 11px;
+    margin-top: 8px;
+    color: #6b21a8 !important;
+    font-weight: 500;
+    opacity: 0.8;
+}
+
+#lastTrainedText {
+    font-weight: 600;
 }
 
 .intelligence-hub-stats-v2 {
-    flex: 2;
+    flex: 1;
     background: rgba(255, 255, 255, 0.4);
     border-radius: 16px;
-    padding: 20px;
+    padding: 15px;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 16px;
+    gap: 12px;
     backdrop-filter: blur(5px);
 }
 
@@ -230,12 +429,13 @@
 
 .intelligence-hub-actions {
     display: flex;
-    gap: 12px;
+    flex-direction: column;
+    gap: 8px;
     margin-top: 8px;
+    width: 100%;
 }
 
 .intelligence-hub-btn {
-    flex: 1;
     background: rgba(255, 255, 255, 0.9);
     border: 1px solid rgba(139, 92, 246, 0.3);
     border-radius: 8px;
@@ -249,6 +449,7 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
+    width: 100%;
 }
 
 .intelligence-hub-btn:hover {
@@ -488,15 +689,16 @@
 
 /* ========== Dark Mode Overrides ========== */
 body.dark-mode .intelligence-hub-card {
-    background: linear-gradient(135deg, #2e1065 0%, #1e1b4b 100%) !important;
-    border: 1px solid rgba(139, 92, 246, 0.3) !important;
+    background: linear-gradient(135deg, #000000 0%, #050505 100%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8) !important;
 }
 
-body.dark-mode .intelligence-hub-title { color: #d8b4fe; }
-body.dark-mode .intelligence-hub-percentage { color: #f5f3ff; }
-body.dark-mode .intelligence-hub-subtitle { color: #a78bfa; }
-body.dark-mode .intelligence-hub-confidence { color: #a78bfa; }
-body.dark-mode .intelligence-hub-stats-v2 { background: rgba(0, 0, 0, 0.3); }
+body.dark-mode .intelligence-hub-title { color: #ffffff; }
+body.dark-mode .intelligence-hub-percentage { color: #ffffff; }
+body.dark-mode .intelligence-hub-subtitle { color: #a1a1aa; }
+body.dark-mode .intelligence-hub-confidence { color: #a1a1aa; }
+body.dark-mode .intelligence-hub-stats-v2 { background: #0a0a0a; border: 1px solid rgba(255, 255, 255, 0.05); }
 
 body.dark-mode .intelligence-hub-btn {
     background: rgba(30, 27, 75, 0.8);
@@ -544,76 +746,66 @@ body.dark-mode .main-forecast-value {
     text-shadow: 0 10px 20px rgba(255, 255, 255, 0.1) !important;
 }
 
- / *   R e s p o n s i v e   a d j u s t m e n t s   f o r   M o d a l s   a n d   C a r d s   * / 
- @ m e d i a   ( m a x - w i d t h :   7 6 8 p x )   { 
-         # p r e d i c t i v e M o d a l   . p r e d i c t i v e - m o d a l ,   
-         # e m p l o y e e P e r f o r m a n c e M o d a l   . p r e d i c t i v e - m o d a l , 
-         # p e r s o n n e l S e a r c h M o d a l   . m o d a l - c o n t e n t   { 
-                 m a x - h e i g h t :   9 0 v h   ! i m p o r t a n t ; 
-                 m a r g i n :   1 0 p x   ! i m p o r t a n t ; 
-                 w i d t h :   9 5 %   ! i m p o r t a n t ; 
-         } 
- 
-         / *   S t a c k   i n n e r   g r i d   e l e m e n t s   * / 
-         # p r e d i c t i v e M o d a l   >   d i v   >   d i v   >   d i v : n t h - c h i l d ( 2 ) , 
-         # p r e d i c t i v e M o d a l   d i v [ s t y l e * = \  
- g r i d - t e m p l a t e - c o l u m n s :  
- 1 f r  
- 1 f r  
- 1 . 2 f r \ ] , 
-         # e m p l o y e e P e r f o r m a n c e M o d a l   d i v [ s t y l e * = \ g r i d - t e m p l a t e - c o l u m n s :  
- 1 f r  
- 1 f r \ ]   { 
-                 d i s p l a y :   f l e x   ! i m p o r t a n t ; 
-                 f l e x - d i r e c t i o n :   c o l u m n   ! i m p o r t a n t ; 
-                 g a p :   1 6 p x   ! i m p o r t a n t ; 
-         } 
- 
-         . m a i n - f o r e c a s t - c a r d   { 
-                 f l e x - d i r e c t i o n :   c o l u m n   ! i m p o r t a n t ; 
-                 g a p :   1 6 p x   ! i m p o r t a n t ; 
-                 p a d d i n g :   2 4 p x   1 6 p x   ! i m p o r t a n t ; 
-         } 
- 
-         . p r e d i c t i v e - h e a d e r   { 
-                 f l e x - d i r e c t i o n :   c o l u m n   ! i m p o r t a n t ; 
-                 a l i g n - i t e m s :   f l e x - s t a r t   ! i m p o r t a n t ; 
-                 g a p :   1 2 p x   ! i m p o r t a n t ; 
-         } 
- 
-         / *   K e e p   t h e   c l o s e   b u t t o n   p o s i t i o n e d   p r o p e r l y   * / 
-         . p r e d i c t i v e - h e a d e r   >   b u t t o n   { 
-                 p o s i t i o n :   a b s o l u t e   ! i m p o r t a n t ; 
-                 t o p :   2 4 p x   ! i m p o r t a n t ; 
-                 r i g h t :   2 4 p x   ! i m p o r t a n t ; 
-         } 
-         
-         . i n t e l l i g e n c e - h u b - c o n t e n t - r o w   { 
-                 f l e x - d i r e c t i o n :   c o l u m n   ! i m p o r t a n t ; 
-                 a l i g n - i t e m s :   f l e x - s t a r t   ! i m p o r t a n t ; 
-         } 
- 
-         . i n t e l l i g e n c e - h u b - a c t i o n s   { 
-                 w i d t h :   1 0 0 %   ! i m p o r t a n t ; 
-                 f l e x - d i r e c t i o n :   c o l u m n   ! i m p o r t a n t ; 
-         } 
-         
-         . i n t e l l i g e n c e - h u b - b t n   { 
-                 w i d t h :   1 0 0 %   ! i m p o r t a n t ; 
-         } 
- } 
- 
- / *   F i x   f l e x   c h i l d   s c r o l l i n g   i s s u e   f o r   b o t h   D e s k t o p   a n d   M o b i l e   * / 
- . p r e d i c t i v e - m o d a l   >   d i v [ s t y l e * = \ o v e r f l o w - y :  
- a u t o \ ] , 
- . m o d a l - c o n t e n t   >   d i v [ s t y l e * = \ o v e r f l o w - y :  
- a u t o \ ]   { 
-         m i n - h e i g h t :   0   ! i m p o r t a n t ; 
-         o v e r f l o w - x :   h i d d e n   ! i m p o r t a n t ; 
- } 
- 
- # e m p l o y e e P e r f o r m a n c e M o d a l   . m a i n - f o r e c a s t - c a r d   >   d i v [ s t y l e * = \ g r i d - t e m p l a t e - c o l u m n s \ ]   { 
-         g r i d - t e m p l a t e - c o l u m n s :   1 f r   ! i m p o r t a n t ;   
- } 
-  
- 
+/* Responsive adjustments for Modals and Cards */
+@media (max-width: 768px) {
+    #predictiveModal .predictive-modal,
+    #employeePerformanceModal .predictive-modal,
+    #personnelSearchModal .modal-content {
+        max-height: 90vh !important;
+        margin: 10px !important;
+        width: 95% !important;
+    }
+
+    /* Stack inner grid elements */
+    #predictiveModal > div > div > div:nth-child(2),
+    #predictiveModal div[style*="grid-template-columns: 1fr 1fr 1.2fr"],
+    #employeePerformanceModal div[style*="grid-template-columns: 1fr 1fr"] {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 16px !important;
+    }
+
+    .main-forecast-card {
+        flex-direction: column !important;
+        gap: 16px !important;
+        padding: 24px 16px !important;
+    }
+
+    .predictive-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 12px !important;
+    }
+
+    /* Keep the close button positioned properly */
+    .predictive-header > button {
+        position: absolute !important;
+        top: 24px !important;
+        right: 24px !important;
+    }
+
+    .intelligence-hub-content-row {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+    }
+
+    .intelligence-hub-actions {
+        width: 100% !important;
+        flex-direction: column !important;
+    }
+
+    .intelligence-hub-btn {
+        width: 100% !important;
+    }
+}
+
+/* Fix flex child scrolling issue for both Desktop and Mobile */
+.predictive-modal > div[style*="overflow-y: auto"],
+.modal-content > div[style*="overflow-y: auto"] {
+    min-height: 0 !important;
+    overflow-x: hidden !important;
+}
+
+#employeePerformanceModal .main-forecast-card > div[style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+}

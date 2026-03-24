@@ -527,7 +527,7 @@ def train_forecast_model():
     for day in daily_counts:
         wd = day['date'].weekday()
         if wd < 5:
-            rate = (day['count'] / all_employees_count) * 100
+            rate = (day['score'] / all_employees_count) * 100
             if rate > 5:
                 dow_groups[wd].append(rate)
                 all_valid_rates.append(rate)

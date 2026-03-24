@@ -1840,13 +1840,21 @@ function getDaysLeft(targetDate) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const target = new Date(targetDate);
+    
+    // Normalize to the viewed year if possible, otherwise use current year
+    const viewedYear = window.currentBirthdayYear || today.getFullYear();
+    
+    // Handle Feb 29 on non-leap years (use Feb 28 to match backend logic)
+    if (target.getMonth() === 1 && target.getDate() === 29) {
+        const isLeap = (viewedYear % 4 === 0 && viewedYear % 100 !== 0) || (viewedYear % 400 === 0);
+        if (!isLeap) {
+            target.setDate(28);
+        }
+    }
+    
+    target.setFullYear(viewedYear);
     target.setHours(0, 0, 0, 0);
-
-    // Set year to current year for calculation to ignore birth year
-    // Actually API returns current year occurrence usually, but let's be safe if it's full birthdate
-    // The API seems to return 'date' field as 'YYYY-MM-DD' for the birthday IN THAT YEAR requested.
-    // So simple diff is enough.
-
+    
     const diffTime = target - today;
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 }
@@ -2998,16 +3006,30 @@ async function openTaskDetail(taskId) {
     const overseers = task.overseers || [];
     const overseerNames = overseers.map(o => o.name).join(', ') || 'None';
 
+    const priorityClass = task.priority.toLowerCase() === 'high' ? 'priority-high' :
+                         (task.priority.toLowerCase() === 'medium' ? 'priority-medium' : 'priority-low');
+
     document.getElementById('detailTaskMeta').innerHTML = `
         <div style="display: flex; flex-direction: column; gap: 8px;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="font-size: 1.1rem;">👥</span>
-                <span style="font-weight: 600; color: #1e293b;">${assigneeNames}</span>
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 6px; background: #f8fafc; padding: 3px 10px; border-radius: 8px; border: 1px solid #f1f5f9;">
+                    <span style="font-size: 0.62rem; font-weight: 850; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Assignees</span>
+                    <span style="font-size: 0.72rem; font-weight: 700; color: #475569;">${assigneeNames}</span>
+                </div>
+                ${overseerNames !== 'None' ? `
+                <div style="display: flex; align-items: center; gap: 6px; background: #f8fafc; padding: 3px 10px; border-radius: 8px; border: 1px solid #f1f5f9;">
+                    <span style="font-size: 0.62rem; font-weight: 850; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Overseer</span>
+                    <span style="font-size: 0.72rem; font-weight: 700; color: #475569;">${overseerNames}</span>
+                </div>
+                ` : ''}
             </div>
-            <div style="display: flex; gap: 12px; font-size: 0.85rem; color: #64748b;">
-                ${overseerNames !== 'None' ? `<span>👁 Overseer: ${overseerNames}</span>` : ''}
-                <span>🚩 ${task.priority}</span>
-                <span>📅 ${task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No date'}</span>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <span class="premium-priority-badge ${priorityClass}" style="font-size: 0.62rem; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; font-weight: 800; letter-spacing: 0.02em;">
+                    ${task.priority}
+                </span>
+                <span style="font-size: 0.7rem; font-weight: 700; color: #64748b; background: #f8fafc; padding: 3px 10px; border-radius: 8px; border: 1px solid #f1f5f9; display: flex; align-items: center; gap: 4px;">
+                    <span style="font-size: 0.85rem;">📅</span> ${task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No Deadline'}
+                </span>
             </div>
         </div>
     `;
@@ -10917,7 +10939,7 @@ function initWidgetSizes() {
             const widget = document.getElementById(id);
             if (widget && config.size) {
                 // Remove existing size classes
-                widget.classList.remove('widget-sm', 'widget-md', 'widget-lg');
+                widget.classList.remove('widget-sm', 'widget-md', 'widget-lg', 'widget-xl');
                 widget.classList.add(`widget-${config.size}`);
                 
                 // Update active button state if in DOM
@@ -10995,6 +11017,7 @@ function takeLayoutSnapshot() {
                 let size = 'sm';
                 if(widget.classList.contains('widget-md')) size = 'md';
                 if(widget.classList.contains('widget-lg')) size = 'lg';
+                if(widget.classList.contains('widget-xl')) size = 'xl';
                 
                 originalLayoutSnapshot[widget.id] = { order: index, size: size, element: widget };
             }
@@ -11013,7 +11036,7 @@ function cancelLayoutChanges() {
         for (const [id, config] of Object.entries(originalLayoutSnapshot)) {
             const widget = document.getElementById(id);
             if (widget) {
-                widget.classList.remove('widget-sm', 'widget-md', 'widget-lg');
+                widget.classList.remove('widget-sm', 'widget-md', 'widget-lg', 'widget-xl');
                 widget.classList.add(`widget-${config.size}`);
             }
         }
@@ -11053,7 +11076,7 @@ function resizeWidget(widgetId, sizeClass) {
     if (!widget) return;
 
     // Reset classes
-    widget.classList.remove('widget-sm', 'widget-md', 'widget-lg');
+    widget.classList.remove('widget-sm', 'widget-md', 'widget-lg', 'widget-xl');
     widget.classList.add(`widget-${sizeClass}`);
 
     // Update active button state visually
@@ -11186,6 +11209,7 @@ async function saveDashboardLayout() {
                 let size = 'sm';
                 if(widget.classList.contains('widget-md')) size = 'md';
                 if(widget.classList.contains('widget-lg')) size = 'lg';
+                if(widget.classList.contains('widget-xl')) size = 'xl';
                 
                 currentLayouts[widget.id] = { order: index, size: size };
             }
