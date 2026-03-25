@@ -309,8 +309,10 @@ class OrganizationSTLM:
                 import pandas as pd
                 X = pd.DataFrame([{
                     'day_of_week': date_obj.weekday(),
+                    'day_of_month': date_obj.day,
                     'is_weekend': 1 if date_obj.weekday() >= 5 else 0,
                     'momentum': momentum,
+                    'rolling_7d': statistics.mean(historical_rates[-7:]) if len(historical_rates) >= 7 else historical_rates[-1],
                     'prev_rate': historical_rates[-1]
                 }])
                 residual_pred = self.model.predict(X)[0]
@@ -345,8 +347,10 @@ class OrganizationSTLM:
             rate = rates[i]
             training_data.append({
                 'day_of_week': day['date'].weekday(),
+                'day_of_month': day['date'].day,
                 'is_weekend': 1 if day['date'].weekday() >= 5 else 0,
                 'momentum': (statistics.mean(rates[i-3:i]) / statistics.mean(rates[i-7:i])) if statistics.mean(rates[i-7:i]) > 0 else 1.0,
+                'rolling_7d': statistics.mean(rates[i-7:i]) if len(rates[i-7:i]) > 0 else rates[i-1],
                 'prev_rate': rates[i-1],
                 'target': rate - dow_patterns.get(str(day['date'].weekday()), rate) # Target is the residual
             })
@@ -355,7 +359,7 @@ class OrganizationSTLM:
         X = df.drop('target', axis=1)
         y = df['target']
         
-        model = RandomForestRegressor(n_estimators=100, random_state=42)
+        model = RandomForestRegressor(n_estimators=200, random_state=42)
         model.fit(X, y)
         
         joblib.dump(model, self.model_path)
@@ -381,11 +385,22 @@ class IndividualPredictor:
             except: return None
         return None
 
-    def _get_historical_features(self, employee):
+    def _get_historical_features(self, employee, target_date=None):
         """Fetch and normalize individual historical metrics"""
-        records = AttendanceRecord.objects.filter(employee=employee).order_by('-date')[:14]
+        from .models import AttendanceRecord, EmployeeRequest, Task
+        from datetime import datetime
+        import statistics
+        
+        if target_date is None:
+            target_date = datetime.now().date()
+            
+        records = list(AttendanceRecord.objects.filter(
+            employee=employee,
+            date__lt=target_date
+        ).order_by('-date')[:14])
+        
         if not records:
-            return 0.75, 0.6  # Default normalized attendance and hours
+            return 0.75, 0.6, 1.0, 0, 0.75
 
         scores = [STATUS_WEIGHTS.get(r.status, 0.0) for r in records]
         avg_score = sum(scores) / len(scores)
@@ -394,35 +409,123 @@ class IndividualPredictor:
         hours = [float(r.total_hours) for r in records if r.total_hours]
         avg_hours = sum(hours) / len(hours) if hours else 8.0
         normalized_hours = min(1.0, avg_hours / MAX_NORMALIZED_HOURS)
+        
+        # New pattern: Consistency
+        consistency = max(0.0, 1.0 - statistics.stdev(scores)) if len(scores) > 1 else 1.0
+        
+        # New pattern: Leave behavior predictor
+        recent_leaves = sum(1 for r in records if r.status == 'leave')
+        has_approved_leave = EmployeeRequest.objects.filter(
+            employee=employee,
+            request_type__in=['full_day', 'half_day'],
+            status='approved',
+            start_date__lte=target_date,
+            end_date__gte=target_date
+        ).exists()
+        
+        if has_approved_leave:
+            recent_leaves += 5  # Add weight for upcoming known absence
+            
+        # New pattern: Work Efficiency Context
+        tasks = Task.objects.filter(
+            assignees=employee,
+            status='completed',
+            completed_at__date__lt=target_date,
+            accuracy__isnull=False
+        ).order_by('-completed_at')[:10]
+        
+        if tasks:
+            avg_accuracy = sum(t.accuracy for t in tasks) / len(tasks)
+            efficiency = avg_accuracy / 100.0
+        else:
+            efficiency = 0.75
 
-        return avg_score, normalized_hours
+        return avg_score, normalized_hours, consistency, recent_leaves, efficiency
 
     def predict(self, employee, org_forecast):
         """Predict individual attendance probability with weighted features"""
-        avg_score, normalized_hours = self._get_historical_features(employee)
+        avg_score, normalized_hours, consistency, recent_leaves, efficiency = self._get_historical_features(employee)
         
         if not self.model:
-            # Hybrid heuristic: Weight individual score and normalized hours against org forecast
-            # Individual Score (60%) + Normalized Hours (20%) + Org Context (20%)
-            weighted_score = (avg_score * 0.6 + normalized_hours * 0.2 + (org_forecast/100) * 0.2) * 100
+            # Hybrid heuristic: Weight individual score, hours, efficiency, logic against org forecast
+            leave_penalty = (recent_leaves / 14.0) * 100 if recent_leaves > 0 else 0
+            weighted_score = (avg_score * 0.5 + normalized_hours * 0.1 + consistency * 0.1 + efficiency * 0.1 + (org_forecast/100) * 0.2) * 100
+            weighted_score -= leave_penalty
+            if recent_leaves >= 5: # Critical leave indicator
+                weighted_score = 5.0
             return round(min(99.0, max(5.0, weighted_score)), 1)
 
         try:
             import pandas as pd
+            from datetime import datetime
             X = pd.DataFrame([{
                 'dept_id': hash(employee.department) % 100,
                 'org_forecast': org_forecast,
                 'day_of_week': datetime.now().weekday(),
                 'avg_score': avg_score,
-                'normalized_hours': normalized_hours
+                'normalized_hours': normalized_hours,
+                'consistency': consistency,
+                'recent_leaves': recent_leaves,
+                'efficiency': efficiency
             }])
             return round(float(self.model.predict(X)[0]), 1)
         except: 
             return round(avg_score * 100, 1)
 
-    def train(self, attendance_records, employees):
-        # Implementation of individual training using new features
-        return True
+    def train(self):
+        import pandas as pd
+        from sklearn.ensemble import RandomForestRegressor
+        import joblib
+        from .models import Employee, AttendanceRecord
+
+        employees = Employee.objects.filter(role='employee')
+        if not employees.exists():
+            return False, "No employees found"
+            
+        training_data = []
+        # Get org forecast once
+        org_forecast, _, _ = calculate_forecast()
+        
+        for emp in employees:
+            # Get last 15 records to have 14 for history and 1 for target
+            records = list(AttendanceRecord.objects.filter(employee=emp).order_by('-date')[:15])
+            if len(records) < 15:
+                continue
+                
+            # Most recent record is target
+            target_record = records[0]
+            
+            avg_score, normalized_hours, consistency, recent_leaves, efficiency = self._get_historical_features(
+                emp, target_date=target_record.date
+            )
+
+            target_score = STATUS_WEIGHTS.get(target_record.status, 0.0)
+            
+            training_data.append({
+                'dept_id': hash(emp.department) % 100 if emp.department else 0,
+                'org_forecast': org_forecast,
+                'day_of_week': target_record.date.weekday(),
+                'avg_score': avg_score,
+                'normalized_hours': normalized_hours,
+                'consistency': consistency,
+                'recent_leaves': recent_leaves,
+                'efficiency': efficiency,
+                'target': target_score * 100
+            })
+            
+        if len(training_data) < 10:
+            return False, "Insufficient data for individual RF training"
+            
+        df = pd.DataFrame(training_data)
+        X = df.drop('target', axis=1)
+        y = df['target']
+        
+        model = RandomForestRegressor(n_estimators=100, random_state=42)
+        model.fit(X, y)
+        
+        joblib.dump(model, self.model_path)
+        self.model = model
+        return True, "Individual RF Model Trained successfully"
 
 
 class AttendanceMLModel:
@@ -525,13 +628,21 @@ def train_forecast_model():
     add_log(f"Retrieved {len(daily_counts)} days of historical weighted vectors.")
     
     # 2. Train ML Model
-    add_log("Step 1/2: Training OrganizationSTLM...")
+    add_log("Step 1/3: Training OrganizationSTLM...")
     ml_engine = AttendanceMLModel()
     ml_success, ml_msg = ml_engine.train(daily_counts, all_employees_count)
     add_log(ml_msg)
 
+    add_log("Step 2/3: Training IndividualPredictor...")
+    try:
+        ind_engine = IndividualPredictor()
+        ind_success, ind_msg = ind_engine.train()
+        add_log(ind_msg)
+    except Exception as e:
+        add_log(f"Individual training skipped: {str(e)}")
+
     # 2. Legacy Pattern Analysis (for model_state.json metadata)
-    add_log("Step 2/2: Updating organizational performance metrics...")
+    add_log("Step 3/3: Updating organizational performance metrics...")
     dow_groups = {i: [] for i in range(5)}
     all_valid_rates = []
     

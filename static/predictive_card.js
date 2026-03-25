@@ -490,32 +490,36 @@ function openPredictiveAnalysisModal(data, predictDays = 3) {
     }
 
     modal.innerHTML = `
-        <div class="predictive-modal modal-content" style="padding: 0; overflow: hidden; border: none; max-width: 680px; max-height: 96vh; display: flex; flex-direction: column; border-radius: 32px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
-            <div style="padding: 32px; overflow-y: auto; flex: 1; position: relative; background: #ffffff;">
-                <div class="predictive-header" style="margin-bottom: 28px; display: flex; justify-content: space-between; align-items: center;">
+        <div class="predictive-modal modal-content" style="width: 680px; max-width: 95vw; max-height: 96vh; padding: 0 !important; overflow: hidden; background: white; border: none; display: flex; flex-direction: column; border-radius: 32px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+            <div style="padding: 28px; overflow-y: auto; flex: 1; position: relative; background: #ffffff;">
+
+                <!-- Header — clean single-row like My Stats -->
+                <div class="predictive-header" style="margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start;">
                     <div>
-                        <div class="predictive-title" style="font-size: 26px; font-weight: 900; color: #0f172a; letter-spacing: -0.8px; display: flex; align-items: center; gap: 12px;">
-                            <span style="background: linear-gradient(135deg, #6366f1, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Intelligence Hub</span>
-                            <span style="font-size: 10px; font-weight: 800; color: #6366f1; background: rgba(99, 102, 241, 0.1); padding: 4px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: 1px;">Admin Executive</span>
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
+                            <span style="font-size: 20px; font-weight: 900; background: linear-gradient(135deg, #6366f1, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -0.5px;">Intelligence Hub</span>
+                            <span style="font-size: 9px; font-weight: 800; color: #6366f1; background: rgba(99,102,241,0.1); padding: 3px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: 1px; white-space: nowrap;">Admin Executive</span>
                         </div>
-                        <div style="font-size: 11px; font-weight: 700; color: #94a3b8; margin-top: 4px; display: flex; align-items: center; gap: 6px;">
-                            <span style="width: 6px; height: 6px; background: #10b981; border-radius: 50%;"></span> SYSTEM LIVE: Verified Data Stream
+                        <div style="font-size: 11px; font-weight: 700; color: #94a3b8; display: flex; align-items: center; gap: 5px;">
+                            <span style="width: 6px; height: 6px; background: #10b981; border-radius: 50%; flex-shrink: 0; display: inline-block;"></span> SYSTEM LIVE: Verified Data Stream
                         </div>
                     </div>
-                    <button onclick="closePredictiveModal()" style="background: #f1f5f9; border: none; font-size: 20px; width: 40px; height: 40px; border-radius: 12px; cursor: pointer; color: #64748b; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">&times;</button>
+                    <button onclick="closePredictiveModal()" style="background: #f1f5f9; border: none; font-size: 20px; width: 38px; height: 38px; border-radius: 10px; cursor: pointer; color: #64748b; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; margin-left: 12px;">&times;</button>
                 </div>
 
-                <div style="display: flex; justify-content: center; margin-bottom: 24px;">
-                    <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 24px 40px; border-radius: 28px; color: white; min-width: 320px; text-align: center; box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.4);">
-                        <div style="font-size: 11px; font-weight: 850; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Tomorrow's Expected Load</div>
-                        <div style="font-size: 32px; font-weight: 900;">${predictedEmployees} <span style="font-size: 16px; font-weight: 600; opacity: 0.8;">Personnel</span></div>
-                        <div style="font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.9); margin-top: 6px;">Out of ${summary.total_employees} Total Force</div>
+                <!-- Tomorrow's Expected Load banner -->
+                <div style="margin-bottom: 20px;">
+                    <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 20px 24px; border-radius: 24px; color: white; text-align: center; box-shadow: 0 8px 20px -5px rgba(99,102,241,0.4);">
+                        <div style="font-size: 10px; font-weight: 800; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;">Tomorrow's Expected Load</div>
+                        <div style="font-size: 28px; font-weight: 900; line-height: 1.1;">${predictedEmployees} <span style="font-size: 14px; font-weight: 600; opacity: 0.8;">Personnel</span></div>
+                        <div style="font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.9); margin-top: 4px;">Out of ${summary.total_employees} Total Force</div>
                     </div>
                 </div>
 
-                <div class="main-forecast-card" style="padding: 32px; background: #ffffff; border: 1px solid #f1f5f9; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.02); border-radius: 28px; margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; gap: 32px;">
-                    <div style="position: relative; width: 140px; height: 140px; display: flex; align-items: center; justify-content: center;">
-                        <svg viewBox="0 0 100 100" style="width: 140px; height: 140px; transform: rotate(-90deg); position: absolute;">
+                <!-- Main Analysis Section -->
+                <div class="perf-main-analysis-card" style="background: #ffffff; border: 1px solid #f1f5f9; border-radius: 24px; padding: 24px; margin-bottom: 20px; display: flex; align-items: center; gap: 28px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+                    <div style="position: relative; width: 130px; height: 130px; flex-shrink: 0;">
+                        <svg viewBox="0 0 100 100" style="transform: rotate(-90deg); width: 130px; height: 130px;">
                             <circle cx="50" cy="50" r="45" fill="none" stroke="#f1f5f9" stroke-width="10" />
                             <circle id="modalForecastGauge" cx="50" cy="50" r="45" fill="none" stroke="url(#gaugeGrad)" stroke-width="10" stroke-linecap="round" stroke-dasharray="283" stroke-dashoffset="283" style="transition: stroke-dashoffset 1.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);" />
                             <defs>
@@ -525,91 +529,100 @@ function openPredictiveAnalysisModal(data, predictDays = 3) {
                                 </linearGradient>
                             </defs>
                         </svg>
-                        <div style="text-align: center; z-index: 1;">
-                            <div id="modalForecastValue" style="color: #4f46e5; font-size: 38px; font-weight: 900; letter-spacing: -1px;">0%</div>
-                            <div style="font-size: 9px; font-weight: 850; color: #94a3b8; letter-spacing: 1px; margin-top: -4px;">TURNOUT</div>
+                        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+                            <div id="modalForecastValue" style="color: #4f46e5; font-size: 30px; font-weight: 950; letter-spacing: -1px;">0%</div>
+                            <div style="font-size: 8px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;">TURNOUT</div>
                         </div>
                     </div>
-                    
-                    <div style="flex: 1;">
-                        <div style="font-size: 11px; font-weight: 850; color: #94a3b8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
                             Analysis Summary <span style="flex: 1; height: 1px; background: #f1f5f9;"></span>
                         </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
                             <div>
-                                <div style="font-size: 18px; font-weight: 800; color: #1e293b;">${Math.round(100 - summary.late_rate)}%</div>
-                                <div style="font-size: 10px; color: #10b981; font-weight: 800;">PUNCTUALITY</div>
+                                <div style="font-size: 17px; font-weight: 900; color: #0f172a;">${Math.round(100 - summary.late_rate)}%</div>
+                                <div style="font-size: 9px; font-weight: 800; color: #10b981; text-transform: uppercase; letter-spacing: 0.5px;">Punctuality</div>
                             </div>
                             <div>
-                                <div style="font-size: 18px; font-weight: 800; color: #1e293b;">+${Math.round(summary.busiest_impact || 0)}%</div>
-                                <div style="font-size: 10px; color: #8b5cf6; font-weight: 800;">VIBRANCY</div>
+                                <div style="font-size: 17px; font-weight: 900; color: #0f172a;">+${Math.round(summary.busiest_impact || 0)}%</div>
+                                <div style="font-size: 9px; font-weight: 800; color: #8b5cf6; text-transform: uppercase; letter-spacing: 0.5px;">Vibrancy</div>
                             </div>
                             <div>
-                                <div style="font-size: 18px; font-weight: 800; color: #1e293b;">${summary.avg_check_in || 'N/A'}</div>
-                                <div style="font-size: 10px; color: #64748b; font-weight: 800;">AVG CHECK-IN</div>
+                                <div style="font-size: 17px; font-weight: 900; color: #0f172a;">${summary.avg_check_in || 'N/A'}</div>
+                                <div style="font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Avg Check-in</div>
                             </div>
                             <div>
-                                <div style="font-size: 18px; font-weight: 800; color: #1e293b;">${(summary.peak_day || 'N/A').substring(0, 3)}</div>
-                                <div style="font-size: 10px; color: #64748b; font-weight: 800;">BEST DAY</div>
+                                <div style="font-size: 17px; font-weight: 900; color: #0f172a;">${(summary.peak_day || 'N/A').substring(0, 3)}</div>
+                                <div style="font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Best Day</div>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Performance Bezier Graph -->
-                <div class="activity-chart-section" style="background: #ffffff; padding: 24px; border-radius: 28px; border: 1px solid #f1f5f9; margin-bottom: 24px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                        <div style="font-size: 12px; font-weight: 900; color: #1e293b; text-transform: uppercase; letter-spacing: 1px;">Engagement Velocity</div>
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <div style="display: flex; gap: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase;">
-                                <button onclick="changePredictiveDays(3)" style="padding: 6px 12px; border-radius: 8px; border: 1px solid ${predictDays === 3 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 3 ? '#eef2ff' : 'white'}; color: ${predictDays === 3 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">3 Days</button>
-                                <button onclick="changePredictiveDays(7)" style="padding: 6px 12px; border-radius: 8px; border: 1px solid ${predictDays === 7 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 7 ? '#eef2ff' : 'white'}; color: ${predictDays === 7 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">1 Week</button>
+                <div class="activity-chart-section" style="background: #ffffff; padding: 20px; border-radius: 24px; border: 1px solid #f1f5f9; margin-bottom: 20px;">
+                    <div class="chart-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+                        <div style="font-size: 12px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 1px;">Engagement Velocity</div>
+                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                            <div style="display: flex; gap: 4px;">
+                                <button onclick="changePredictiveDays(3)" style="padding: 5px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; border: 1px solid ${predictDays === 3 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 3 ? '#eef2ff' : 'white'}; color: ${predictDays === 3 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">3 Days</button>
+                                <button onclick="changePredictiveDays(7)" style="padding: 5px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; border: 1px solid ${predictDays === 7 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 7 ? '#eef2ff' : 'white'}; color: ${predictDays === 7 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">1 Week</button>
                             </div>
-                            <div style="font-size: 10px; font-weight: 800; color: #6366f1; background: rgba(99, 102, 241, 0.05); padding: 6px 14px; border-radius: 20px; display: flex; align-items: center; gap: 6px; border: 1px solid rgba(99, 102, 241, 0.1);">
-                                <span style="font-size: 14px;">📉</span> Bezier Interpolation
+                            <div class="bezier-badge" style="font-size: 9px; font-weight: 800; color: #6366f1; background: rgba(99,102,241,0.05); padding: 5px 10px; border-radius: 20px; display: flex; align-items: center; gap: 4px; border: 1px solid rgba(99,102,241,0.1); white-space: nowrap;">
+                                📉 Bezier
                             </div>
                         </div>
                     </div>
-                    <div style="height: 160px; position: relative; padding: 10px 0;">
-                        <svg viewBox="0 0 600 120" preserveAspectRatio="none" style="width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 8px 16px rgba(99, 102, 241, 0.1));">
+                    <!-- SVG with labels embedded inside — scales correctly on all screen sizes -->
+                    <div style="width: 100%; position: relative;">
+                        <svg viewBox="0 0 600 155" preserveAspectRatio="none" style="width: 100%; height: 180px; overflow: visible; display: block; filter: drop-shadow(0 6px 12px rgba(99,102,241,0.08));">
                             <defs>
                                 <linearGradient id="curveGrad" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="0%" stop-color="#6366f1" stop-opacity="0.15" />
                                     <stop offset="100%" stop-color="#6366f1" stop-opacity="0" />
                                 </linearGradient>
                             </defs>
-                            <path d="${bezierPath} L 575 120 L 0 120 Z" fill="url(#curveGrad)" style="transform: scaleY(0); transform-origin: bottom; animation: forecast-fill 1.2s forwards 0.5s;" />
-                            <path d="${bezierPath}" fill="none" stroke="#6366f1" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1000" stroke-dashoffset="1000" style="animation: forecast-draw 1.5s forwards 0.2s;" />
+                            <!-- Horizontal base line -->
+                            <line x1="0" y1="120" x2="600" y2="120" stroke="#f1f5f9" stroke-width="1.5" />
+                            <!-- Area fill -->
+                            <path d="${bezierPath} L 575 120 L 0 120 Z" fill="url(#curveGrad)" style="transform: scaleY(0); transform-origin: 0 120px; animation: forecast-fill 1.2s forwards 0.5s;" />
+                            <!-- Bezier line -->
+                            <path d="${bezierPath}" fill="none" stroke="#6366f1" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1000" stroke-dashoffset="1000" style="animation: forecast-draw 1.5s forwards 0.2s;" />
                             ${points.map((v, i) => {
                                 const color = v.is_prediction ? '#6366f1' : '#cbd5e1';
                                 const px = i * xStep;
                                 const py = 120 - (v.rate / 100 * 100);
+                                const labelShort = v.day_name === 'Yesterday' ? 'Yest' : (v.day_name === 'Today' ? 'Today' : v.day_name.substring(0, 3).toUpperCase());
+                                const labelColor = v.is_prediction ? '#6366f1' : (v.day_name === 'Today' ? '#0f172a' : '#94a3b8');
                                 return `
                                     <circle cx="${px}" cy="${py}" r="${v.is_prediction ? 6 : 5}" fill="white" stroke="${color}" stroke-width="3" style="opacity: 0; animation: forecast-point 0.5s forwards ${0.8 + (i * 0.1)}s;" />
-                                    <text x="${px}" y="${py - 20}" font-size="11" font-weight="900" fill="${v.is_prediction ? '#4f46e5' : '#94a3b8'}" text-anchor="middle" style="opacity: 0; animation: forecast-point 0.5s forwards ${1 + (i * 0.1)}s;">${Math.round(v.rate)}%</text>
+                                    <text x="${px}" y="${py - 12}" font-size="10" font-weight="900" fill="${v.is_prediction ? '#4f46e5' : '#94a3b8'}" text-anchor="middle" style="opacity: 0; animation: forecast-point 0.5s forwards ${1 + (i * 0.1)}s;">${Math.round(v.rate)}%</text>
+                                    <!-- Day label inside SVG — scales with container -->
+                                    <text x="${px}" y="142" font-size="10" font-weight="800" fill="${labelColor}" text-anchor="middle">${labelShort}</text>
+                                    ${v.day_name === 'Today' ? `<rect x="${px - 22}" y="130" width="44" height="14" rx="3" fill="#f1f5f9" />
+                                    <text x="${px}" y="142" font-size="10" font-weight="900" fill="#0f172a" text-anchor="middle">${labelShort}</text>` : ''}
                                 `;
                             }).join('')}
                         </svg>
-                        <div style="display: flex; justify-content: space-between; margin-top: 20px; border-top: 1px solid #f8fafc; padding-top: 12px; position: relative;">
-                            ${points.map((v, i) => `
-                                <div style="font-size: 10px; font-weight: 850; color: ${v.is_prediction ? '#6366f1' : (v.day_name === 'Today' ? '#0f172a' : '#94a3b8')}; text-align: center; position: absolute; left: ${i * xStep}px; transform: translateX(-50%); width: 64px; ${v.day_name === 'Today' ? 'background: #f1f5f9; padding: 2px 0; border-radius: 4px;' : ''}">${v.day_name === 'Yesterday' || v.day_name === 'Today' ? v.day_name : v.day_name.substring(0, 3).toUpperCase()}</div>
-                            `).join('')}
-                        </div>
                     </div>
                 </div>
 
-                <div style="padding: 24px; background: #f8fafc; border-radius: 28px; border: 1px solid #eef2f6; position: relative; overflow: hidden;">
-                    <div style="position: absolute; top: -10px; left: -10px; font-size: 64px; opacity: 0.03; font-weight: 900; color: #6366f1; pointer-events: none;">INSIGHT</div>
-                    <div style="font-size: 14px; line-height: 1.7; color: #334155; position: relative;">
-                        <span style="font-size: 24px; float: left; margin-right: 16px; background: white; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">💡</span> 
-                        <strong style="color: #0f172a;">Executive Intelligence:</strong> 
-                        <div style="margin-top: 4px; font-weight: 600;">${summary.ai_insight || 'Data shows consistent operational flow. No immediate intervention required.'}</div>
+                <!-- Executive Insight — same layout as My Stats -->
+                <div style="background: rgba(99,102,241,0.03); border: 1px solid rgba(99,102,241,0.1); border-radius: 24px; padding: 20px; display: flex; gap: 14px; align-items: flex-start; position: relative; overflow: hidden;">
+                    <div style="position: absolute; top: -20px; right: -20px; font-size: 80px; opacity: 0.03; font-weight: 900; pointer-events: none;">INSIGHT</div>
+                    <div style="width: 44px; height: 44px; background: white; border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); flex-shrink: 0; font-size: 20px;">💡</div>
+                    <div style="min-width: 0;">
+                        <div style="font-size: 13px; font-weight: 900; color: #0f172a; margin-bottom: 5px;">Executive Intelligence:</div>
+                        <div style="font-size: 12px; color: #475569; line-height: 1.6; font-weight: 600;">${summary.ai_insight || 'Data shows consistent operational flow. No immediate intervention required.'}</div>
                     </div>
                 </div>
 
-                <div style="text-align: center; margin-top: 40px; margin-bottom: 20px;">
-                    <button onclick="closePredictiveModal()" style="width: auto; padding: 20px 100px; font-size: 15px; font-weight: 900; background: #0f172a; color: white; border: none; border-radius: 24px; cursor: pointer; transition: transform 0.2s, background 0.2s; box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.3);" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">ACKNOWLEDGE ANALYSIS</button>
-                </div>
+            </div>
+
+            <!-- Sticky footer — same as My Stats modal -->
+            <div style="padding: 16px 24px; background: #ffffff; border-top: 1px solid #f1f5f9; display: flex; justify-content: center; flex-shrink: 0;">
+                <button onclick="closePredictiveModal()" style="width: 100%; padding: 16px; font-size: 13px; font-weight: 900; background: #0f172a; color: white; border: none; border-radius: 18px; cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 1px;">Acknowledge Analysis</button>
             </div>
         </div>
 

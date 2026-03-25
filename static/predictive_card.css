@@ -2,7 +2,6 @@
 
 /* ========== Intelligence Hub Card Styles ========== */
 .intelligence-hub-card {
-    grid-column: span 1;
     background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%) !important;
     border-radius: 24px !important;
     border: 1px solid rgba(168, 85, 247, 0.2) !important;
@@ -30,6 +29,18 @@
 .intelligence-hub-card.widget-sm {
     grid-column: span 1 !important;
     padding: 12px !important;
+}
+
+.intelligence-hub-card.widget-md {
+    grid-column: span 2 !important;
+}
+
+.intelligence-hub-card.widget-lg {
+    grid-column: span 3 !important;
+}
+
+.intelligence-hub-card.widget-xl {
+    grid-column: span 4 !important;
 }
 
 .intelligence-hub-card.widget-sm .intelligence-hub-content-row {
@@ -500,6 +511,40 @@
     margin-bottom: 24px;
 }
 
+/* Admin predictive modal — main analysis card (same structure as employee modal) */
+.perf-main-analysis-card {
+    display: flex;
+    align-items: center;
+    gap: 36px;
+    background: #ffffff;
+    border: 1px solid #f1f5f9;
+    border-radius: 28px;
+    padding: 28px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+}
+
+/* Close button — always a fixed square, never stretches */
+.predictive-header > button,
+#employeePerformanceModal .predictive-header > button {
+    width: 38px !important;
+    min-width: 38px !important;
+    max-width: 38px !important;
+    height: 38px !important;
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+}
+
+/* Header text side — allow it to shrink without overflowing */
+.predictive-header > div:first-child {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+}
+
+
 .main-forecast-value {
     font-size: 64px;
     font-weight: 800;
@@ -743,44 +788,210 @@ body.dark-mode .main-forecast-value {
     text-shadow: 0 10px 20px rgba(255, 255, 255, 0.1) !important;
 }
 
-/* Responsive adjustments for Modals and Cards */
+/* ====================================================
+   MOBILE RESPONSIVE — All Predictive / My Stats Modals
+   ==================================================== */
 @media (max-width: 768px) {
+
+    /* ── Modal shell ───────────────────────────────── */
     #predictiveModal .predictive-modal,
     #employeePerformanceModal .predictive-modal,
     #personnelSearchModal .modal-content {
-        max-height: 90vh !important;
-        margin: 10px !important;
-        width: 95% !important;
+        max-height: 93vh !important;
+        margin: 8px !important;
+        width: calc(100vw - 16px) !important;
+        border-radius: 24px !important;
     }
 
-    /* Stack inner grid elements */
-    #predictiveModal > div > div > div:nth-child(2),
-    #predictiveModal div[style*="grid-template-columns: 1fr 1fr 1.2fr"],
-    #employeePerformanceModal div[style*="grid-template-columns: 1fr 1fr"] {
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 16px !important;
+    /* Reduce inner scroll-area padding on mobile */
+    #predictiveModal .predictive-modal > div[style*="padding: 32px"],
+    #employeePerformanceModal .predictive-modal > div[style*="padding: 32px"] {
+        padding: 20px 16px !important;
     }
 
-    .main-forecast-card {
-        flex-direction: column !important;
-        gap: 16px !important;
-        padding: 24px 16px !important;
-    }
-
+    /* ── Header ─────────────────────────────────────── */
     .predictive-header {
-        flex-direction: column !important;
+        flex-direction: row !important;
         align-items: flex-start !important;
+        justify-content: space-between !important;
+        gap: 8px !important;
+        flex-wrap: nowrap !important;
+    }
+
+    /* Shrink title font on mobile */
+    .predictive-title {
+        font-size: 18px !important;
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+    }
+
+    /* Keep close button anchored top-right, normal flow */
+    .predictive-header > button {
+        flex-shrink: 0 !important;
+        position: static !important;
+    }
+
+    /* Employee modal — avatar + name header */
+    #employeePerformanceModal .predictive-header > div:first-child {
+        gap: 10px !important;
+    }
+
+    #employeePerformanceModal .predictive-header div[style*="font-size: 24px"] {
+        font-size: 17px !important;
+    }
+
+    /* ── "Tomorrow's Expected Load" / "Attendance Probability" banner ── */
+    #predictiveModal div[style*="min-width: 320px"],
+    #employeePerformanceModal div[style*="min-width: 320px"] {
+        min-width: 0 !important;
+        width: 100% !important;
+        padding: 16px 20px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Outer wrapper that centres the banner */
+    #predictiveModal div[style*="justify-content: center"][style*="margin-bottom: 24px"],
+    #employeePerformanceModal div[style*="justify-content: center"][style*="margin-bottom: 24px"] {
+        padding: 0 !important;
+    }
+
+    /* ── .perf-main-analysis-card (admin predictive modal, redesigned) ── */
+    .perf-main-analysis-card {
+        flex-direction: column !important;
+        align-items: center !important;
+        gap: 20px !important;
+        padding: 20px 14px !important;
+    }
+
+    .perf-main-analysis-card > div:first-child {
+        flex-shrink: 0 !important;
+        margin: 0 auto !important;
+    }
+
+    .perf-main-analysis-card > div:last-child {
+        width: 100% !important;
+        flex: unset !important;
+    }
+
+    .perf-main-analysis-card > div:last-child > div[style*="grid-template-columns"] {
+        grid-template-columns: 1fr 1fr !important;
+        width: 100% !important;
         gap: 12px !important;
     }
 
-    /* Keep the close button positioned properly */
-    .predictive-header > button {
-        position: absolute !important;
-        top: 24px !important;
-        right: 24px !important;
+    /* Hide Bezier badge on mobile (class-based, reliable) */
+    .bezier-badge {
+        display: none !important;
     }
 
+    /* ── Main analysis card (circular chart + stats) ── */
+    .main-forecast-card {
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        gap: 20px !important;
+        padding: 20px 14px !important;
+    }
+
+    /* Circle wrapper — admin modal */
+    .main-forecast-card > div:first-child {
+        flex-shrink: 0 !important;
+        margin: 0 auto !important;
+    }
+
+    /* Stats section — admin modal */
+    .main-forecast-card > div:last-child {
+        width: 100% !important;
+        flex: unset !important;
+    }
+
+    /* 2-col stats grid — admin modal */
+    .main-forecast-card > div:last-child > div[style*="grid-template-columns"] {
+        grid-template-columns: 1fr 1fr !important;
+        width: 100% !important;
+        gap: 12px !important;
+    }
+
+    /* Employee modal — main analysis section (no class, use attribute) */
+    #employeePerformanceModal div[style*="display: flex"][style*="align-items: center"][style*="gap: 40px"] {
+        flex-direction: column !important;
+        align-items: center !important;
+        gap: 20px !important;
+        padding: 20px 14px !important;
+    }
+
+    /* Circle — employee modal */
+    #employeePerformanceModal div[style*="width: 140px"][style*="flex-shrink: 0"] {
+        margin: 0 auto !important;
+    }
+
+    /* Stats flex:1 section — employee modal */
+    #employeePerformanceModal div[style*="display: flex"][style*="align-items: center"][style*="gap: 40px"] > div:last-child {
+        width: 100% !important;
+        flex: unset !important;
+    }
+
+    /* 3-col stats grid → 2-col on mobile — employee modal */
+    #employeePerformanceModal div[style*="grid-template-columns: 1fr 1fr 1fr"] {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 12px !important;
+    }
+
+    /* ── Chart sections (Engagement Velocity) ─────── */
+    /* Chart header row: stack vertically */
+    .activity-chart-section > div[style*="justify-content: space-between"],
+    #employeePerformanceModal div[style*="background: #ffffff"][style*="border-radius: 28px"] > div[style*="justify-content: space-between"] {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 10px !important;
+    }
+
+    /* Day-range buttons + Bezier badge row — wrap them */
+    .activity-chart-section div[style*="display: flex"][style*="align-items: center"][style*="gap: 12px"],
+    #employeePerformanceModal div[style*="display: flex"][style*="align-items: center"][style*="gap: 12px"] {
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+    }
+
+    /* Hide "Bezier Interpolation" text badge on mobile to save space */
+    .activity-chart-section div[style*="Bezier Interpolation"],
+    #employeePerformanceModal div[style*="Bezier Interpolation"] {
+        display: none !important;
+    }
+
+    /* ── AI Insight / Executive Intelligence section ─ */
+    /* Admin modal insight: float causes issues → clear it */
+    #predictiveModal div[style*="background: #f8fafc"] span[style*="float: left"] {
+        float: none !important;
+        display: inline-flex !important;
+        margin-bottom: 10px !important;
+        margin-right: 0 !important;
+    }
+
+    /* Employee modal AI insight: tighten gap */
+    #employeePerformanceModal div[style*="display: flex"][style*="gap: 20px"][style*="align-items: flex-start"] {
+        gap: 12px !important;
+    }
+
+    #employeePerformanceModal div[style*="display: flex"][style*="gap: 20px"][style*="align-items: flex-start"] > div:last-child div[style*="font-size: 13px"] {
+        font-size: 12px !important;
+    }
+
+    /* ── Bottom action buttons ─────────────────────── */
+    /* Admin: "ACKNOWLEDGE ANALYSIS" — full width */
+    #predictiveModal button[onclick*="closePredictiveModal"] {
+        width: 100% !important;
+        padding: 16px 20px !important;
+        font-size: 13px !important;
+        border-radius: 20px !important;
+    }
+
+    /* Employee: bottom bar */
+    #employeePerformanceModal div[style*="padding: 24px 32px"] {
+        padding: 16px !important;
+    }
+
+    /* ── Intelligence Hub card (dashboard widget) ── */
     .intelligence-hub-content-row {
         flex-direction: column !important;
         align-items: flex-start !important;

@@ -994,68 +994,67 @@ async function handleNotificationClick(type, id) {
     }
 
     // Auto-close notification dropdown
-    const list = document.getElementById('notificationList');
-    if (list) {
-        list.style.display = 'none';
-        list.classList.add('hidden');
-        const icon = document.getElementById('toggleIcon');
-        if (icon) icon.textContent = '▼';
-    }
+    const dropdown = document.getElementById('notificationDropdown');
+    if (dropdown) dropdown.style.display = 'none';
 }
 
 function updateNotificationBadge(count) {
     const badge = document.getElementById('notificationBadge');
+    const label = document.getElementById('notifBellLabel');
     if (badge) {
         badge.textContent = count;
         badge.style.display = count > 0 ? 'inline-block' : 'none';
-
-        // Add wiggle animation if new notifications
-        if (count > 0) {
-            const icon = document.querySelector('.notification-icon');
-            if (icon) {
-                icon.animate([
-                    { transform: 'rotate(0deg)' },
-                    { transform: 'rotate(-10deg)' },
-                    { transform: 'rotate(10deg)' },
-                    { transform: 'rotate(0deg)' }
-                ], {
-                    duration: 500,
-                    iterations: 2
-                });
-            }
+    }
+    if (label) {
+        label.textContent = count > 0 ? `${count} notification${count !== 1 ? 's' : ''}` : 'notifications';
+    }
+    // Wiggle the bell icon if there are new notifications
+    if (count > 0) {
+        const bellIcon = document.querySelector('.notif-bell-icon');
+        if (bellIcon) {
+            bellIcon.animate([
+                { transform: 'rotate(0deg)' },
+                { transform: 'rotate(-15deg)' },
+                { transform: 'rotate(15deg)' },
+                { transform: 'rotate(-10deg)' },
+                { transform: 'rotate(0deg)' }
+            ], { duration: 600, iterations: 2 });
         }
     }
 }
 
 function toggleNotifications() {
-    const list = document.getElementById('notificationList');
-    const icon = document.getElementById('toggleIcon');
-    if (!list) return;
+    const dropdown = document.getElementById('notificationDropdown');
+    if (!dropdown) return;
 
-    const isHidden = list.style.display === 'none' || list.classList.contains('hidden');
+    const isHidden = dropdown.style.display === 'none' || !dropdown.style.display;
 
     if (isHidden) {
-        list.style.display = 'block';
-        list.classList.remove('hidden');
-        if (icon) icon.textContent = '▲';
+        dropdown.style.display = 'block';
+        // Restart animation
+        dropdown.style.animation = 'none';
+        dropdown.offsetHeight; // reflow
+        dropdown.style.animation = '';
     } else {
-        list.style.display = 'none';
-        list.classList.add('hidden');
-        if (icon) icon.textContent = '▼';
+        dropdown.style.display = 'none';
     }
 }
+
+// Close notification dropdown when clicking outside
+document.addEventListener('click', function(e) {
+    const dropdown = document.getElementById('notificationDropdown');
+    const bellBtn = document.getElementById('notifBellBtn');
+    if (dropdown && bellBtn && !bellBtn.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.style.display = 'none';
+    }
+});
 
 async function markAllAsRead() {
     try {
         await apiCall('mark-notifications-read', 'POST', { user_id: currentUser.id });
         updateNotificationBadge(0);
-        const list = document.getElementById('notificationList');
-        if (list) {
-            list.style.display = 'none';
-            list.classList.add('hidden');
-        }
-        const icon = document.getElementById('toggleIcon');
-        if (icon) icon.textContent = '▼';
+        const dropdown = document.getElementById('notificationDropdown');
+        if (dropdown) dropdown.style.display = 'none';
 
         showNotification('All notifications marked as read', 'success');
         loadNotifications(); // Refresh list

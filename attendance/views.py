@@ -2136,6 +2136,9 @@ def employee_performance_analysis(request, employee_id):
                         hours = round((now_local - check_in_dt).total_seconds() / 3600, 2)
                         hours = max(0.0, min(hours, 14.0))
                     except: pass
+                
+                if r.status == 'half_day' or getattr(r, 'is_half_day', False):
+                    hours = max(hours, 4.5)
             else:
                 hours = 0.0
 
@@ -3498,6 +3501,20 @@ def intelligence_hub_forecast(request):
         forecast, confidence, trend = calculate_forecast()
         day_name = get_current_day_name()
         model_state = load_model_state()
+        
+        # --- Lazy Auto-Training Fallback ---
+        from django.utils import timezone
+        import threading
+        now = timezone.localtime(timezone.now())
+        if now.hour > 18 or (now.hour == 18 and now.minute >= 30):
+            last_trained_str = model_state.get('last_trained', '') if model_state else ''
+            if str(now.date()) not in last_trained_str:
+                try:
+                    from .management.commands.train_forecast_model import run_train_forecast_model
+                    threading.Thread(target=run_train_forecast_model, daemon=True).start()
+                except:
+                    pass
+        # -----------------------------------
         
         employee_id = request.GET.get('employee_id')
         if employee_id:

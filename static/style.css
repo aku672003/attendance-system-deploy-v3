@@ -344,7 +344,7 @@ body {
 /* Stats Grid */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
     gap: 16px;
     margin-bottom: 24px;
 }
@@ -580,7 +580,7 @@ body {
 /* Actions Grid */
 .actions-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
     gap: 24px;
     margin-bottom: 32px;
 }
@@ -1311,113 +1311,168 @@ body {
 }
 
 /* ==================== RESPONSIVE DESIGN ==================== */
-/* Notification Bar */
-.notification-bar {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 12px;
-    margin-bottom: 24px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    color: white;
-    overflow: hidden;
-    transition: all 0.3s ease;
-}
 
-.notification-container {
-    padding: 0;
-}
-
-.notification-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px 20px;
-    cursor: pointer;
-    background: rgba(255, 255, 255, 0.1);
-    transition: background 0.2s;
-}
-
-.notification-header:hover {
-    background: rgba(255, 255, 255, 0.15);
-}
-
-.notification-title {
+/* ==================== HEADER TITLE GROUP ==================== */
+.header-title-group {
     display: flex;
     align-items: center;
     gap: 12px;
-    font-weight: 600;
-    font-size: 1.1rem;
 }
 
-.notification-icon-wrapper {
-    position: relative;
+/* ==================== NOTIFICATION BELL BUTTON ==================== */
+.notif-bell-btn {
     display: flex;
     align-items: center;
-}
-
-.notification-icon {
-    font-size: 1.4rem;
-}
-
-.notification-badge {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    background: #ef4444;
+    gap: 0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    border-radius: 50px;
+    padding: 6px 10px;
+    cursor: pointer;
     color: white;
-    border-radius: 10px;
-    padding: 2px 6px;
-    font-size: 0.75rem;
-    font-weight: bold;
-    min-width: 18px;
-    text-align: center;
-    border: 1px solid white;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    transition: padding 0.3s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+    position: relative;
+    overflow: hidden;
 }
 
-.notification-text {
-    letter-spacing: 0.5px;
+.notif-bell-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(102, 126, 234, 0.55);
 }
 
-.notification-toggle-btn {
-    background: rgba(255, 255, 255, 0.2);
-    width: 28px;
-    height: 28px;
+.notif-bell-btn:active {
+    transform: translateY(0);
+}
+
+.notif-bell-icon-wrap {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
-    font-size: 0.8rem;
-    transition: all 0.3s ease;
+    flex-shrink: 0;
 }
 
-.notification-list {
-    background: white;
-    max-height: 400px;
-    overflow-y: auto;
-    animation: slideDown 0.3s ease-out;
-    position: relative;
-    z-index: 900;
+.notif-bell-icon {
+    font-size: 1.1rem;
+    line-height: 1;
+    display: block;
 }
 
-@keyframes slideDown {
+.notif-bell-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: #ef4444;
+    color: white;
+    border-radius: 10px;
+    padding: 1px 5px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    min-width: 16px;
+    text-align: center;
+    border: 1.5px solid white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+    line-height: 1.4;
+}
+
+.notif-bell-label {
+    max-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    opacity: 0;
+    transition: max-width 0.35s ease, opacity 0.3s ease, margin-left 0.3s ease;
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin-left: 0;
+}
+
+.notif-bell-btn:hover .notif-bell-label {
+    max-width: 140px;
+    opacity: 1;
+    margin-left: 7px;
+}
+
+/* ==================== NOTIFICATION DROPDOWN ==================== */
+.notif-dropdown {
+    background: #ffffff;
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.13), 0 2px 8px rgba(102, 126, 234, 0.1);
+    border: 1px solid rgba(102, 126, 234, 0.15);
+    margin-bottom: 20px;
+    overflow: hidden;
+    animation: notifDropIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes notifDropIn {
     from {
         opacity: 0;
-        transform: translateY(-10px);
+        transform: translateY(-8px) scale(0.98);
     }
-
     to {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(0) scale(1);
     }
 }
 
+.notif-dropdown-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.notif-dropdown-title {
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: 0.3px;
+}
+
+.notif-dropdown-close {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.notif-dropdown-close:hover {
+    background: rgba(255,255,255,0.35);
+}
+
+.notif-dropdown-body {
+    max-height: 360px;
+    overflow-y: auto;
+}
+
+.notif-dropdown-footer {
+    padding: 10px;
+    text-align: center;
+    background: #f9fafb;
+    border-top: 1px solid #e5e7eb;
+}
+
+/* Reuse existing notification item styles */
 .notification-item {
     cursor: pointer;
-    padding: 16px 20px;
+    padding: 14px 20px;
     border-bottom: 1px solid #f3f4f6;
     display: flex;
     align-items: flex-start;
-    gap: 16px;
+    gap: 14px;
     transition: background 0.2s;
     color: #1f2937;
 }
@@ -1431,10 +1486,10 @@ body {
 }
 
 .notification-item-icon {
-    font-size: 1.5rem;
+    font-size: 1.4rem;
     background: #eff6ff;
-    width: 40px;
-    height: 40px;
+    width: 38px;
+    height: 38px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1444,42 +1499,25 @@ body {
 
 .notification-item-content {
     flex: 1;
+    min-width: 0;
 }
 
 .notification-item-message {
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     color: #374151;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
     font-weight: 500;
     line-height: 1.4;
 }
 
 .notification-item-time {
-    font-size: 0.8rem;
+    font-size: 0.77rem;
     color: #9ca3af;
 }
 
-.notification-footer {
-    padding: 10px;
-    text-align: center;
-    background: #f9fafb;
-    border-top: 1px solid #e5e7eb;
-}
-
-/* Mobile responsive fixes */
-@media (max-width: 640px) {
-    .notification-bar {
-        border-radius: 8px;
-        margin-bottom: 16px;
-    }
-
-    .notification-header {
-        padding: 12px 16px;
-    }
-
-    .notification-title {
-        font-size: 1rem;
-    }
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
 @media (max-width: 768px) {
@@ -1535,6 +1573,27 @@ body {
     .widget-lg,
     .widget-xl {
         grid-column: span 1 !important;
+    }
+
+    /* Doc-row: stack checkbox label ON TOP of the form fields on mobile */
+    .doc-row {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        justify-content: flex-start !important;
+        gap: 10px !important;
+    }
+
+    .doc-row > label.form-label {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 8px !important;
+        font-weight: 600;
+        width: 100%;
+    }
+
+    .doc-row > .form-row {
+        width: 100% !important;
     }
 
     .camera-controls {
@@ -6617,13 +6676,18 @@ body.birthday-mode-active .profile-alert-text {
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 
-body.birthday-mode-active .notification-bar {
-    background: rgba(30, 0, 60, 0.85) !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+body.birthday-mode-active .notif-dropdown {
+    background: rgba(30, 0, 60, 0.92) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
 }
 
-body.birthday-mode-active .notification-title {
+body.birthday-mode-active .notification-item {
     color: #ffffff !important;
+    border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+body.birthday-mode-active .notification-item-message {
+    color: #f0e6ff !important;
 }
 
 /* Status & Location Visibility Fixes */
@@ -7424,18 +7488,36 @@ body.dark-mode .profile-alert-text {
     color: #d1d5db !important;
 }
 
-body.dark-mode .notification-bar {
-    background: #000000 !important;
-    border: 1px solid rgba(139, 92, 246, 0.3) !important;
+body.dark-mode .notif-dropdown {
+    background: #111111 !important;
+    border-color: rgba(139, 92, 246, 0.3) !important;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8) !important;
 }
 
-body.dark-mode .notification-header {
-    background: rgba(139, 92, 246, 0.1) !important;
+body.dark-mode .notif-dropdown-body {
+    background: #111111 !important;
 }
 
-body.dark-mode .notification-header:hover {
+body.dark-mode .notif-dropdown-footer {
+    background: #0a0a0a !important;
+    border-top-color: rgba(255,255,255,0.08) !important;
+}
+
+body.dark-mode .notification-item {
+    color: #e5e7eb !important;
+    border-bottom-color: rgba(255,255,255,0.06) !important;
+}
+
+body.dark-mode .notification-item:hover {
+    background: rgba(255,255,255,0.05) !important;
+}
+
+body.dark-mode .notification-item-icon {
     background: rgba(139, 92, 246, 0.15) !important;
+}
+
+body.dark-mode .notification-item-message {
+    color: #e5e7eb !important;
 }
 
 body.dark-mode .header {
@@ -8635,58 +8717,52 @@ body.dark-mode .resize-btn {
     box-shadow: 0 4px 10px rgba(var(--primary-rgb), 0.3);
 }
 
-/* Widget Sizing Classes */
-/* Small: Square-ish (1/3 width on desktop) */
+/* Widget Sizing Classes — S=1col, M=2col, L=3col, XL=4col (on a 4-column grid) */
 .widget-sm {
     grid-column: span 1 !important;
 }
 
-@media (max-width: 1024px) {
-    .widget-sm {
-        grid-column: span 1 !important;
-    }
-}
-
-@media (max-width: 600px) {
-    .widget-sm {
-        grid-column: span 1 !important;
-    }
-}
-
-/* Medium: Rectangle (2/3 width on desktop) */
 .widget-md {
-    grid-column: span 2;
+    grid-column: span 2 !important;
     height: 200px;
 }
 
-/* Large: Full Width Banner */
 .widget-lg {
-    grid-column: 1 / -1;
+    grid-column: span 3 !important;
     height: 200px;
 }
 
-/* XL: 4-Column Area */
 .widget-xl {
-    grid-column: span 4;
+    grid-column: span 4 !important;
     height: 200px;
 }
 
-@media (max-width: 1200px) {
-    .widget-md {
-        grid-column: span 2;
+/* Responsive: collapse to 2 columns on medium screens */
+@media (max-width: 1024px) {
+    .stats-grid,
+    .actions-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .widget-lg,
+    .widget-xl {
+        grid-column: 1 / -1 !important;
     }
 }
 
-@media (max-width: 768px) {
+/* Responsive: single column on mobile */
+@media (max-width: 640px) {
+    .stats-grid,
+    .actions-grid {
+        grid-template-columns: 1fr;
+    }
 
     .widget-sm,
     .widget-md,
     .widget-lg,
     .widget-xl,
     .widget-full {
-        grid-column: span 1;
-        aspect-ratio: auto;
-        /* Reset aspect ratio on mobile so content doesn't break */
+        grid-column: span 1 !important;
         min-height: auto;
     }
 }
@@ -9295,13 +9371,14 @@ body.dark-mode .edit-btn-group {
         font-size: 28px;
     }
 
-    /* --- Notification Bar --- */
-    .notification-bar {
-        border-radius: 10px;
+    /* --- Notification Bell --- */
+    .notif-bell-label {
+        /* always hidden on small screens to save space */
+        display: none !important;
     }
 
-    .notification-header {
-        padding: 12px 16px;
+    .notif-bell-btn:hover .notif-bell-label {
+        display: none !important;
     }
 
     /* --- Mentor Status Banner --- */
