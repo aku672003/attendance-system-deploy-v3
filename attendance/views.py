@@ -2115,6 +2115,63 @@ def employee_performance_analysis(request, employee_id):
         else:
             prediction_score = 85.0
 
+        # Create predictive graph data for individual
+        predict_days = int(request.GET.get('predict_days', 3))
+        history_days = 3
+        graph_data = []
+
+        graph_dates = []
+        for i in range(history_days, 0, -1):
+            graph_dates.append(today - timedelta(days=i))
+        graph_dates.append(today)
+
+        for d in graph_dates:
+            r = AttendanceRecord.objects.filter(employee=employee, date=d).first()
+            if r:
+                hours = float(r.total_hours or 0)
+                if not r.check_out_time and r.check_in_time and r.date == now_local.date():
+                    try:
+                        check_in_t = datetime.strptime(str(r.check_in_time), '%H:%M:%S').time()
+                        check_in_dt = timezone.make_aware(datetime.combine(r.date, check_in_t))
+                        hours = round((now_local - check_in_dt).total_seconds() / 3600, 2)
+                        hours = max(0.0, min(hours, 14.0))
+                    except: pass
+            else:
+                hours = 0.0
+
+            if d == today:
+                day_name = 'Today'
+            elif d == today - timedelta(days=1):
+                day_name = 'Yesterday'
+            else:
+                day_name = d.strftime('%A')
+            
+            graph_data.append({
+                'date': d.strftime('%Y-%m-%d'),
+                'day_name': day_name,
+                'hours': hours,
+                'is_prediction': False
+            })
+
+        from .intelligence_hub import calculate_forecast, IndividualPredictor
+        org_forecast, _, _ = calculate_forecast()
+        individual_engine = IndividualPredictor()
+
+        for i in range(1, predict_days + 1):
+            target_date = today + timedelta(days=i)
+            base_pred = individual_engine.predict(employee, org_forecast)
+            if target_date.weekday() >= 5:
+                pred_hours = 0.0
+            else:
+                pred_hours = (base_pred / 100) * 8.0
+            
+            graph_data.append({
+                'date': target_date.strftime('%Y-%m-%d'),
+                'day_name': target_date.strftime('%A'),
+                'hours': round(pred_hours, 1),
+                'is_prediction': True
+            })
+
         # Attendance Habits (Averages for filtered period)
         attendance_with_time = records.filter(check_in_time__isnull=False)
         
@@ -2269,7 +2326,8 @@ def employee_performance_analysis(request, employee_id):
             'prediction': {
                 'likelihood': round(prediction_score, 1),
                 'tomorrow_day': tomorrow.strftime('%A'),
-                'habit_summary': f"Usually present on {tomorrow.strftime('%A')}s" if prediction_score > 70 else f"Irregular pattern on {tomorrow.strftime('%A')}s"
+                'habit_summary': f"Usually present on {tomorrow.strftime('%A')}s" if prediction_score > 70 else f"Irregular pattern on {tomorrow.strftime('%A')}s",
+                'graph_data': graph_data
             }
         })
     except Employee.DoesNotExist:
@@ -3503,7 +3561,8 @@ def intelligence_hub_trends(request):
         from .intelligence_hub import get_company_overview
         
         days = int(request.GET.get('days', 30))
-        overview_data = get_company_overview(days)
+        predict_days = int(request.GET.get('predict_days', 3))
+        overview_data = get_company_overview(days, predict_days)
         
         return Response({
             'success': True,

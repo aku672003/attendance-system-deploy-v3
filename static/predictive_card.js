@@ -428,7 +428,28 @@ async function viewTrends() {
     }
 }
 
-function openPredictiveAnalysisModal(data) {
+window.currentGraphContext = { type: 'trends', id: null, days: 3 };
+
+async function changePredictiveDays(days) {
+    const ctx = window.currentGraphContext;
+    if (ctx.type === 'trends') {
+        showLoading("Updating forecast...");
+        try {
+            const result = await apiCall(`intelligence-hub-trends?days=30&predict_days=${days}`, 'GET');
+            if (result.success) openPredictiveAnalysisModal(result, days);
+        } finally { hideLoading(); }
+    } else if (ctx.type === 'employee') {
+        showLoading("Updating forecast...");
+        try {
+            const viewType = document.querySelector('.performance-filter.active')?.dataset.filter || 'period';
+            const result = await apiCall(`employee-performance-analysis/${ctx.id}?view_type=${viewType}&predict_days=${days}`, 'GET');
+            if (result.success) renderEmployeePerformanceModal(result, ctx.id, days);
+        } finally { hideLoading(); }
+    }
+}
+
+function openPredictiveAnalysisModal(data, predictDays = 3) {
+    window.currentGraphContext = { type: 'trends', id: null, days: predictDays };
     let modal = document.getElementById('predictiveModal');
     if (!modal) {
         modal = document.createElement('div');
@@ -455,7 +476,8 @@ function openPredictiveAnalysisModal(data) {
         return [p1x, p1y, p2x, p2y];
     };
 
-    const graphPoints = points.map((v, i) => ({ x: i * 115, y: 120 - (v.rate / 100 * 100) }));
+    const xStep = points.length > 1 ? (575 / (points.length - 1)) : 115;
+    const graphPoints = points.map((v, i) => ({ x: i * xStep, y: 120 - (v.rate / 100 * 100) }));
     let bezierPath = `M ${graphPoints[0].x} ${graphPoints[0].y}`;
     for (let i = 0; i < graphPoints.length - 1; i++) {
         const p0 = graphPoints[i - 1] || graphPoints[i];
@@ -538,8 +560,14 @@ function openPredictiveAnalysisModal(data) {
                 <div class="activity-chart-section" style="background: #ffffff; padding: 24px; border-radius: 28px; border: 1px solid #f1f5f9; margin-bottom: 24px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                         <div style="font-size: 12px; font-weight: 900; color: #1e293b; text-transform: uppercase; letter-spacing: 1px;">Engagement Velocity</div>
-                        <div style="font-size: 10px; font-weight: 800; color: #6366f1; background: rgba(99, 102, 241, 0.05); padding: 6px 14px; border-radius: 20px; display: flex; align-items: center; gap: 6px; border: 1px solid rgba(99, 102, 241, 0.1);">
-                            <span style="font-size: 14px;">📉</span> Bezier Interpolation
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div style="display: flex; gap: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase;">
+                                <button onclick="changePredictiveDays(3)" style="padding: 6px 12px; border-radius: 8px; border: 1px solid ${predictDays === 3 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 3 ? '#eef2ff' : 'white'}; color: ${predictDays === 3 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">3 Days</button>
+                                <button onclick="changePredictiveDays(7)" style="padding: 6px 12px; border-radius: 8px; border: 1px solid ${predictDays === 7 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 7 ? '#eef2ff' : 'white'}; color: ${predictDays === 7 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">1 Week</button>
+                            </div>
+                            <div style="font-size: 10px; font-weight: 800; color: #6366f1; background: rgba(99, 102, 241, 0.05); padding: 6px 14px; border-radius: 20px; display: flex; align-items: center; gap: 6px; border: 1px solid rgba(99, 102, 241, 0.1);">
+                                <span style="font-size: 14px;">📉</span> Bezier Interpolation
+                            </div>
                         </div>
                     </div>
                     <div style="height: 160px; position: relative; padding: 10px 0;">
@@ -554,7 +582,7 @@ function openPredictiveAnalysisModal(data) {
                             <path d="${bezierPath}" fill="none" stroke="#6366f1" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1000" stroke-dashoffset="1000" style="animation: forecast-draw 1.5s forwards 0.2s;" />
                             ${points.map((v, i) => {
                                 const color = v.is_prediction ? '#6366f1' : '#cbd5e1';
-                                const px = i * 115;
+                                const px = i * xStep;
                                 const py = 120 - (v.rate / 100 * 100);
                                 return `
                                     <circle cx="${px}" cy="${py}" r="${v.is_prediction ? 6 : 5}" fill="white" stroke="${color}" stroke-width="3" style="opacity: 0; animation: forecast-point 0.5s forwards ${0.8 + (i * 0.1)}s;" />
@@ -562,9 +590,9 @@ function openPredictiveAnalysisModal(data) {
                                 `;
                             }).join('')}
                         </svg>
-                        <div style="display: flex; justify-content: space-between; margin-top: 20px; border-top: 1px solid #f8fafc; padding-top: 12px;">
-                            ${points.map(v => `
-                                <div style="font-size: 10px; font-weight: 850; color: ${v.is_prediction ? '#6366f1' : '#94a3b8'}; text-align: center; width: 64px;">${v.day_name === 'Yesterday' || v.day_name === 'Today' ? v.day_name : v.day_name.substring(0, 3).toUpperCase()}</div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 20px; border-top: 1px solid #f8fafc; padding-top: 12px; position: relative;">
+                            ${points.map((v, i) => `
+                                <div style="font-size: 10px; font-weight: 850; color: ${v.is_prediction ? '#6366f1' : (v.day_name === 'Today' ? '#0f172a' : '#94a3b8')}; text-align: center; position: absolute; left: ${i * xStep}px; transform: translateX(-50%); width: 64px; ${v.day_name === 'Today' ? 'background: #f1f5f9; padding: 2px 0; border-radius: 4px;' : ''}">${v.day_name === 'Yesterday' || v.day_name === 'Today' ? v.day_name : v.day_name.substring(0, 3).toUpperCase()}</div>
                             `).join('')}
                         </div>
                     </div>
@@ -764,7 +792,9 @@ function viewMyStats() {
     }
 }
 
-function renderEmployeePerformanceModal(data, employeeId) {
+function renderEmployeePerformanceModal(data, employeeId, predictDays = 3) {
+    window.currentGraphContext = { type: 'employee', id: employeeId, days: predictDays };
+    
     const existing = document.getElementById('employeePerformanceModal');
     if (existing) existing.remove();
 
@@ -798,22 +828,12 @@ function renderEmployeePerformanceModal(data, employeeId) {
         return [p1x, p1y, p2x, p2y];
     };
 
-    // Graph points from last 6 entries in history + 1 prediction for tomorrow
-    const graphData = [...history].reverse().slice(-6);
-    
-    // Add prediction for tomorrow
-    const tomorrowDate = new Date();
-    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-    const predictedHours = (p.likelihood / 100) * 8;
-    
-    graphData.push({
-        date: tomorrowDate.toISOString().split('T')[0],
-        hours: predictedHours,
-        is_prediction: true
-    });
+    // Use the backend-provided composite graph data
+    const graphData = p.graph_data || [];
 
+    const xStep = graphData.length > 1 ? (575 / (graphData.length - 1)) : 95;
     const graphPoints = graphData.map((v, i) => ({ 
-        x: i * 95, 
+        x: i * xStep, 
         y: 120 - (Math.min(v.hours, 12) / 12 * 100) 
     }));
     
@@ -915,8 +935,14 @@ function renderEmployeePerformanceModal(data, employeeId) {
                 <div style="background: #ffffff; border: 1px solid #f1f5f9; border-radius: 28px; padding: 24px; margin-bottom: 24px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                         <div style="font-size: 14px; font-weight: 900; color: #0f172a;">Engagement Velocity</div>
-                        <div style="font-size: 10px; font-weight: 800; color: #64748b; background: #f8fafc; padding: 6px 12px; border-radius: 10px; display: flex; align-items: center; gap: 6px;">
-                            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236366f1' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 3v18h18'/%3E%3Cpath d='M7 16l4-4 4 4 6-6'/%3E%3C/svg%3E" style="width: 12px;"/> Bezier Interpolation
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div style="display: flex; gap: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase;">
+                                <button onclick="changePredictiveDays(3)" style="padding: 6px 12px; border-radius: 8px; border: 1px solid ${predictDays === 3 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 3 ? '#eef2ff' : 'white'}; color: ${predictDays === 3 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">3 Days</button>
+                                <button onclick="changePredictiveDays(7)" style="padding: 6px 12px; border-radius: 8px; border: 1px solid ${predictDays === 7 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 7 ? '#eef2ff' : 'white'}; color: ${predictDays === 7 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">1 Week</button>
+                            </div>
+                            <div style="font-size: 10px; font-weight: 800; color: #64748b; background: #f8fafc; padding: 6px 12px; border-radius: 10px; display: flex; align-items: center; gap: 6px;">
+                                <span style="font-size: 14px;">📉</span> Bezier Interpolation
+                            </div>
                         </div>
                     </div>
                     
@@ -943,8 +969,8 @@ function renderEmployeePerformanceModal(data, employeeId) {
                             <!-- Points -->
                             ${graphPoints.map((pt, i) => `
                                 <circle cx="${pt.x}" cy="${pt.y}" r="6" fill="${graphData[i].is_prediction ? 'white' : '#6366f1'}" stroke="#6366f1" stroke-width="3" />
-                                <text x="${pt.x}" y="170" text-anchor="middle" style="font-size: 11px; font-weight: 850; fill: ${graphData[i].is_prediction ? '#6366f1' : '#94a3b8'}; text-transform: uppercase;">
-                                    ${new Date(graphData[i].date).toLocaleDateString('en-US', {weekday: 'short'}).toUpperCase()}
+                                <text x="${pt.x}" y="170" text-anchor="middle" style="font-size: 11px; font-weight: 850; fill: ${graphData[i].is_prediction ? '#6366f1' : (graphData[i].day_name === 'Today' ? '#0f172a' : '#94a3b8')}; text-transform: uppercase;">
+                                    ${graphData[i].day_name === 'Yesterday' || graphData[i].day_name === 'Today' ? graphData[i].day_name : graphData[i].day_name.substring(0, 3).toUpperCase()}
                                 </text>
                                 <text x="${pt.x}" y="${pt.y - 15}" text-anchor="middle" style="font-size: 11px; font-weight: 900; fill: #6366f1;">
                                     ${graphData[i].hours.toFixed(1)}h

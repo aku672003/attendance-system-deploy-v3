@@ -178,19 +178,22 @@ def calculate_multi_day_forecast(days=7):
     return predictions
 
 
-def calculate_hybrid_forecast(predict_days=4):
+def calculate_hybrid_forecast(predict_days=3, history_days=3):
     """
-    Returns a list of 6 points: Yesterday, Today, and the next N predicted days.
+    Returns a list of points: history_days before today, Today, and the next predict_days prediction.
     """
     total_employees = Employee.objects.filter(role='employee').count()
     if total_employees == 0:
         return []
 
-    # 1. Get Yesterday and Today
+    # 1. Get History and Today
     today = datetime.now().date()
-    yesterday = today - timedelta(days=1)
     
-    dates = [yesterday, today]
+    dates = []
+    for i in range(history_days, 0, -1):
+        dates.append(today - timedelta(days=i))
+    dates.append(today)
+    
     actual_data = []
     
     for d in dates:
@@ -199,9 +202,17 @@ def calculate_hybrid_forecast(predict_days=4):
             status__in=['present', 'wfh', 'client']
         ).count()
         rate = round((count / total_employees * 100), 1)
+        
+        if d == today:
+            day_name = 'Today'
+        elif d == today - timedelta(days=1):
+            day_name = 'Yesterday'
+        else:
+            day_name = d.strftime('%A')
+            
         actual_data.append({
             'date': d.strftime('%Y-%m-%d'),
-            'day_name': 'Yesterday' if d == yesterday else 'Today',
+            'day_name': day_name,
             'rate': rate,
             'is_prediction': False
         })
@@ -724,7 +735,7 @@ def search_personnel(query=None, department=None, min_attendance=None, max_atten
     return results
 
 
-def get_company_overview(days=30):
+def get_company_overview(days=30, predict_days=3):
     """
     Get comprehensive company-wide attendance analytics (OPTIMIZED)
     Returns: {
@@ -1011,7 +1022,7 @@ def get_company_overview(days=30):
         'busiest_impact': busiest_impact,
         'model_accuracy': (load_model_state() or {}).get('stability_factor', 0.95) * 100,
         'forecast_7d': calculate_multi_day_forecast(7),
-        'hybrid_forecast': calculate_hybrid_forecast(4),
+        'hybrid_forecast': calculate_hybrid_forecast(predict_days),
         'ai_insight': ai_insight
     }
     
