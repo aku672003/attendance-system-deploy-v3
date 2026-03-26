@@ -10,6 +10,9 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('attendance.urls')),
     
+    # Service Worker handling - served from root to allow controlling the whole site
+    path('sw.js', views.service_worker_view, name='service_worker'),
+    
     # Favicon handling
     path('favicon.ico', TemplateView.as_view(template_name="index.html"), name='favicon'),
     

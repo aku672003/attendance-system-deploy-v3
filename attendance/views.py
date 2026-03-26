@@ -4110,3 +4110,27 @@ def save_push_subscription(request):
     )
     return Response({'success': True, 'message': 'Push subscription saved'})
 
+
+@csrf_exempt
+def service_worker_view(request):
+    """
+    Serve the Service Worker script from the root with the required 
+    Service-Worker-Allowed header to allow it to control the entire site scope.
+    """
+    try:
+        #sw_path = os.path.join(settings.BASE_DIR, 'static', 'sw.js')
+        # Optimized: use STATICFILES_DIRS if available
+        if hasattr(settings, 'STATICFILES_DIRS') and settings.STATICFILES_DIRS:
+            sw_path = os.path.join(settings.STATICFILES_DIRS[0], 'sw.js')
+        else:
+            sw_path = os.path.join(settings.BASE_DIR, 'static', 'sw.js')
+            
+        with open(sw_path, 'rb') as f:
+            content = f.read()
+        
+        response = HttpResponse(content, content_type='application/javascript')
+        response['Service-Worker-Allowed'] = '/'
+        return response
+    except Exception as e:
+        return HttpResponse(f"Service Worker not found: {str(e)}", status=404)
+

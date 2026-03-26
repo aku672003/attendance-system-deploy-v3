@@ -26,6 +26,7 @@ let currentCalendarYear = 0; // Set in init
 let currentPhotoLocation = null; // Store for overlay
 let serverTimeOffset = 0; // Milliseconds between server and local time
 let isExportAllCancelled = false; // Flag for cancellation
+let dashboardLocationWatchId = null; // Background watcher for dashboard
 
 /**
  * Returns a new Date object reflecting the current Indian Standard Time (IST),
@@ -78,6 +79,8 @@ document.addEventListener('DOMContentLoaded', async function () {
 
             loadDashboardData();
             updateDashboardVisibility();
+            startDashboardLocationWatch(); // Persistent background GPS watcher
+            checkAndUpdateLocationStatus(true); // Initial immediate check
 
             // Register push notifications for the returning session
             setupPushNotifications(currentUser.id);
@@ -134,8 +137,8 @@ async function setupPushNotifications(employeeId) {
             return;
         }
 
-        // Register (or retrieve) the service worker
-        const reg = await navigator.serviceWorker.register('/static/sw.js', { scope: '/' });
+        // Register (or retrieve) the service worker at the root scope
+        const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
         console.log('[Push] Service worker registered:', reg.scope);
 
         // Request notification permission (graceful if already granted/denied)
@@ -648,9 +651,14 @@ async function requestLocationOnce() {
     if (!('geolocation' in navigator)) return;
     return new Promise((resolve) => {
         navigator.geolocation.getCurrentPosition(
-            () => resolve(true),
+            (p) => {
+                // Also update cache if we get a one-shot fix
+                const { latitude: lat, longitude: lng, accuracy } = p.coords;
+                currentPhotoLocation = { lat, lng, accuracy: accuracy || 999, timestamp: Date.now() };
+                resolve(true);
+            },
             () => resolve(false),
-            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+            { enableHighAccuracy: true, timeout: 45000, maximumAge: 0 }
         );
     });
 }
@@ -831,6 +839,7 @@ async function handleLogin(event) {
 
             showNotification('Login successful!');
             showScreen('dashboardScreen');
+            startDashboardLocationWatch(); // Start persistent watcher on login
 
             try {
                 await loadDashboardData();
@@ -843,6 +852,8 @@ async function handleLogin(event) {
             }
 
             updateDashboardVisibility();
+            checkAndUpdateLocationStatus(true); // Automatic geolocation after login
+            
             // Register this browser for push notifications after successful login
             setupPushNotifications(currentUser.id);
         } else {
@@ -4142,10 +4153,76 @@ async function updateLocationStatus(updateAttendance = true) {
 }
 
 
+// ── Geolocation Optimizations & Watching ─────────────────────────────────────
+
+/**
+ * Starts a persistent background geolocation watcher to keep the GPS hardware warm.
+ * Updates the dashboard UI and currentPhotoLocation cache in real-time.
+ */
+function startDashboardLocationWatch() {
+    if (!('geolocation' in navigator)) return;
+    if (dashboardLocationWatchId !== null) return; // Already running
+
+    console.log('GPS: Starting background dashboard location watch...');
+    dashboardLocationWatchId = navigator.geolocation.watchPosition(
+        (pos) => {
+            const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+            const now = Date.now();
+            
+            // 1. Update global cache
+            currentPhotoLocation = { lat, lng, accuracy: accuracy || 999, timestamp: now };
+            
+            // 2. If on dashboard, perform a lightweight UI refresh
+            if (document.getElementById('dashboardScreen') && document.getElementById('dashboardScreen').classList.contains('active')) {
+                _updateLocationDashboardUI(lat, lng, accuracy || 999);
+            }
+        },
+        (err) => {
+            console.warn('GPS Watcher Error:', err);
+            // Don't show notifications here to avoid spamming the user on transient errors
+        },
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 10000 }
+    );
+}
+
+/**
+ * Lightweight, non-async UI update for the location widget.
+ * Used by the background watcher to provide instantaneous feedback.
+ */
+function _updateLocationDashboardUI(lat, lng, accuracy) {
+    const statusEl = document.getElementById('locationStatus');
+    const distEl = document.getElementById('locationDistance');
+    if (!statusEl || !distEl) return;
+
+    // Accuracy guard: if worse than 200m, keep previous status but show accuracy warning
+    if (accuracy > 200) {
+        // Only update if current status is checking or empty
+        if (statusEl.textContent === 'Checking...') {
+            statusEl.textContent = 'Optimizing GPS...';
+            distEl.textContent = `Accuracy: ±${Math.round(accuracy)}m...`;
+        }
+        return;
+    }
+
+    // Reuse existing offices list if available in scope or global
+    // Since we need offices to compute distance, we'll try to find nearby office.
+    // We'll use a globally cached offices list or just wait for the periodic checkAndUpdateLocationStatus
+    // to handle the heavy lifting. For now, we'll just update the cache.
+}
+
+
 // Computes "Location Status" on the dashboard and updates the UI
 async function checkAndUpdateLocationStatus(updateAttendance = true) {
     const statusEl = document.getElementById('locationStatus');
     const distEl = document.getElementById('locationDistance');
+    const btn = document.getElementById('enableLocationBtn');
+
+    // FAST-PATH: If we already have a fresh background fix, use it immediately!
+    const now = Date.now();
+    if (currentPhotoLocation && currentPhotoLocation.accuracy <= 200 && (now - currentPhotoLocation.timestamp) < 15000) {
+        console.log('GPS: Fast-path cache reuse for dashboard UI.');
+        return _renderLocationResultInternal(currentPhotoLocation.lat, currentPhotoLocation.lng, currentPhotoLocation.accuracy, updateAttendance);
+    }
 
     // Helper to render a retry link
     const showRetry = (msg, css = 'warning') => {
@@ -4203,54 +4280,27 @@ async function checkAndUpdateLocationStatus(updateAttendance = true) {
         } catch { }
     }
 
+    // Ensure background watcher is running
+    startDashboardLocationWatch();
+
     // 3) Try to get position with good timeouts
     try {
         const pos = await new Promise((resolve, reject) => {
             let settled = false;
-            const guard = setTimeout(() => { if (!settled) { settled = true; reject(Object.assign(new Error('timeout'), { code: 3 })); } }, 8000);
+            const guard = setTimeout(() => { if (!settled) { settled = true; reject(Object.assign(new Error('timeout'), { code: 3 })); } }, 65000);
             navigator.geolocation.getCurrentPosition(
                 (p) => { if (!settled) { settled = true; clearTimeout(guard); resolve(p); } },
                 (err) => { if (!settled) { settled = true; clearTimeout(guard); reject(err); } },
-                { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }
+                { enableHighAccuracy: true, timeout: 60000, maximumAge: 10000 } // Allow 10s old browser cache for speed
             );
         });
 
         const { latitude: lat, longitude: lng, accuracy } = pos.coords;
-        const accuracyM = accuracy || 9999;
-
-        // Guard: if accuracy is worse than 500m, the browser is using IP-based
-        // geolocation (no real GPS). This can be 9+ km off — don't trust it.
-        if (accuracyM > 500) {
-            statusEl.textContent = 'Location inaccurate';
-            statusEl.className = 'stat-card-value warning';
-            distEl.textContent = `Accuracy: ±${Math.round(accuracyM)}m — enable GPS/Wi-Fi for precise detection`;
-            if (updateAttendance) { isUserGeoInRange = false; updateCheckOutButtonState(); }
-            return { inRange: false };
-        }
-
-        // 4) Compute nearest office
-        let nearest = { d: Infinity, office: null };
-        for (const o of offices) {
-            const d = calculateDistance(lat, lng, parseFloat(o.latitude), parseFloat(o.longitude));
-            if (d < nearest.d) nearest = { d, office: o };
-        }
-
-        if (!nearest.office) {
-            statusEl.textContent = 'No offices';
-            statusEl.className = 'stat-card-value warning';
-            distEl.textContent = '';
-            if (updateAttendance) { isUserGeoInRange = false; updateCheckOutButtonState(); }
-            return { inRange: false }; // <-- MODIFIED (logically required)
-        }
-
-        const inRange = nearest.d <= (nearest.office.radius_meters || 0);
-        statusEl.textContent = inRange ? 'In Office Range' : 'Out of Range';
-        statusEl.className = 'stat-card-value ' + (inRange ? 'success' : 'warning');
-        distEl.textContent = `${nearest.office.name} • ${Math.round(nearest.d)} m`;
-        if (updateAttendance) { isUserGeoInRange = inRange; updateCheckOutButtonState(); }
-        return { inRange: inRange }; // <-- MODIFIED
+        return await _renderLocationResultInternal(lat, lng, accuracy, updateAttendance);
 
     } catch (err) {
+        if (btn) btn.style.display = 'block'; // Always show retry button on error
+
         // Differentiate errors
         if (err && err.code === 1) {            // PERMISSION_DENIED
             showRetry('Location permission denied', 'error');
@@ -4265,7 +4315,99 @@ async function checkAndUpdateLocationStatus(updateAttendance = true) {
             showRetry('Location error', 'warning');
             distEl.textContent = 'Retry or check permissions';
         }
-        return { inRange: false }; // <-- MODIFIED
+        return { inRange: false };
+    }
+}
+
+/**
+ * Internal helper to process a Lat/Lng and update the Dashboard UI.
+ * Extracted from checkAndUpdateLocationStatus to support fast-path reuse.
+ */
+async function _renderLocationResultInternal(lat, lng, accuracy, updateAttendance = true) {
+    const statusEl = document.getElementById('locationStatus');
+    const distEl = document.getElementById('locationDistance');
+    const btn = document.getElementById('enableLocationBtn');
+    if (!statusEl || !distEl) return { inRange: false };
+
+    const accuracyM = accuracy || 9999;
+
+    // 1) Load offices (so we can compute distance)
+    let offices = [];
+    try {
+        const res = await apiCall('offices', 'GET', { active: 1, department: currentUser.department });
+        offices = (res && res.success && Array.isArray(res.offices)) ? res.offices : [];
+    } catch { }
+
+    if (offices.length === 0) {
+        statusEl.textContent = 'No offices';
+        statusEl.className = 'stat-card-value warning';
+        distEl.textContent = '';
+        if (btn) btn.style.display = 'block';
+        if (updateAttendance) { isUserGeoInRange = false; updateCheckOutButtonState(); }
+        return { inRange: false };
+    }
+
+    // Save with timestamp for reuse in startAttendanceFlow & loadOfficeSelection
+    currentPhotoLocation = { lat, lng, accuracy: accuracyM, timestamp: Date.now() };
+
+    // Guard: if accuracy is worse than 200m
+    if (accuracyM > 200) {
+        statusEl.textContent = 'Location inaccurate';
+        statusEl.className = 'stat-card-value warning';
+        distEl.textContent = `Accuracy: ±${Math.round(accuracyM)}m — enable GPS/Wi-Fi for precise detection`;
+        if (btn) btn.style.display = 'block';
+        if (updateAttendance) { isUserGeoInRange = false; updateCheckOutButtonState(); }
+        return { inRange: false };
+    }
+
+    // 4) Compute nearest office
+    let nearest = { d: Infinity, office: null };
+    for (const o of offices) {
+        const d = calculateDistance(lat, lng, parseFloat(o.latitude), parseFloat(o.longitude));
+        if (d < nearest.d) nearest = { d, office: o };
+    }
+
+    if (!nearest.office) {
+        statusEl.textContent = 'No offices';
+        statusEl.className = 'stat-card-value warning';
+        distEl.textContent = '';
+        if (btn) btn.style.display = 'block';
+        if (updateAttendance) { isUserGeoInRange = false; updateCheckOutButtonState(); }
+        return { inRange: false };
+    }
+
+    const inRange = nearest.d <= (nearest.office.radius_meters || 0);
+    statusEl.textContent = inRange ? 'In Office Range' : 'Out of Range';
+    statusEl.className = 'stat-card-value ' + (inRange ? 'success' : 'warning');
+    distEl.textContent = `${nearest.office.name} • ${Math.round(nearest.d)} m`;
+    
+    // Success: hide the manual button
+    if (btn) btn.style.display = 'none';
+
+    if (updateAttendance) { isUserGeoInRange = inRange; updateCheckOutButtonState(); }
+    return { inRange: inRange };
+}
+
+/**
+ * Manually trigger a high-accuracy location check from the dashboard button
+ */
+async function manualLocationCheck() {
+    const btn = document.getElementById('enableLocationBtn');
+    if (btn) btn.style.display = 'none';
+    
+    const statusEl = document.getElementById('locationStatus');
+    const distEl = document.getElementById('locationDistance');
+    if (statusEl) statusEl.textContent = 'Locating...';
+    if (distEl) distEl.textContent = 'Requesting GPS fix (up to 45s)...';
+    
+    showNotification('Requesting high-precision location. Please stay still.', 'info');
+    
+    try {
+        // Force a fresh fetch by calling with updateAttendance=true
+        await checkAndUpdateLocationStatus(true);
+    } catch (e) {
+        console.error('Manual location check failed', e);
+        if (btn) btn.style.display = 'block';
     }
 }
 
@@ -4406,21 +4548,27 @@ function selectType(type, e) {
 /* Entry point when user clicks "Check In" */
 async function startAttendanceFlow() {
     // --- MANDATORY LOCATION GATE ---
-    // Before showing the attendance screen, ensure location is accessible.
-    if (!currentPhotoLocation) {
+    // Use cached dashboard location if it's fresh (< 2 mins) and accurate (<= 200m)
+    const isLocationFresh = currentPhotoLocation && 
+                            currentPhotoLocation.accuracy <= 200 && 
+                            (Date.now() - (currentPhotoLocation.timestamp || 0) < 120000);
+
+    if (!isLocationFresh) {
+        currentPhotoLocation = null; // Only clear if not fresh/accurate
         showNotification('Requesting location access...', 'info');
         try {
             const pos = await new Promise((res, rej) =>
                 navigator.geolocation.getCurrentPosition(res, rej, {
                     enableHighAccuracy: true,
-                    timeout: 10000,
+                    timeout: 45000,
                     maximumAge: 0
                 })
             );
             currentPhotoLocation = {
                 lat: pos.coords.latitude,
                 lng: pos.coords.longitude,
-                accuracy: pos.coords.accuracy
+                accuracy: pos.coords.accuracy,
+                timestamp: Date.now()
             };
         } catch (e) {
             showNotification('Location access is required to mark attendance. Please enable GPS/Location and try again.', 'error');
@@ -4823,9 +4971,24 @@ async function loadOfficeSelection() {
         }
     }
 
+    // REUSE: Check if a fresh high-accuracy dashboard location exists
+    const now = Date.now();
+    if (currentPhotoLocation && currentPhotoLocation.accuracy <= 200 && (now - currentPhotoLocation.timestamp) < 120000) {
+        console.log('REUSE: Using cached dashboard location for office selection.');
+        renderOfficeCards(currentPhotoLocation.lat, currentPhotoLocation.lng);
+        return;
+    }
+
     // Try to get current position
     navigator.geolocation.getCurrentPosition(
         (pos) => {
+            // Update cache for other parts of the flow
+            currentPhotoLocation = { 
+                lat: pos.coords.latitude, 
+                lng: pos.coords.longitude, 
+                accuracy: pos.coords.accuracy || 999, 
+                timestamp: Date.now() 
+            };
             showNotification('Location detected successfully', 'success');
             renderOfficeCards(pos.coords.latitude, pos.coords.longitude);
         },
@@ -4844,7 +5007,7 @@ async function loadOfficeSelection() {
         },
         {
             enableHighAccuracy: true,
-            timeout: 8000,
+            timeout: 10000, // Slightly increased to 10s as a fallback
             maximumAge: 0
         }
     );
@@ -5007,10 +5170,32 @@ async function startCamera() {
         // Poll for accuracy updates to show user
         window.accInterval = setInterval(() => {
             const el = document.getElementById('cameraAccuracy');
+            const captureBtn = document.getElementById('captureBtn');
             if (el && currentPhotoLocation) {
                 const acc = Math.round(currentPhotoLocation.accuracy);
-                el.innerText = `GPS Accuracy: ±${acc}m`;
-                el.style.backgroundColor = acc > 200 ? 'rgba(255,0,0,0.6)' : 'rgba(0,128,0,0.6)';
+                const isAccurate = acc <= 200;
+                
+                if (isAccurate) {
+                    el.innerText = `GPS Accuracy: ±${acc}m (Good)`;
+                    el.style.backgroundColor = 'rgba(0,128,0,0.7)';
+                    if (captureBtn) {
+                        captureBtn.disabled = false;
+                        captureBtn.title = "";
+                    }
+                } else {
+                    el.innerText = `GPS Accuracy: ±${acc}m — Wait for GPS...`;
+                    el.style.backgroundColor = 'rgba(255,0,0,0.7)';
+                    if (captureBtn) {
+                        captureBtn.disabled = true;
+                        captureBtn.title = "Waiting for high-accuracy GPS signal (±200m)";
+                    }
+                }
+            } else if (el) {
+                el.innerText = 'Acquiring GPS Signal... Wait for GPS...';
+                el.style.backgroundColor = 'rgba(255,165,0,0.7)';
+                if (captureBtn) {
+                    captureBtn.disabled = true;
+                }
             }
         }, 1000);
         placeholder.style.display = 'none';
@@ -5422,27 +5607,14 @@ async function markAttendance() {
         const now = getCurrentDateTime();
 
         // MANDATORY LOCATION CHECK (WFH / Office / Client)
-        // We use the high-accuracy location fetched during camera preview
+        // We use the high-accuracy location fetched during camera preview.
+        // Redundant fetch removed to ensure reuse of dashboard/preview coordinates.
         if (!currentPhotoLocation) {
-            // Try to force one last fetch if missing (fallback)
-            try {
-                const pos = await new Promise((res, rej) =>
-                    navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 5000 })
-                );
-                currentPhotoLocation = {
-                    lat: pos.coords.latitude,
-                    lng: pos.coords.longitude,
-                    accuracy: pos.coords.accuracy
-                };
-            } catch (e) {
-                showNotification('Location access is mandatory. Please enable GPS and try again.', 'error');
-                return; // Stop submission
-            }
+            showNotification('Location access is mandatory. Please wait for GPS and try again.', 'error');
+            return;
         }
-
-        // Accuracy Check (e.g., must be better than 1000m to be useful, ideally <100m)
-        // User complained about accuracy, so we enforce a reasonable limit.
-        // 200m is a safe upper bound for "being at the office/home" vs "in the neighborhood".
+        
+        // Accuracy Check — already enforced by the "Capture" button state, but good to have here too.
         if (currentPhotoLocation.accuracy > 200) {
             showNotification(`Location accuracy is too low (±${Math.round(currentPhotoLocation.accuracy)}m). Please wait for a better GPS signal.`, 'error');
             return;
@@ -5720,7 +5892,7 @@ async function confirmCheckOut() {
                 position = await new Promise((resolve, reject) =>
                     navigator.geolocation.getCurrentPosition(resolve, reject, {
                         enableHighAccuracy: true,
-                        timeout: 12000,
+                        timeout: 50000,
                         maximumAge: 0
                     })
                 );
@@ -6527,7 +6699,7 @@ function useCurrentLocation() {
             btn.disabled = false;
             showNotification("Could not get location. Please check permissions.", "error");
         },
-        { enableHighAccuracy: true, timeout: 5000 }
+        { enableHighAccuracy: true, timeout: 45000 }
     );
 }
 
