@@ -156,6 +156,11 @@ else:
 
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'noreply@hanuai.com')
 
+# Web Push / VAPID Configuration
+VAPID_PRIVATE_KEY = os.getenv('VAPID_PRIVATE_KEY', '')
+VAPID_PUBLIC_KEY  = os.getenv('VAPID_PUBLIC_KEY', '')
+VAPID_CLAIMS_SUB  = os.getenv('VAPID_CLAIMS_SUB', f'mailto:{DEFAULT_FROM_EMAIL}')
+
 # Caching & CORS
 CACHES = {
     'default': {

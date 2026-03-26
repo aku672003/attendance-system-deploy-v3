@@ -17,6 +17,7 @@ def start():
 
     from attendance.management.commands.auto_mark_absent import run_auto_mark_absent
     from attendance.management.commands.train_forecast_model import run_train_forecast_model
+    from attendance.management.commands.send_attendance_reminders import run_attendance_reminders
 
     scheduler = BackgroundScheduler()
     
@@ -38,5 +39,24 @@ def start():
         replace_existing=True,
     )
 
+    # Job 3: Check-in reminder at 9:30 AM IST for employees who haven't checked in
+    scheduler.add_job(
+        lambda: run_attendance_reminders('check_in'),
+        trigger=CronTrigger(hour=9, minute=30, timezone='Asia/Kolkata'),
+        id='checkin_reminder',
+        name='Remind employees to check in at 9:30 AM IST',
+        replace_existing=True,
+    )
+
+    # Job 4: Check-out reminder at 5:30 PM IST for employees who haven't checked out
+    scheduler.add_job(
+        lambda: run_attendance_reminders('check_out'),
+        trigger=CronTrigger(hour=17, minute=30, timezone='Asia/Kolkata'),
+        id='checkout_reminder',
+        name='Remind employees to check out at 5:30 PM IST',
+        replace_existing=True,
+    )
+
     scheduler.start()
-    logger.info("Scheduler started with auto-absent (18:00) and model training (18:30) jobs.")
+    logger.info("Scheduler started: auto-absent (18:00), model training (18:30), check-in reminder (09:30), check-out reminder (17:30).")
+

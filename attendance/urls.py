@@ -76,6 +76,8 @@ urlpatterns = [
     path('notifications', views.get_notifications, name='get_notifications'),
     path('mark-notifications-read', views.mark_notifications_read, name='mark_notifications_read'),
     path('send-wish', views.send_birthday_wish, name='send_birthday_wish'),
+    path('get-vapid-public-key', views.get_vapid_public_key, name='get_vapid_public_key'),
+    path('save-push-subscription', views.save_push_subscription, name='save_push_subscription'),
     
     # Attendance Predictions (Admin only)
     path('attendance-predictions', views.attendance_predictions, name='attendance_predictions'),

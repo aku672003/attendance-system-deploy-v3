@@ -4054,3 +4054,59 @@ def mentor_status(request):
         return Response({'success': False, 'message': 'Employee not found'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ========== Web Push Notification API ==========
+
+@api_view(['GET'])
+def get_vapid_public_key(request):
+    """Return the VAPID public key so the browser can subscribe to push notifications."""
+    from django.conf import settings
+    key = getattr(settings, 'VAPID_PUBLIC_KEY', '')
+    if not key:
+        return Response({'success': False, 'message': 'VAPID not configured'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    return Response({'success': True, 'public_key': key})
+
+
+@api_view(['POST', 'DELETE'])
+@parser_classes([JSONParser])
+def save_push_subscription(request):
+    """
+    POST  → Save (or update) a browser push subscription for an employee.
+    DELETE → Remove a subscription (for unsubscribe / logout).
+    Body: { employee_id, endpoint, p256dh, auth }
+    """
+    from attendance.models import PushSubscription
+
+    data = request.data
+    employee_id = data.get('employee_id')
+    endpoint = data.get('endpoint')
+
+    if not employee_id or not endpoint:
+        return Response({'success': False, 'message': 'employee_id and endpoint are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        employee = Employee.objects.get(id=employee_id)
+    except Employee.DoesNotExist:
+        return Response({'success': False, 'message': 'Employee not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == 'DELETE':
+        PushSubscription.objects.filter(employee=employee, endpoint=endpoint).delete()
+        return Response({'success': True, 'message': 'Push subscription removed'})
+
+    # POST — save or update
+    p256dh = data.get('p256dh', '')
+    auth   = data.get('auth', '')
+    ua     = request.META.get('HTTP_USER_AGENT', '')[:255]
+
+    PushSubscription.objects.update_or_create(
+        endpoint=endpoint,
+        defaults={
+            'employee': employee,
+            'p256dh': p256dh,
+            'auth': auth,
+            'user_agent': ua,
+        }
+    )
+    return Response({'success': True, 'message': 'Push subscription saved'})
+

@@ -467,3 +467,23 @@ class Memoji(models.Model):
 
     def __str__(self):
         return f"{self.employee.username}'s Memoji"
+
+
+class PushSubscription(models.Model):
+    """Stores a browser's Web Push subscription for an employee device."""
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='push_subscriptions')
+    endpoint = models.TextField(unique=True)
+    p256dh = models.TextField()   # browser public key
+    auth = models.TextField()     # auth secret
+    user_agent = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'push_subscriptions'
+        indexes = [
+            models.Index(fields=['employee']),
+        ]
+
+    def __str__(self):
+        return f"{self.employee.username} – {self.endpoint[:60]}"

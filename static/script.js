@@ -79,6 +79,9 @@ document.addEventListener('DOMContentLoaded', async function () {
             loadDashboardData();
             updateDashboardVisibility();
 
+            // Register push notifications for the returning session
+            setupPushNotifications(currentUser.id);
+
             // If they are logged in, we skip the gatekeeper logic below
             // because they already "passed" the gatekeeper to get the session.
         } catch (e) {
@@ -106,6 +109,98 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
     }, 60000);
 });
+
+// ── Web Push Notification Setup ──────────────────────────────────────────────
+/**
+ * Convert a URL-safe Base64 string to a Uint8Array (required for VAPID subscription).
+ */
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = window.atob(base64);
+    return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+/**
+ * Register the service worker, request notification permission, and save the
+ * push subscription to the backend so the server can send reminders.
+ * @param {number|string} employeeId – the logged-in employee's primary key.
+ */
+async function setupPushNotifications(employeeId) {
+    try {
+        // Guard: feature must be supported by the browser
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+            console.log('[Push] Browser does not support push notifications.');
+            return;
+        }
+
+        // Register (or retrieve) the service worker
+        const reg = await navigator.serviceWorker.register('/static/sw.js', { scope: '/' });
+        console.log('[Push] Service worker registered:', reg.scope);
+
+        // Request notification permission (graceful if already granted/denied)
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+            console.log('[Push] Notification permission:', permission);
+            return;
+        }
+
+        // Fetch VAPID public key from the backend
+        const keyRes = await fetch(`${apiBaseUrl}/get-vapid-public-key`);
+        const keyData = await keyRes.json();
+        if (!keyData.success || !keyData.public_key) {
+            console.warn('[Push] VAPID public key not available — push disabled.');
+            return;
+        }
+
+        // Subscribe via PushManager
+        const applicationServerKey = urlBase64ToUint8Array(keyData.public_key);
+        let subscription = await reg.pushManager.getSubscription();
+        if (!subscription) {
+            subscription = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey,
+            });
+        }
+
+        // Serialize and send subscription to the backend
+        const subJson = subscription.toJSON();
+        const payload = {
+            employee_id: employeeId,
+            endpoint:    subJson.endpoint,
+            p256dh:      subJson.keys.p256dh,
+            auth:        subJson.keys.auth,
+        };
+
+        await fetch(`${apiBaseUrl}/save-push-subscription`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken(),
+            },
+            body: JSON.stringify(payload),
+        });
+
+        console.log('[Push] Subscription saved — attendance reminders enabled ✅');
+    } catch (err) {
+        console.error('[Push] Setup failed:', err);
+    }
+}
+
+/** Helper: extract the Django CSRF token from the cookie */
+function getCsrfToken() {
+    const name = 'csrftoken';
+    const cookies = document.cookie.split(';');
+    for (let c of cookies) {
+        c = c.trim();
+        if (c.startsWith(name + '=')) {
+            return decodeURIComponent(c.slice(name.length + 1));
+        }
+    }
+    return '';
+}
+// ── End Web Push Setup ────────────────────────────────────────────────────────
+
 // Toggle password visibility for any button with .toggle-password-btn
 document.addEventListener('click', function (e) {
     if (!e.target.classList.contains('toggle-password-btn')) return;
@@ -748,6 +843,8 @@ async function handleLogin(event) {
             }
 
             updateDashboardVisibility();
+            // Register this browser for push notifications after successful login
+            setupPushNotifications(currentUser.id);
         } else {
             showNotification(result.message || 'Login failed', 'error');
         }
@@ -4114,11 +4211,22 @@ async function checkAndUpdateLocationStatus(updateAttendance = true) {
             navigator.geolocation.getCurrentPosition(
                 (p) => { if (!settled) { settled = true; clearTimeout(guard); resolve(p); } },
                 (err) => { if (!settled) { settled = true; clearTimeout(guard); reject(err); } },
-                { enableHighAccuracy: true, timeout: 7000, maximumAge: 60000 }
+                { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }
             );
         });
 
-        const { latitude: lat, longitude: lng } = pos.coords;
+        const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+        const accuracyM = accuracy || 9999;
+
+        // Guard: if accuracy is worse than 500m, the browser is using IP-based
+        // geolocation (no real GPS). This can be 9+ km off — don't trust it.
+        if (accuracyM > 500) {
+            statusEl.textContent = 'Location inaccurate';
+            statusEl.className = 'stat-card-value warning';
+            distEl.textContent = `Accuracy: ±${Math.round(accuracyM)}m — enable GPS/Wi-Fi for precise detection`;
+            if (updateAttendance) { isUserGeoInRange = false; updateCheckOutButtonState(); }
+            return { inRange: false };
+        }
 
         // 4) Compute nearest office
         let nearest = { d: Infinity, office: null };
@@ -4394,10 +4502,48 @@ async function checkLocationPermission() {
                     _disableCheckInCard(card);
                 } else {
                     _enableCheckInCard(card);
+                    _startDashboardLocationWatch(); // resume watch when re-granted
                 }
             };
-        } catch (e) { /* Permissions API not available, skip */ }
+            // Pre-fetch location in background so check-in camera has it instantly
+            if (result.state !== 'denied') {
+                _startDashboardLocationWatch();
+            }
+        } catch (e) {
+            // Permissions API not available — try starting watch anyway
+            _startDashboardLocationWatch();
+        }
+    } else {
+        // No Permissions API — start background watch directly
+        _startDashboardLocationWatch();
     }
+}
+
+/**
+ * Starts a persistent background watchPosition from the dashboard.
+ * This silently keeps currentPhotoLocation up-to-date so the camera
+ * check-in screen already has a GPS fix and never shows "Waiting for GPS..."
+ */
+function _startDashboardLocationWatch() {
+    if (!navigator.geolocation) return;
+    // Only start one background watch at a time
+    if (window.dashboardGeoWatchId) return;
+
+    window.dashboardGeoWatchId = navigator.geolocation.watchPosition(
+        (pos) => {
+            currentPhotoLocation = {
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                accuracy: pos.coords.accuracy,
+                timestamp: pos.timestamp
+            };
+        },
+        (err) => {
+            console.warn('[Dashboard GPS] Background watch error:', err.message);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+    console.log('[Dashboard GPS] Background location watch started.');
 }
 
 function _disableCheckInCard(card) {
@@ -4454,7 +4600,7 @@ async function refreshWFHAvailability() {
                 navigator.geolocation.getCurrentPosition(
                     (p) => { if (!settled) { settled = true; clearTimeout(guard); resolve(p); } },
                     (e) => { if (!settled) { settled = true; clearTimeout(guard); reject(e); } },
-                    { enableHighAccuracy: false, timeout: 4500, maximumAge: 60000 }
+                    { enableHighAccuracy: true, timeout: 4500, maximumAge: 0 }
                 );
             });
             const { latitude, longitude } = pos.coords;
@@ -4795,28 +4941,34 @@ async function startCamera() {
         }
     }
 
-    // Start fetching location for photo overlay (High Accuracy & Watch)
+    // Location for photo overlay: reuse the dashboard background watch.
+    // The dashboard already started watchPosition via _startDashboardLocationWatch(),
+    // so currentPhotoLocation is likely already populated — no new watch needed.
+    // If the dashboard watch isn't running (e.g. permission was granted late),
+    // start it now so the camera poll loop below will get data quickly.
     if (navigator.geolocation) {
-        // Clear any existing watch
+        if (!window.dashboardGeoWatchId) {
+            // Dashboard watch not yet running — kick it off now
+            _startDashboardLocationWatch();
+        }
+        // Also keep a per-camera watch as a safety net in case accuracy improves
         if (window.geoWatchId) navigator.geolocation.clearWatch(window.geoWatchId);
-
         window.geoWatchId = navigator.geolocation.watchPosition(
             (pos) => {
-                currentPhotoLocation = {
-                    lat: pos.coords.latitude,
-                    lng: pos.coords.longitude,
-                    accuracy: pos.coords.accuracy
-                };
+                // Only update if this reading is fresher/more accurate
+                if (!currentPhotoLocation || pos.coords.accuracy <= currentPhotoLocation.accuracy) {
+                    currentPhotoLocation = {
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude,
+                        accuracy: pos.coords.accuracy,
+                        timestamp: pos.timestamp
+                    };
+                }
             },
             (err) => {
-                console.warn('Location watch failed', err);
-                // Don't nullify immediately if we had a fix, unless it's critical
+                console.warn('Camera location watch error:', err.message);
             },
-            {
-                enableHighAccuracy: true, // Request best possible results (GPS)
-                timeout: 10000,
-                maximumAge: 0
-            }
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
     }
 
@@ -4832,11 +4984,19 @@ async function startCamera() {
         // show live video, hide placeholder & previous photo
         video.style.display = 'block';
 
-        // Show accuracy toast/warning if needed
+        // Show accuracy overlay — show instantly if we already have a GPS fix from the dashboard
         const accElement = document.getElementById('cameraAccuracy') || document.createElement('div');
         accElement.id = 'cameraAccuracy';
         accElement.style = 'position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.5); color:white; padding:5px; border-radius:4px; font-size:12px; z-index:10;';
-        accElement.innerText = 'Waiting for GPS...';
+
+        if (currentPhotoLocation) {
+            // Location already cached from dashboard — display immediately
+            const acc = Math.round(currentPhotoLocation.accuracy);
+            accElement.innerText = `GPS Accuracy: ±${acc}m`;
+            accElement.style.backgroundColor = acc > 200 ? 'rgba(255,0,0,0.6)' : 'rgba(0,128,0,0.6)';
+        } else {
+            accElement.innerText = 'Locating...';
+        }
 
         const camContainer = document.querySelector('.camera-box') || video.parentElement;
         if (camContainer && !document.getElementById('cameraAccuracy')) {
