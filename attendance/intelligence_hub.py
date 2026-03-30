@@ -9,6 +9,7 @@ from .models import AttendanceRecord, Employee
 import statistics
 import json
 import os
+import hashlib
 from django.conf import settings
 
 
@@ -459,7 +460,7 @@ class IndividualPredictor:
             import pandas as pd
             from datetime import datetime
             X = pd.DataFrame([{
-                'dept_id': hash(employee.department) % 100,
+                'dept_id': (hashlib.md5(employee.department.encode()).digest()[0] % 100) if employee.department else 0,
                 'org_forecast': org_forecast,
                 'day_of_week': datetime.now().weekday(),
                 'avg_score': avg_score,
@@ -502,7 +503,7 @@ class IndividualPredictor:
             target_score = STATUS_WEIGHTS.get(target_record.status, 0.0)
             
             training_data.append({
-                'dept_id': hash(emp.department) % 100 if emp.department else 0,
+                'dept_id': (hashlib.md5(emp.department.encode()).digest()[0] % 100) if emp.department else 0,
                 'org_forecast': org_forecast,
                 'day_of_week': target_record.date.weekday(),
                 'avg_score': avg_score,
@@ -558,25 +559,25 @@ class SLMInsightGenerator:
         
         # 1. Trend & Forecast Insight
         if trend == 'UP':
-            insights.append(f"Engagement is on an upward trajectory, with a {forecast}% turnout predicted for tomorrow.")
+            insights.append(f"Engagement is on a strong upward trajectory! We predict a {forecast}% turnout for tomorrow—keep this momentum going.")
         elif trend == 'DOWN':
-            insights.append(f"Participation velocity is slowing down. Expected turnout: {forecast}%.")
+            insights.append(f"Participation velocity is slightly cooling ({forecast}%). Let's boost engagement through team check-ins to reverse this trend.")
         else:
-            insights.append(f"Organizational rhythm remains consistent. Predicted attendance for tomorrow is {forecast}%.")
+            insights.append(f"Organizational rhythm remains steady and consistent. Tomorrow's forecast sits at {forecast}%.")
 
         # 2. Efficiency/Late Rate Insight
         if late_rate > 15:
-            insights.append(f"High arrival friction detected ({late_rate}% late rate). Consider shift staggering during {summary.get('peak_hour', 'peak')} hours.")
+            insights.append(f"Minor arrival friction detected ({late_rate}% late). Optimizing morning workflows or shift staggering could boost immediate efficiency.")
         elif late_rate < 5:
-            insights.append("Outstanding punctuality performance across all departments.")
+            insights.append("Outstanding punctuality! This discipline is the foundation of high-performance efficiency.")
         
         # 3. Cultural/Streak Insight
         if streak >= 5:
-            insights.append(f"The team is maintaining a strong {streak}-day consistent attendance momentum.")
+            insights.append(f"Impressive! The team is on a {streak}-day consistency streak. Maintaining this focus will maximize weekly output.")
         
         # 4. Actionable Advice
         if peak_day != 'N/A' and trend == 'UP':
-            insights.append(f"Recommend allocating additional office resources for {peak_day} due to projected peak load.")
+            insights.append(f"Pro-tip: Since {peak_day} is trending as a peak day, allocating additional resources now will ensure you stay ahead of the load.")
 
         return " ".join(insights)
 

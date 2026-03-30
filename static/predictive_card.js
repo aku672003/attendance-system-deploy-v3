@@ -546,7 +546,7 @@ function openPredictiveAnalysisModal(data, predictDays = 3) {
                             </div>
                             <div>
                                 <div style="font-size: 17px; font-weight: 900; color: #0f172a;">+${Math.round(summary.busiest_impact || 0)}%</div>
-                                <div style="font-size: 9px; font-weight: 800; color: #8b5cf6; text-transform: uppercase; letter-spacing: 0.5px;">Vibrancy</div>
+                                <div style="font-size: 9px; font-weight: 800; color: #8b5cf6; text-transform: uppercase; letter-spacing: 0.5px;">Activity</div>
                             </div>
                             <div>
                                 <div style="font-size: 17px; font-weight: 900; color: #0f172a;">${summary.avg_check_in || 'N/A'}</div>
@@ -564,13 +564,14 @@ function openPredictiveAnalysisModal(data, predictDays = 3) {
                 <div class="activity-chart-section" style="background: #ffffff; padding: 20px; border-radius: 24px; border: 1px solid #f1f5f9; margin-bottom: 20px;">
                     <div class="chart-toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
                         <div style="font-size: 12px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 1px;">Engagement Velocity</div>
-                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <div style="width: 10px; height: 10px; border-radius: 50%; background: #6366f1;"></div>
+                                <span style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">Attendance Rate</span>
+                            </div>
                             <div style="display: flex; gap: 4px;">
                                 <button onclick="changePredictiveDays(3)" style="padding: 5px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; border: 1px solid ${predictDays === 3 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 3 ? '#eef2ff' : 'white'}; color: ${predictDays === 3 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">3 Days</button>
                                 <button onclick="changePredictiveDays(7)" style="padding: 5px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; border: 1px solid ${predictDays === 7 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 7 ? '#eef2ff' : 'white'}; color: ${predictDays === 7 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">1 Week</button>
-                            </div>
-                            <div class="bezier-badge" style="font-size: 9px; font-weight: 800; color: #6366f1; background: rgba(99,102,241,0.05); padding: 5px 10px; border-radius: 20px; display: flex; align-items: center; gap: 4px; border: 1px solid rgba(99,102,241,0.1); white-space: nowrap;">
-                                📉 Bezier
                             </div>
                         </div>
                     </div>
@@ -608,13 +609,15 @@ function openPredictiveAnalysisModal(data, predictDays = 3) {
                     </div>
                 </div>
 
-                <!-- Executive Insight — same layout as My Stats -->
+                <!-- Neural Core Consolidate -->
                 <div style="background: rgba(99,102,241,0.03); border: 1px solid rgba(99,102,241,0.1); border-radius: 24px; padding: 20px; display: flex; gap: 14px; align-items: flex-start; position: relative; overflow: hidden;">
-                    <div style="position: absolute; top: -20px; right: -20px; font-size: 80px; opacity: 0.03; font-weight: 900; pointer-events: none;">INSIGHT</div>
-                    <div style="width: 44px; height: 44px; background: white; border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); flex-shrink: 0; font-size: 20px;">💡</div>
+                    <div style="position: absolute; top: -20px; right: -20px; font-size: 80px; opacity: 0.03; font-weight: 900; pointer-events: none;">CORE</div>
+                    <div style="width: 44px; height: 44px; background: white; border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); flex-shrink: 0; font-size: 20px;">🧠</div>
                     <div style="min-width: 0;">
-                        <div style="font-size: 13px; font-weight: 900; color: #0f172a; margin-bottom: 5px;">Executive Intelligence:</div>
-                        <div style="font-size: 12px; color: #475569; line-height: 1.6; font-weight: 600;">${summary.ai_insight || 'Data shows consistent operational flow. No immediate intervention required.'}</div>
+                        <div style="font-size: 12px; font-weight: 900; color: #4f46e5; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;">Neural Core</div>
+                        <div style="font-size: 11px; color: #475569; line-height: 1.6; font-weight: 600;">
+                            ${summary.ai_insight || 'Rhythm is consistent.'} Pro-tip: Implement flexible check-ins for the 'Surveyors' team and reward punctual departments to drive peak momentum.
+                        </div>
                     </div>
                 </div>
 
@@ -850,18 +853,49 @@ function renderEmployeePerformanceModal(data, employeeId, predictDays = 3) {
         y: 120 - (Math.min(v.hours, 12) / 12 * 100) 
     }));
     
+    // Calculate second line points (subtracting 45 mins = 0.75h)
+    const lunchPoints = graphData.map((v, i) => ({
+        x: i * xStep,
+        y: 120 - (Math.min(Math.max(0, v.hours - 0.75), 12) / 12 * 100)
+    }));
+    
     let bezierPath = "";
+    let lunchBezierPath = "";
     if (graphPoints.length > 0) {
         bezierPath = `M ${graphPoints[0].x} ${graphPoints[0].y}`;
+        lunchBezierPath = `M ${lunchPoints[0].x} ${lunchPoints[0].y}`;
         for (let i = 0; i < graphPoints.length - 1; i++) {
             const p0 = graphPoints[i - 1] || graphPoints[i];
             const p1 = graphPoints[i];
             const p2 = graphPoints[i + 1];
             const p3 = graphPoints[i + 2] || p2;
+            
+            // Org Line
             const [cp1x, cp1y, cp2x, cp2y] = getControlPoints(p0, p1, p2);
             const [nextCp1x, nextCp1y, nextCp2x, nextCp2y] = getControlPoints(p1, p2, p3);
             bezierPath += ` C ${cp2x} ${cp2y}, ${nextCp1x} ${nextCp1y}, ${graphPoints[i+1].x} ${graphPoints[i+1].y}`;
+            
+            // Lunch Line
+            const lp0 = lunchPoints[i - 1] || lunchPoints[i];
+            const lp1 = lunchPoints[i];
+            const lp2 = lunchPoints[i + 1];
+            const lp3 = lunchPoints[i + 2] || lp2;
+            const [lcp1x, lcp1y, lcp2x, lcp2y] = getControlPoints(lp0, lp1, lp2);
+            const [lnextCp1x, lnextCp1y, lnextCp2x, lnextCp2y] = getControlPoints(lp1, lp2, lp3);
+            lunchBezierPath += ` C ${lcp2x} ${lcp2y}, ${lnextCp1x} ${lnextCp1y}, ${lunchPoints[i+1].x} ${lunchPoints[i+1].y}`;
         }
+    }
+
+    // Neural Tip Engine - Selects best advice based on current stats
+    let neuralTip = "Focus on completing tasks early in the morning for peak efficiency.";
+    if (regularityScore < 70) {
+        neuralTip = "Small improvements in punctuality will drastically boost your regularity score. Aim for a 5-minute earlier check-in tomorrow!";
+    } else if (t.work_efficiency < 75) {
+        neuralTip = `Deep work sessions of 90 minutes can help push your efficiency above 80%. Stay focused to see the orange line rise!`;
+    } else if (streak > 3) {
+        neuralTip = `You're on a ${streak}-day consistency streak! Maintaining this rhythm is the key to elite professional growth.`;
+    } else if (Math.round(m.weekly_avg_hours) > 40) {
+        neuralTip = "Excellent work volume! Prioritize high-impact tasks to ensure your efficiency remains as strong as your total hours.";
     }
 
     const modal = document.createElement('div');
@@ -922,7 +956,7 @@ function renderEmployeePerformanceModal(data, employeeId, predictDays = 3) {
                             </div>
                             <div>
                                 <div style="font-size: 18px; font-weight: 900; color: #0f172a;">+${Math.round(m.weekly_avg_hours)}h</div>
-                                <div style="font-size: 9px; font-weight: 800; color: #8b5cf6; text-transform: uppercase; letter-spacing: 0.5px;">Vibrancy</div>
+                                <div style="font-size: 9px; font-weight: 800; color: #8b5cf6; text-transform: uppercase; letter-spacing: 0.5px;">Avg Hours</div>
                             </div>
                             <div>
                                 <div style="font-size: 18px; font-weight: 900; color: #0f172a;">${t.work_efficiency}%</div>
@@ -948,13 +982,18 @@ function renderEmployeePerformanceModal(data, employeeId, predictDays = 3) {
                 <div style="background: #ffffff; border: 1px solid #f1f5f9; border-radius: 28px; padding: 24px; margin-bottom: 24px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                         <div style="font-size: 14px; font-weight: 900; color: #0f172a;">Engagement Velocity</div>
-                        <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                            <div style="display: flex; align-items: center; gap: 12px; font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">
+                                <div style="display: flex; align-items: center; gap: 5px;">
+                                    <div style="width: 8px; height: 8px; border-radius: 50%; background: #6366f1;"></div> Total Hrs
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 5px;">
+                                    <div style="width: 8px; height: 8px; border-radius: 50%; background: #f97316;"></div> Excl. Lunch
+                                </div>
+                            </div>
                             <div style="display: flex; gap: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase;">
                                 <button onclick="changePredictiveDays(3)" style="padding: 6px 12px; border-radius: 8px; border: 1px solid ${predictDays === 3 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 3 ? '#eef2ff' : 'white'}; color: ${predictDays === 3 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">3 Days</button>
                                 <button onclick="changePredictiveDays(7)" style="padding: 6px 12px; border-radius: 8px; border: 1px solid ${predictDays === 7 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 7 ? '#eef2ff' : 'white'}; color: ${predictDays === 7 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">1 Week</button>
-                            </div>
-                            <div style="font-size: 10px; font-weight: 800; color: #64748b; background: #f8fafc; padding: 6px 12px; border-radius: 10px; display: flex; align-items: center; gap: 6px;">
-                                <span style="font-size: 14px;">📉</span> Bezier Interpolation
                             </div>
                         </div>
                     </div>
@@ -966,8 +1005,10 @@ function renderEmployeePerformanceModal(data, employeeId, predictDays = 3) {
                                 <line x1="${pt.x}" y1="0" x2="${pt.x}" y2="140" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="${graphData[i].is_prediction ? '4,4' : '0'}" />
                             `).join('')}
                             
-                            <!-- Bezier Path -->
+                            
+                            <!-- Bezier Paths -->
                             <path d="${bezierPath}" fill="none" stroke="#6366f1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+                            <path d="${lunchBezierPath}" fill="none" stroke="#f97316" stroke-width="3" stroke-dasharray="4,2" stroke-linecap="round" stroke-linejoin="round" />
                             
                             <!-- Area under curve -->
                             <path d="${bezierPath} L ${graphPoints[graphPoints.length-1].x} 140 L ${graphPoints[0].x} 140 Z" fill="url(#areaGrad)" opacity="0.1" />
@@ -979,28 +1020,39 @@ function renderEmployeePerformanceModal(data, employeeId, predictDays = 3) {
                                 </linearGradient>
                             </defs>
                             
-                            <!-- Points -->
+                            <!-- Points & Labels -->
                             ${graphPoints.map((pt, i) => `
-                                <circle cx="${pt.x}" cy="${pt.y}" r="6" fill="${graphData[i].is_prediction ? 'white' : '#6366f1'}" stroke="#6366f1" stroke-width="3" />
+                                <line x1="${pt.x}" y1="${pt.y}" x2="${lunchPoints[i].x}" y2="${lunchPoints[i].y}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="2,2" opacity="0.3" />
+                                
+                                <!-- Original Points -->
+                                <circle cx="${pt.x}" cy="${pt.y}" r="5" fill="${graphData[i].is_prediction ? 'white' : '#6366f1'}" stroke="#6366f1" stroke-width="2" />
+                                
+                                <!-- Lunch Points -->
+                                <circle cx="${lunchPoints[i].x}" cy="${lunchPoints[i].y}" r="3" fill="#f97316" />
+
                                 <text x="${pt.x}" y="170" text-anchor="middle" style="font-size: 11px; font-weight: 850; fill: ${graphData[i].is_prediction ? '#6366f1' : (graphData[i].day_name === 'Today' ? '#0f172a' : '#94a3b8')}; text-transform: uppercase;">
                                     ${graphData[i].day_name === 'Yesterday' || graphData[i].day_name === 'Today' ? graphData[i].day_name : graphData[i].day_name.substring(0, 3).toUpperCase()}
                                 </text>
-                                <text x="${pt.x}" y="${pt.y - 15}" text-anchor="middle" style="font-size: 11px; font-weight: 900; fill: #6366f1;">
+                                
+                                <text x="${pt.x}" y="${pt.y - 12}" text-anchor="middle" style="font-size: 10px; font-weight: 900; fill: #6366f1;">
                                     ${graphData[i].hours.toFixed(1)}h
+                                </text>
+                                <text x="${lunchPoints[i].x}" y="${lunchPoints[i].y + 15}" text-anchor="middle" style="font-size: 9px; font-weight: 700; fill: #f97316;">
+                                    ${Math.max(0, graphData[i].hours - 0.75).toFixed(1)}h
                                 </text>
                             `).join('')}
                         </svg>
                     </div>
                 </div>
 
-                <!-- AI Insight -->
+                <!-- Neural Core Consolidate -->
                 <div style="background: rgba(99, 102, 241, 0.03); border: 1px solid rgba(99, 102, 241, 0.1); border-radius: 28px; padding: 24px; display: flex; gap: 20px; align-items: flex-start; position: relative; overflow: hidden;">
-                    <div style="position: absolute; top: -20px; right: -20px; font-size: 80px; opacity: 0.03; font-weight: 900; pointer-events: none;">INSIGHT</div>
-                    <div style="width: 48px; height: 48px; background: white; border-radius: 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); flex-shrink: 0;">💡</div>
-                    <div>
-                        <div style="font-size: 14px; font-weight: 900; color: #0f172a; margin-bottom: 6px;">Executive Intelligence:</div>
-                        <div style="font-size: 13px; color: #475569; line-height: 1.6; font-weight: 600;">
-                            ${p.habit_summary}. Performance is on an ${regularityScore > 75 ? 'upward' : 'consistent'} trajectory, with a ${p.likelihood}% turnout predicted for tomorrow. ${streak > 3 ? 'Strong consistency streak detected.' : 'Maintains a standard engagement pattern.'} Recommend ${t.avg_accuracy > 85 ? 'maintaining current load' : 'monitoring task complexity'} due to ${t.avg_accuracy}% accuracy rating.
+                    <div style="position: absolute; top: -20px; right: -20px; font-size: 80px; opacity: 0.03; font-weight: 900; pointer-events: none;">CORE</div>
+                    <div style="width: 48px; height: 48px; background: white; border-radius: 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); flex-shrink: 0; font-size: 22px;">🧠</div>
+                    <div style="min-width: 0;">
+                        <div style="font-size: 13px; font-weight: 900; color: #4f46e5; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1.5px;">Neural Core</div>
+                        <div style="font-size: 12px; color: #475569; line-height: 1.6; font-weight: 600;">
+                            ${p.habit_summary}. Performance is on an ${regularityScore > 75 ? 'upward' : 'consistent'} trajectory. ${neuralTip} (<b>Blue:</b> Total Hrs | <b>Orange:</b> Excl. Lunch)
                         </div>
                     </div>
                 </div>

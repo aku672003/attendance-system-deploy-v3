@@ -3502,19 +3502,8 @@ def intelligence_hub_forecast(request):
         day_name = get_current_day_name()
         model_state = load_model_state()
         
-        # --- Lazy Auto-Training Fallback ---
-        from django.utils import timezone
-        import threading
-        now = timezone.localtime(timezone.now())
-        if now.hour > 18 or (now.hour == 18 and now.minute >= 30):
-            last_trained_str = model_state.get('last_trained', '') if model_state else ''
-            if str(now.date()) not in last_trained_str:
-                try:
-                    from .management.commands.train_forecast_model import run_train_forecast_model
-                    threading.Thread(target=run_train_forecast_model, daemon=True).start()
-                except:
-                    pass
-        # -----------------------------------
+        # Note: Model training is now handled by a system-level Cron job at 6:30 PM daily.
+        # Check /scripts/train_model.sh for details.
         
         employee_id = request.GET.get('employee_id')
         if employee_id:

@@ -197,7 +197,7 @@ class AttendancePredictionEngine:
             on_time_count = 0
             for record in records_with_checkin:
                 if record.check_in_time:
-                    check_in_hour = int(record.check_in_time.split(':')[0])
+                    check_in_hour = record.check_in_time.hour
                     if check_in_hour < 10:
                         on_time_count += 1
             punctuality_score = (on_time_count / records_with_checkin.count()) * 30
