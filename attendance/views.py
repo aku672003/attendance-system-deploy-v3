@@ -2198,7 +2198,12 @@ def employee_performance_analysis(request, employee_id):
                 avg_check_out = f"{int(avg_out_sec // 3600):02d}:{int((avg_out_sec % 3600) // 60):02d}"
         
         # Task Management Performance (for filtered period)
-        tasks_base = Task.objects.filter(assignees=employee, created_at__date__range=[start_date, end_date]).distinct()
+        # Improved: Include tasks that were either created in this range, completed in this range, OR are currently active
+        tasks_base = Task.objects.filter(assignees=employee).filter(
+            Q(created_at__date__range=[start_date, end_date]) |
+            Q(completed_at__date__range=[start_date, end_date]) |
+            Q(status__in=['todo', 'in_progress'])
+        ).distinct()
         completed_tasks = tasks_base.filter(status='completed')
         
         # New Advanced Accuracy Logic
@@ -2258,12 +2263,17 @@ def employee_performance_analysis(request, employee_id):
             total_accuracy_points += task_score
             tasks_evaluated += 1
 
-        avg_accuracy = total_accuracy_points / (tasks_evaluated or 1)
+        avg_accuracy = total_accuracy_points / tasks_evaluated if tasks_evaluated > 0 else (70.0 if tasks_base.filter(status='in_progress').exists() else 0.0)
         avg_span_h = total_span_hours / (spans_counted or 1)
         
         total_assigned = tasks_base.count()
         completed_count = completed_tasks.count()
-        completion_rate = (completed_count / total_assigned * 100) if total_assigned > 0 else 100.0
+        in_progress_count = tasks_base.filter(status='in_progress').count()
+
+        # Weighted Completion logic: Completed tasks (1.0) + In Progress (0.5)
+        weighted_completion = completed_count + (in_progress_count * 0.5)
+        completion_rate = (weighted_completion / total_assigned * 100) if total_assigned > 0 else 100.0
+        
         work_efficiency = (completion_rate * 0.4) + (avg_accuracy * 0.6)
 
         task_stats = {
