@@ -6247,7 +6247,7 @@ input:checked+.slider:before {
     display: none;
     justify-content: center;
     align-items: center;
-    z-index: 2000;
+    z-index: 11000;
     padding: 20px;
 }
 
