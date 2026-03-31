@@ -1115,9 +1115,22 @@ async function handleNotificationClick(notif) {
         } else {
             openMyTasks();
         }
-    } else if (type === 'task_request') {
-        // Mentor clicks on a task request notification
-        openTaskMentor(notif.employee_id);
+    } else if (type === 'task_request' || type === 'idle_employee' || type === 'idle_employees_summary') {
+        if (type === 'idle_employees_summary') {
+            openAdminPanel();
+            setTimeout(() => {
+                const card = document.getElementById('manageEmployeesCard');
+                if (card) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    card.style.transition = 'background 1s';
+                    card.style.background = '#f0f9ff';
+                    setTimeout(() => card.style.background = '', 2000);
+                }
+            }, 600);
+        } else {
+            // Mentor clicks on a task request or single idle employee notification
+            openTaskMentor(notif.employee_id);
+        }
     } else if (type === 'request') {
         openRequestsModal();
     }
@@ -2974,15 +2987,27 @@ function addNewTask(autoAssigneeId = null) {
 
     // Multi-Select Reset
     selectedEmployeeIds = autoAssigneeId ? [parseInt(autoAssigneeId)] : [];
-    selectedOverseerIds = [];
+    // If current user is a mentor/admin, auto-select them as overseer
+    selectedOverseerIds = (currentUser && (currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.has_subordinates)) 
+        ? [currentUser.id] 
+        : [];
     
     // Use a small delay to ensure popcorn/dropdowns are ready if calling from notification
     const syncTags = () => {
-        updateSelectedTags('multiSelectDisplay', selectedEmployeeIds, window.allEmployeesSimple || [], 'taskAssigneeIds');
-        updateSelectedTags('overseerDisplay', [], window.allEmployeesSimple || [], 'taskOverseerIds');
+        const employees = window.allEmployeesSimple || [];
+        updateSelectedTags('multiSelectDisplay', selectedEmployeeIds, employees, 'taskAssigneeIds');
+        updateSelectedTags('overseerDisplay', selectedOverseerIds, employees, 'taskOverseerIds');
+        
+        // Auto-fill title with name if possible
+        if (autoAssigneeId && employees.length > 0) {
+            const emp = employees.find(e => e.id == autoAssigneeId);
+            if (emp) {
+                document.getElementById('taskTitle').value = `New Assignment: ${emp.name}`;
+            }
+        }
     };
 
-    if (autoAssigneeId) {
+    if (autoAssigneeId || !window.allEmployeesSimple) {
         // Ensure dropdown is populated before syncing tags
         populateTaskAssigneeDropdown().then(syncTags);
     } else {
@@ -2995,8 +3020,7 @@ function addNewTask(autoAssigneeId = null) {
     document.getElementById('saveTaskText').textContent = 'Save Task';
     window.currentEditingTaskId = null;
 
-    // Populate assignee dropdown & teams
-    populateTaskAssigneeDropdown();
+    // Populate teams
     loadTeams();
 
     openModal('addTaskModal');
@@ -3184,8 +3208,25 @@ let currentSelectedTaskId = null;
 
 async function openTaskDetail(taskId) {
     showLoading("Loading task details...");
-    const task = [...tasks, ...myTasks].find(t => t.id === taskId);
-    if (!task) return;
+    let task = [...tasks, ...myTasks].find(t => t.id === taskId);
+    
+    // If task not in memory (e.g. from Manage Employees list), fetch it
+    if (!task) {
+        try {
+            const res = await apiCall(`tasks/${taskId}`, 'GET', { user_id: currentUser.id });
+            if (res && res.success && res.task) {
+                task = res.task;
+            }
+        } catch (e) {
+            console.error('Failed to fetch task from server', e);
+        }
+    }
+
+    if (!task) {
+        hideLoading();
+        showNotification('Task not found', 'error');
+        return;
+    }
 
     currentSelectedTaskId = taskId;
     document.getElementById('detailTaskTitle').textContent = task.title;
@@ -6982,8 +7023,8 @@ async function deleteOffice(id) {
 async function refreshAdminUsers() {
     const tbody = document.getElementById('adminUsersList');
     tbody.innerHTML = `
-        <tr><td colspan="7">
-            <div class="text-center" style="padding:12px;"><div class="loading-spinner" style="margin:0 auto;"></div> Loading users…</div>
+        <tr><td colspan="9">
+            <div class="text-center" style="padding:12px;"><div class="loading-spinner" style="margin:0 auto;"></div> Loading employees…</div>
         </td></tr>`;
 
     const res = await apiCall('admin-users', 'GET', { user_id: currentUser.id });
@@ -7001,7 +7042,7 @@ function renderAdminUsers(users) {
     document.getElementById('userCount').textContent = `(${users.length})`;
 
     if (users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center" style="padding:20px; color:var(--gray-500)">No matching users found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center" style="padding:40px; color:var(--gray-500)">No employees found. Make sure you have subordinates assigned to you.</td></tr>';
         return;
     }
 
@@ -7024,19 +7065,26 @@ function renderAdminUsers(users) {
             }
         }
 
+        const tasksHtml = (u.active_tasks && u.active_tasks.length > 0) 
+            ? u.active_tasks.map(t => `<div class="task-pill" onclick="event.stopPropagation(); openTaskDetail(${t.id})" style="font-size:11px; background:#f0f9ff; color:#0369a1; padding:2px 8px; border-radius:6px; margin-bottom:4px; border:1px solid #bae6fd; font-weight:500; white-space:normal; line-height:1.2; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.background='#e0f2fe'; this.style.borderColor='#7dd3fc';" onmouseout="this.style.background='#f0f9ff'; this.style.borderColor='#bae6fd';">${t.title}</div>`).join('')
+            : `<div onclick="event.stopPropagation(); addNewTask(${u.id})" style="font-size:11px; color:#ef4444; font-weight:600; background:#fef2f2; padding:4px 8px; border-radius:6px; border:1px solid #fee2e2; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.background='#fee2e2'; this.style.borderColor='#fca5a5';" onmouseout="this.style.background='#fef2f2'; this.style.borderColor='#fee2e2;">⚠️ No Active Tasks</div>`;
+
         return `
             <tr>
                 <td>${u.id}</td>
-                <td>${u.name || ''} ${birthdayAction}</td>
+                <td><div style="font-weight:600;">${u.name || ''}</div> ${birthdayAction}</td>
                 <td>${u.username || ''}</td>
                 <td>${u.phone || ''}</td>
-                <td>${u.department || ''}</td>
-                <td>${u.role || ''}</td>
-                <td>${u.Mentor_name || '<small class="text-muted">None</small>'}</td>
+                <td><span class="badge" style="background:#f1f5f9; color:#475569;">${u.department || ''}</span></td>
+                <td><span class="badge" style="background:#f8fafc; border:1px solid #e2e8f0;">${u.role || ''}</span></td>
+                <td><div style="font-size:12px; color:#64748b;">${u.Mentor_name || '<small class="text-muted">None</small>'}</div></td>
+                <td style="max-width:250px;">${tasksHtml}</td>
                 <td style="white-space:nowrap;">
-                    <button class="btn btn-secondary" style="background:#3b82f6;color:#fff" onclick="showEmployeePerformanceAnalysis(${u.id})">Stats</button>
-                    <button class="btn btn-secondary" onclick="viewEmployeeRecords(${u.id}, '${u.name}')">Records</button>
-                    ${adminActions}
+                    <div style="display:flex; gap:6px;">
+                        <button class="btn btn-secondary" style="background:#3b82f6;color:#fff; padding:6px 10px; font-size:12px;" onclick="showEmployeePerformanceAnalysis(${u.id})">Stats</button>
+                        <button class="btn btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="viewEmployeeRecords(${u.id}, '${u.name}')">Records</button>
+                        ${adminActions}
+                    </div>
                 </td>
             </tr>
         `;

@@ -4,7 +4,7 @@ from .security import require_valid_token
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils.decorators import method_decorator
-from django.db.models import Q, Count, Sum, Avg
+from django.db.models import Q, Count, Sum, Avg, Prefetch
 from django.utils import timezone
 from django.core.cache import cache
 from django.core.mail import send_mail
@@ -1263,7 +1263,16 @@ def admin_users(request):
     is_mentor = user and (user.role == 'mentor' or (user.role != 'admin' and user.subordinates.exists()))
 
     try:
-        users = Employee.objects.all().order_by('-id').prefetch_related('profile')
+        # Include active task names and counts
+        active_tasks_qs = Task.objects.filter(status__in=['todo', 'in_progress'])
+        users = Employee.objects.all().order_by('-id').prefetch_related(
+            'profile', 
+            'mentors',
+            Prefetch('assigned_tasks', queryset=active_tasks_qs, to_attr='active_tasks_list')
+        ).annotate(
+            active_tasks_count_db=Count('assigned_tasks', filter=Q(assigned_tasks__status__in=['todo', 'in_progress']), distinct=True)
+        )
+        
         if is_mentor:
             users = users.filter(mentors=user)
         
@@ -1286,7 +1295,9 @@ def admin_users(request):
                 'Mentor_name': ", ".join([m.name for m in u.mentors.all()]) if u.mentors.all() else None,
                 'is_active': u.is_active,
                 'date_of_birth': dob,
-                'gender': gender
+                'gender': gender,
+                'active_tasks': [{'id': t.id, 'title': t.title} for t in u.active_tasks_list] if hasattr(u, 'active_tasks_list') else [],
+                'active_tasks_count': getattr(u, 'active_tasks_count_db', 0)
             })
 
         return Response({
@@ -1294,9 +1305,10 @@ def admin_users(request):
             'users': users_data
         })
     except Exception as e:
+        print(f"Error in admin_users: {str(e)}")
         return Response({
             'success': False,
-            'message': 'Failed to fetch users'
+            'message': f'Failed to fetch users: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -2516,6 +2528,30 @@ def get_notifications(request):
                 'employee_id': treq.employee.id,
                 'employee_name': treq.employee.name
             })
+            
+        # Idle Subordinates (No tasks) - Summary Notification
+        idle_count = 0
+        try:
+            subordinates = user.subordinates.all()
+            for sub in subordinates:
+                # Check if this subordinate has any tasks in progress or todo
+                has_active = Task.objects.filter(
+                    assignees=sub, 
+                    status__in=['todo', 'in_progress']
+                ).exists()
+                if not has_active:
+                    idle_count += 1
+        except Exception:
+            idle_count = 0
+        
+        if idle_count > 0:
+            notifications.append({
+                'type': 'idle_employees_summary',
+                'icon': '⚠️',
+                'message': f'{idle_count} subordinates have no active tasks!',
+                'time': 'Now',
+                'id': 'idle_employees_summary'
+            })
 
     # 4. No Active Tasks Warning (for non-admins)
     if user.role != 'admin':
@@ -2543,6 +2579,24 @@ def get_notifications(request):
                 'time': 'Now',
                 'id': 'no_active_tasks'
             })
+
+    # Task Comments
+    now = timezone.now()
+    recent_comments = TaskComment.objects.filter(
+        Q(task__assignees=user) | Q(task__mentor=user)
+    ).exclude(author=user).filter(
+        created_at__gte=now - timedelta(days=1)
+    ).order_by('-created_at')[:5]
+
+    for comment in recent_comments:
+        notifications.append({
+            'id': f'comment_{comment.id}',
+            'type': 'task_comment',
+            'icon': '💬',
+            'message': f"{comment.author.name} commented on: {comment.task.title}",
+            'time': comment.created_at.strftime('%H:%M %p'),
+            'task_id': comment.task.id
+        })
 
     return Response({
         'success': True,
