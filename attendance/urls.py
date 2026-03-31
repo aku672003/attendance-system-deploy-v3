@@ -104,4 +104,5 @@ urlpatterns = [
     path('memoji', views.user_memoji_api, name='user_memoji_api'),
     path('memoji/<int:user_id>', views.user_memoji_api, name='user_memoji_api_detail'),
     path('upload-avatar', views.upload_avatar, name='upload_avatar'),
+    path('request-new-task', views.request_new_task, name='request_new_task'),
 ]

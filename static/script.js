@@ -286,6 +286,11 @@ function closeModal(id) {
     document.body.style.overflow = 'auto';
     document.documentElement.style.overflow = 'auto';
 
+    // If board-empty warning is closed, mark as shown to avoid pop-up loops
+    if (id === 'noTasksModal') {
+        window._lastTaskWarningShown = true;
+    }
+
     // Refresh dashboard stats when closing requests/calendar modals
     // This ensures that if a request was made/approved, the dashboard counters update.
     if (id === 'myRequestsModal' || id === 'requestsModal' || id === 'calendarModal') {
@@ -1034,6 +1039,15 @@ async function loadNotifications() {
             displayNotifications(res.notifications);
             updateNotificationBadge(res.unread_count);
 
+            // Check for Task Warnings
+            const taskWarning = res.notifications.find(n => n.type === 'task_warning');
+            if (taskWarning && !window._lastTaskWarningShown) {
+                openModal('noTasksModal');
+                window._lastTaskWarningShown = true; 
+            } else if (!taskWarning) {
+                window._lastTaskWarningShown = false;
+            }
+
             // SOCIAL TRIGGER: Check for unread wishes and trigger animation
             const gender = (currentUser && currentUser.gender) ? currentUser.gender.toLowerCase() : 'other';
             const unreadWishes = res.notifications.filter(n => n.type === 'wish' && !displayedWishIds.has(n.id));
@@ -1069,8 +1083,8 @@ function displayNotifications(notifications) {
         return;
     }
 
-    container.innerHTML = notifications.map(notif => `
-        <div class="notification-item" data-id="${notif.id}" onclick="handleNotificationClick('${notif.type}', '${notif.id}')">
+    container.innerHTML = notifications.map((notif, idx) => `
+        <div class="notification-item" data-id="${notif.id}" onclick='handleNotificationClick(${JSON.stringify(notif).replace(/'/g, "&apos;")})'>
             <div class="notification-item-icon">${notif.icon}</div>
             <div class="notification-item-content">
                 <div class="notification-item-message">${notif.message}</div>
@@ -1080,7 +1094,11 @@ function displayNotifications(notifications) {
     `).join('');
 }
 
-async function handleNotificationClick(type, id) {
+async function handleNotificationClick(notif) {
+    if (!notif) return;
+    const type = notif.type;
+    const id = notif.id;
+
     if (type === 'wish') {
         // Mark this specific wish as read
         await apiCall('mark-notifications-read', 'POST', {
@@ -1091,12 +1109,15 @@ async function handleNotificationClick(type, id) {
         showNotification('Wish marked as read', 'success');
     } else if (type === 'birthday') {
         openBirthdayCalendar();
-    } else if (type === 'task') {
-        if (currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.has_subordinates) {
+    } else if (type === 'task' || type === 'task_warning') {
+        if (currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.role === 'mentor' || currentUser.has_subordinates) {
             openTaskMentor();
         } else {
             openMyTasks();
         }
+    } else if (type === 'task_request') {
+        // Mentor clicks on a task request notification
+        openTaskMentor(notif.employee_id);
     } else if (type === 'request') {
         openRequestsModal();
     }
@@ -1258,6 +1279,7 @@ async function loadDashboardData() {
             (async () => { try { await loadTodayAttendance(isUserInRange); } catch (e) { console.error(e); } })(),
             (async () => { try { await loadMonthlyStats(); } catch (e) { console.error(e); } })(),
             (async () => { try { await loadWFHEligibility(); } catch (e) { console.error(e); } })(),
+            (async () => { try { await refreshMyTasks(); } catch (e) { console.error(e); } })(),
             (async () => { try { await loadIntelligenceHubData(); } catch (e) { console.error(e); } })(),
             (async () => { try { await loadMentorStatus(); } catch (e) { console.error(e); } })()
         ]);
@@ -2445,10 +2467,17 @@ function applyRequestFilters() {
     list.innerHTML = renderRequestCards(filtered);
 }
 
-async function openTaskMentor() {
+async function openTaskMentor(autoAssigneeId = null) {
     showLoading("Opening Task Mentor...");
     await refreshTasks();
     await populateTaskExportEmployeeFilter();
+
+    // If autoAssigneeId is provided (from a notification), trigger addNewTask with it
+    if (autoAssigneeId) {
+        setTimeout(() => {
+            addNewTask(autoAssigneeId);
+        }, 500);
+    }
 
     // Hide Add Task button for non-admins
     const addTaskBtn = document.querySelector('#taskMentorModal .modal-actions .btn-primary');
@@ -2767,6 +2796,17 @@ async function refreshMyTasks() {
             myTasks = res.tasks;
             renderMyTaskBoard();
             checkDueTomorrowReminders();
+
+            // Immediate check for zero active tasks
+            const activeCount = myTasks.filter(t => t.status === 'todo' || t.status === 'in_progress').length;
+            if (activeCount === 0 && currentUser && currentUser.role !== 'admin') {
+                if (!window._lastTaskWarningShown) {
+                    openModal('noTasksModal');
+                    window._lastTaskWarningShown = true;
+                }
+            } else {
+                window._lastTaskWarningShown = false;
+            }
         }
     } catch (error) {
         console.error('Error loading my tasks:', error);
@@ -2925,7 +2965,7 @@ function updateDashboardVisibility() {
 
 // Legacy function removed as it is merged into renderTaskBoard logic above
 
-function addNewTask() {
+function addNewTask(autoAssigneeId = null) {
     // Reset form
     document.getElementById('taskTitle').value = '';
     document.getElementById('taskDescription').value = '';
@@ -2933,10 +2973,21 @@ function addNewTask() {
     document.getElementById('taskDueDate').value = '';
 
     // Multi-Select Reset
-    selectedEmployeeIds = [];
+    selectedEmployeeIds = autoAssigneeId ? [parseInt(autoAssigneeId)] : [];
     selectedOverseerIds = [];
-    updateSelectedTags('multiSelectDisplay', [], window.allEmployeesSimple || [], 'taskAssigneeIds');
-    updateSelectedTags('overseerDisplay', [], window.allEmployeesSimple || [], 'taskOverseerIds');
+    
+    // Use a small delay to ensure popcorn/dropdowns are ready if calling from notification
+    const syncTags = () => {
+        updateSelectedTags('multiSelectDisplay', selectedEmployeeIds, window.allEmployeesSimple || [], 'taskAssigneeIds');
+        updateSelectedTags('overseerDisplay', [], window.allEmployeesSimple || [], 'taskOverseerIds');
+    };
+
+    if (autoAssigneeId) {
+        // Ensure dropdown is populated before syncing tags
+        populateTaskAssigneeDropdown().then(syncTags);
+    } else {
+        syncTags();
+    }
 
     if (document.getElementById('teamSelector')) document.getElementById('teamSelector').value = '';
 
@@ -3055,8 +3106,8 @@ async function saveNewTask() {
     const spinner = document.getElementById('saveTaskSpinner');
 
     btn.disabled = true;
-    btnText.classList.add('hidden');
-    spinner.classList.remove('hidden');
+    if (btnText) btnText.classList.add('hidden');
+    if (spinner) spinner.classList.remove('hidden');
 
     try {
         const url = window.currentEditingTaskId ? `tasks/${window.currentEditingTaskId}` : 'tasks/create';
@@ -3090,9 +3141,42 @@ async function saveNewTask() {
         console.error('Error creating task:', error);
         showNotification('Error creating task', 'error');
     } finally {
-        btn.disabled = false;
-        btnText.classList.remove('hidden');
-        spinner.classList.add('hidden');
+        if (btn) btn.disabled = false;
+        if (btnText) btnText.classList.remove('hidden');
+        if (spinner) spinner.classList.add('hidden');
+    }
+}
+
+async function requestNewTaskFromMentor() {
+    const btn = document.getElementById('btnRequestTask');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Sending...';
+    }
+    
+    // Close the warning modal immediately (User: "Board Empty card did not close")
+    closeModal('noTasksModal');
+    
+    try {
+        const res = await apiCall('request-new-task', 'POST', {
+            user_id: currentUser.id
+        });
+        
+        if (res && res.success) {
+            showNotification('Request sent successfully! 🚀', 'success');
+            window._lastTaskWarningShown = true;
+        } else {
+            showNotification(res.message || 'Failed to send request', 'error');
+            // If already sent or failed, we keep button disabled or just reset? 
+            // Better allow them to try again later if it was a real failure.
+            if (btn) btn.disabled = false;
+        }
+    } catch (e) {
+        console.error('Task request error:', e);
+        showNotification('Connection error', 'error');
+        if (btn) btn.disabled = false;
+    } finally {
+        if (btn) btn.textContent = '🚀 Request New Task';
     }
 }
 

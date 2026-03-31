@@ -234,6 +234,7 @@ class EmployeeRequest(models.Model):
         ('full_day', 'Full Day Leave'),
         ('half_day', 'Half Day Leave'),
         ('unblock_attendance', 'Unblock Attendance'),
+        ('task_request', 'Task Request'),
     ]
 
     STATUS_CHOICES = [

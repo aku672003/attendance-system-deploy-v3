@@ -2482,7 +2482,7 @@ def get_notifications(request):
             'id': f'task_{task.id}'
         })
 
-    # 3. Pending requests (for admins)
+    # 3. Pending requests (for admins/mentors)
     if user.role == 'admin':
         pending_requests_count = EmployeeRequest.objects.filter(
             status='pending'
@@ -2496,12 +2496,96 @@ def get_notifications(request):
                 'time': 'Now',
                 'id': 'pending_requests'
             })
+    
+    # 3.1 Task Requests for Mentors
+    is_mentor = user.role == 'mentor' or user.subordinates.exists()
+    if is_mentor:
+        task_requests = EmployeeRequest.objects.filter(
+            request_type='task_request',
+            status='pending',
+            employee__mentors=user
+        ).select_related('employee')
+        
+        for treq in task_requests:
+            notifications.append({
+                'type': 'task_request',
+                'icon': '⚠️',
+                'message': f'{treq.employee.name} is requesting a task',
+                'time': treq.created_at.strftime('%I:%M %p') if treq.created_at else 'Now',
+                'id': f'task_req_{treq.id}',
+                'employee_id': treq.employee.id,
+                'employee_name': treq.employee.name
+            })
+
+    # 4. No Active Tasks Warning (for non-admins)
+    if user.role != 'admin':
+        active_task_count = Task.objects.filter(
+            assignees=user,
+            status__in=['todo', 'in_progress']
+        ).count()
+        
+        if active_task_count == 0:
+            # Check if task request already sent
+            request_sent = EmployeeRequest.objects.filter(
+                employee=user,
+                request_type='task_request',
+                status='pending'
+            ).exists()
+            
+            message = '⚠️ Task list empty! Please request a new task.'
+            if request_sent:
+                message = '🕒 Task request already sent. Waiting for assignment...'
+            
+            notifications.append({
+                'type': 'task_warning',
+                'icon': '⚠️',
+                'message': message,
+                'time': 'Now',
+                'id': 'no_active_tasks'
+            })
 
     return Response({
         'success': True,
         'notifications': notifications,
         'unread_count': len(notifications)
     })
+
+@api_view(['POST'])
+@parser_classes([JSONParser])
+def request_new_task(request):
+    """Employee requests a new task from their mentor"""
+    user_id = request.data.get('user_id')
+    if not user_id:
+        return Response({'success': False, 'message': 'User ID required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = Employee.objects.get(id=user_id)
+        
+        # Check if already has a pending task request
+        existing = EmployeeRequest.objects.filter(
+            employee=user,
+            request_type='task_request',
+            status='pending'
+        ).exists()
+        
+        if existing:
+            return Response({'success': False, 'message': 'You already have a pending task request sent to your mentor.'})
+            
+        EmployeeRequest.objects.create(
+            employee=user,
+            request_type='task_request',
+            start_date=timezone.now().date(),
+            end_date=timezone.now().date(),
+            reason='New task request from dashboard alert',
+            status='pending'
+        )
+        
+        return Response({'success': True, 'message': 'Task request sent to your mentor!'})
+        
+    except Employee.DoesNotExist:
+        return Response({'success': False, 'message': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
 @parser_classes([JSONParser])
@@ -2800,6 +2884,14 @@ def _create_task_admin(data, creator):
     task.assignees.set(Employee.objects.filter(id__in=assigned_ids))
     if overseer_ids:
         task.overseers.set(Employee.objects.filter(id__in=overseer_ids))
+
+    # Resolve any pending task_requests for these assignees
+    EmployeeRequest.objects.filter(
+        employee_id__in=assigned_ids,
+        request_type='task_request',
+        status='pending'
+    ).update(status='approved', admin_response=f'Task "{task.title}" assigned.')
+
     return task
 
 @api_view(['GET', 'POST'])
