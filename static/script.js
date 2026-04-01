@@ -39,6 +39,7 @@ function getCurrentISTDate() {
 }
 // API Configuration
 const apiBaseUrl = "/api";
+const GOOGLE_MAPS_API_KEY = window.GOOGLE_MAPS_API_KEY || ''; // Picked from window (injected by server-side context)
 
 // Initialize Application
 document.addEventListener('DOMContentLoaded', async function () {
@@ -629,17 +630,21 @@ function hideLoading() {
 function showGeoPermissionHelp(containerEl) {
     const el = containerEl || document.getElementById('locationDistance');
     if (!el) return;
+    
+    // If we're updating the main dashboard widget, clear the 'denied' text first
+    if (el.id === 'locationDistance') {
+        const statusEl = document.getElementById('locationStatus');
+        if (statusEl) statusEl.innerHTML = '';
+    }
+
     el.innerHTML = `
-        <div class="geo-help" style="font-size:13px;color:var(--gray-700);line-height:1.4;">
-            Location is blocked by your browser for this site.<br>
-            <div style="margin-top:6px;">
-                - Chrome: Click the lock icon near the address bar → Site settings → Location: Allow → Reload.<br>
-                - Safari (macOS): Safari → Settings → Websites → Location → Allow for this site → Reload.<br>
-                - Ensure you use http://localhost or HTTPS (required for geolocation).
-            </div>
-            <div style="margin-top:8px;display:flex;gap:8px;">
-                <button class="btn btn-primary" id="geoTryEnableBtn">Enable Location</button>
-                <button class="btn btn-secondary" id="geoReloadBtn">Reload</button>
+        <div class="geo-help" style="font-size:13px; color:var(--gray-600); line-height:1.5; text-align:center; padding: 12px;">
+            <div style="font-size: 20px; margin-bottom: 8px;">📍</div>
+            <div style="font-weight: 700; color: #1e293b; margin-bottom: 4px;">Location Required</div>
+            Enable location in your browser settings to track attendance properly.
+            <div style="margin-top:12px; display:flex; gap:8px; justify-content:center;">
+                <button class="btn btn-primary" id="geoTryEnableBtn" style="padding: 8px 16px; border-radius: 10px; font-weight: 600; min-height: 36px; font-size: 13px;">Enable</button>
+                <button class="btn btn-secondary" id="geoReloadBtn" style="padding: 8px 16px; border-radius: 10px; font-weight: 600; min-height: 36px; font-size: 13px;">Reload</button>
             </div>
         </div>`;
     const btn = document.getElementById('geoReloadBtn');
@@ -4028,47 +4033,30 @@ async function loadTodayAttendance(isUserInRange = false) {
 
                 // Initialize Mini Map
                 setTimeout(() => {
-                    if (window.statusMap) {
-                        window.statusMap.off();
-                        window.statusMap.remove();
-                        window.statusMap = null;
-                    }
-
                     const mapEl = document.getElementById('statusMiniMap');
-                    if (mapEl && typeof L !== 'undefined') {
-                        const map = L.map('statusMiniMap', {
-                            zoomControl: false,
-                            attributionControl: false,
-                            dragging: false,
-                            scrollWheelZoom: false,
-                            doubleClickZoom: false,
-                            boxZoom: false
+                    if (mapEl && typeof google !== 'undefined') {
+                        const map = new google.maps.Map(mapEl, {
+                            center: { lat: 20.5937, lng: 78.9629 },
+                            zoom: 4,
+                            disableDefaultUI: true,
+                            gestureHandling: 'none',
+                            zoomControl: false
                         });
                         window.statusMap = map;
 
-                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                            maxZoom: 19,
-                        }).addTo(map);
-
                         const markers = [];
+                        const bounds = new google.maps.LatLngBounds();
 
-                        const createEmojiIcon = (emoji) => {
-                            const gender = (record.gender || 'other').toLowerCase();
+                        const getMarkerIcon = (gender) => {
                             let markerImage = '/static/images/marker-user.jpeg';
-
-                            if (gender === 'male') {
-                                markerImage = '/static/images/marker-user.png';
-                            } else if (gender === 'female') {
-                                markerImage = '/static/images/marker-female.png';
-                            }
-
-                            return L.divIcon({
-                                className: 'custom-emoji-marker',
-                                html: `<img src="${markerImage}" style="width: 100%; height: 100%; object-fit: contain;">`,
-                                iconSize: [40, 40],
-                                iconAnchor: [20, 20],
-                                popupAnchor: [0, -28]
-                            });
+                            if (gender === 'male') markerImage = '/static/images/marker-user.png';
+                            else if (gender === 'female') markerImage = '/static/images/marker-female.png';
+                            
+                            return {
+                                url: markerImage,
+                                scaledSize: new google.maps.Size(40, 40),
+                                anchor: new google.maps.Point(20, 20)
+                            };
                         };
 
                         // 1. Check-In Location
@@ -4079,8 +4067,15 @@ async function loadTodayAttendance(isUserInRange = false) {
                                 const lon = loc.longitude || loc.lon || loc.lng;
                                 if (lat && lon) {
                                     const timeStr = record.check_in_time ? new Date(`1970-01-01T${record.check_in_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-                                    const marker = L.marker([lat, lon], { icon: createEmojiIcon('🧍') }).addTo(map).bindPopup(`Check In: ${timeStr}`);
+                                    const pos = { lat, lng: lon };
+                                    const marker = new google.maps.Marker({
+                                        position: pos,
+                                        map: map,
+                                        icon: getMarkerIcon(record.gender),
+                                        title: `Check In: ${timeStr}`
+                                    });
                                     markers.push(marker);
+                                    bounds.extend(pos);
                                 }
                             } catch (e) { console.error('Error parsing check-in location', e); }
                         }
@@ -4093,17 +4088,22 @@ async function loadTodayAttendance(isUserInRange = false) {
                                 const lon = loc.longitude || loc.lon || loc.lng;
                                 if (lat && lon) {
                                     const timeStr = record.check_out_time ? new Date(`1970-01-01T${record.check_out_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-                                    const marker = L.marker([lat, lon], { icon: createEmojiIcon('👋') }).addTo(map).bindPopup(`Check Out: ${timeStr}`);
+                                    const pos = { lat, lng: lon };
+                                    const marker = new google.maps.Marker({
+                                        position: pos,
+                                        map: map,
+                                        icon: getMarkerIcon(record.gender),
+                                        title: `Check Out: ${timeStr}`
+                                    });
                                     markers.push(marker);
+                                    bounds.extend(pos);
                                 }
                             } catch (e) { console.error('Error parsing check_out location', e); }
                         }
 
                         if (markers.length > 0) {
-                            const group = new L.featureGroup(markers);
-                            if (map) map.fitBounds(group.getBounds(), { padding: [20, 20] });
-                        } else {
-                            if (map) map.setView([20.5937, 78.9629], 4);
+                            map.fitBounds(bounds);
+                            if (markers.length === 1) map.setZoom(15);
                         }
                     }
                 }, 100);
@@ -5444,43 +5444,35 @@ async function capturePhoto() {
     const mapX = p;
     const mapY = overlayY + p;
 
-    // Try to draw real OSM tile
+    // Try to draw real Google Maps Static tile
     let mapDrawn = false;
     if (lat !== 0 && lng !== 0) {
         try {
             const zoom = 15;
-            const xtile = lon2tile(lng, zoom);
-            const ytile = lat2tile(lat, zoom);
-            const tileUrl = `https://tile.openstreetmap.org/${zoom}/${xtile}/${ytile}.png`;
+            const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${zoom}&size=${Math.round(mapSize)}x${Math.round(mapSize)}&markers=color:red%7C${lat},${lng}&key=${GOOGLE_MAPS_API_KEY}`;
 
             const mapImg = new Image();
-            mapImg.crossOrigin = "Anonymous"; // Crucial for toDataURL
-            mapImg.src = tileUrl;
+            mapImg.crossOrigin = "Anonymous"; 
+            mapImg.src = staticMapUrl;
 
             await new Promise((resolve) => {
                 mapImg.onload = () => {
-                    // Draw tile: this isn't perfectly centered but gives "exact map view" of the area
                     ctx.drawImage(mapImg, mapX, mapY, mapSize, mapSize);
-
-                    // Draw Red Pin centered on the map box (approximate for the tile)
-                    const pinX = mapX + mapSize / 2;
-                    const pinY = mapY + mapSize / 2 - 5;
-                    ctx.fillStyle = '#ea4335';
-                    ctx.beginPath();
-                    ctx.arc(pinX, pinY, 5, 0, Math.PI * 2);
-                    ctx.fill();
-
-                    // "OpenStreetMap" label
+                    
+                    // "Google Maps" label
                     ctx.fillStyle = 'rgba(0,0,0,0.5)';
                     ctx.fillRect(mapX, mapY + mapSize - 12, mapSize, 12);
                     ctx.fillStyle = '#fff';
                     ctx.font = '8px sans-serif';
-                    ctx.fillText('OSM', mapX + 2, mapY + mapSize - 3);
+                    ctx.fillText('Google Maps', mapX + 2, mapY + mapSize - 3);
 
                     mapDrawn = true;
                     resolve();
                 };
-                mapImg.onerror = resolve; // Fallback if fails
+                mapImg.onerror = (err) => {
+                    console.error("Static Map Error:", err);
+                    resolve();
+                };
             });
         } catch (e) {
             console.warn("Map tile load failed", e);
@@ -6761,26 +6753,31 @@ function openMapPicker() {
 
     // Initialize map if not exists
     if (!officeMap) {
-        officeMap = L.map('officeLocationMap').setView([currentLat, currentLng], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(officeMap);
-
-        officeMarker = L.marker([currentLat, currentLng], { draggable: true }).addTo(officeMap);
-
-        officeMap.on('click', function (e) {
-            updatePickerMarker(e.latlng.lat, e.latlng.lng);
+        officeMap = new google.maps.Map(document.getElementById('officeLocationMap'), {
+            center: { lat: currentLat, lng: currentLng },
+            zoom: 13,
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: false
         });
 
-        officeMarker.on('dragend', function (e) {
-            const pos = officeMarker.getLatLng();
-            updatePickerMarker(pos.lat, pos.lng);
+        officeMarker = new google.maps.Marker({
+            position: { lat: currentLat, lng: currentLng },
+            map: officeMap,
+            draggable: true
+        });
+
+        officeMap.addListener('click', function (e) {
+            updatePickerMarker(e.latLng.lat(), e.latLng.lng());
+        });
+
+        officeMarker.addListener('dragend', function (e) {
+            const pos = officeMarker.getPosition();
+            updatePickerMarker(pos.lat(), pos.lng());
         });
     } else {
-        officeMap.setView([currentLat, currentLng], 13);
-        officeMarker.setLatLng([currentLat, currentLng]);
-        // Fix Leaflet sizing in modal
-        setTimeout(() => officeMap.invalidateSize(), 200);
+        officeMap.setCenter({ lat: currentLat, lng: currentLng });
+        officeMarker.setPosition({ lat: currentLat, lng: currentLng });
     }
 }
 
@@ -6833,32 +6830,36 @@ async function searchMapLocation() {
     const query = document.getElementById('mapSearchInput').value.trim();
     if (!query) return;
 
+    if (typeof google === 'undefined') return showNotification("Map service not ready", "error");
+
     const btn = document.querySelector('button[onclick="searchMapLocation()"]');
     const originalText = btn.textContent;
     btn.textContent = 'Searching...';
     btn.disabled = true;
 
     try {
-        // Using OpenStreetMap Nominatim API (Free)
-        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
-        const data = await response.json();
+        const geocoder = new google.maps.Geocoder();
+        geocoder.geocode({ address: query }, (results, status) => {
+            if (status === "OK" && results[0]) {
+                const loc = results[0].geometry.location;
+                const lat = loc.lat();
+                const lng = loc.lng();
 
-        if (data && data.length > 0) {
-            const result = data[0];
-            const lat = parseFloat(result.lat);
-            const lng = parseFloat(result.lon);
+                updatePickerMarker(lat, lng);
+                officeMap.setCenter(loc);
+                officeMap.setZoom(15);
 
-            updatePickerMarker(lat, lng);
-            officeMap.setView([lat, lng], 15);
-
-            document.getElementById('mapPickerStatus').textContent = `Found: ${result.display_name.split(',')[0]}`;
-        } else {
-            showNotification("Location not found", "warning");
-        }
+                const cityName = results[0].address_components.find(c => c.types.includes("locality"))?.long_name || results[0].formatted_address.split(',')[0];
+                document.getElementById('mapPickerStatus').textContent = `Found: ${cityName}`;
+            } else {
+                showNotification("Location not found", "warning");
+            }
+            btn.textContent = originalText;
+            btn.disabled = false;
+        });
     } catch (error) {
         console.error("Search failed:", error);
         showNotification("Search service unavailable", "error");
-    } finally {
         btn.textContent = originalText;
         btn.disabled = false;
     }
@@ -9521,121 +9522,32 @@ window.openMapModal = function () {
     // Initialize map if not exists or resize
     setTimeout(() => {
         if (!window.fullScreenMap) {
-            // Base Layers
-            const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '© OpenStreetMap'
-            });
-
-            const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                maxZoom: 19,
-                attribution: '© Esri'
-            });
-
-            window.fullScreenMap = L.map('fullMap', {
-                center: [20.5937, 78.9629],
+            window.fullScreenMap = new google.maps.Map(document.getElementById('fullMap'), {
+                center: { lat: 20.5937, lng: 78.9629 },
                 zoom: 4,
-                layers: [streets], // Default
-                zoomControl: false
+                mapTypeControl: true,
+                streetViewControl: true,
+                fullscreenControl: true
             });
-
-            // Add Layer Control
-            const baseMaps = {
-                "Street": streets,
-                "Satellite": satellite
-            };
-            L.control.layers(baseMaps).addTo(window.fullScreenMap);
-            L.control.zoom({ position: 'topleft' }).addTo(window.fullScreenMap);
-
-            // Add Current Location Button
-            const locControl = L.Control.extend({
-                options: { position: 'topleft' },
-                onAdd: function (map) {
-                    const btn = L.DomUtil.create('button', 'leaflet-bar leaflet-control leaflet-control-custom');
-                    btn.innerHTML = '📍';
-                    btn.style.backgroundColor = 'white';
-                    btn.style.width = '30px';
-                    btn.style.height = '30px';
-                    btn.style.cursor = 'pointer';
-                    btn.style.border = '2px solid rgba(0,0,0,0.2)';
-                    btn.style.borderRadius = '4px';
-                    btn.title = "Show My Location";
-                    btn.onclick = function (e) {
-                        e.stopPropagation();
-                        if (navigator.geolocation) {
-                            btn.innerHTML = '⌛';
-                            navigator.geolocation.getCurrentPosition(pos => {
-                                const lat = pos.coords.latitude;
-                                const lon = pos.coords.longitude;
-                                map.flyTo([lat, lon], 17);
-
-                                // Clear existing location markers/circles
-                                if (map._locMarker) map.removeLayer(map._locMarker);
-                                if (map._locCircle) map.removeLayer(map._locCircle);
-
-                                // Add accuracy circle
-                                map._locCircle = L.circle([lat, lon], {
-                                    radius: pos.coords.accuracy || 100,
-                                    color: '#3b82f6',
-                                    fillColor: '#3b82f6',
-                                    fillOpacity: 0.15,
-                                    weight: 1
-                                }).addTo(map);
-
-                                // Add marker
-                                map._locMarker = L.circleMarker([lat, lon], {
-                                    radius: 8,
-                                    fillColor: "#3b82f6",
-                                    color: "#fff",
-                                    weight: 2,
-                                    opacity: 1,
-                                    fillOpacity: 0.8
-                                }).addTo(map).bindPopup("You are here").openPopup();
-
-                                btn.innerHTML = '📍';
-                            }, () => {
-                                alert("Location access denied.");
-                                btn.innerHTML = '📍';
-                            });
-                        } else {
-                            alert("Geolocation not supported.");
-                        }
-                    }
-                    return btn;
-                }
-            });
-            window.fullScreenMap.addControl(new locControl());
         }
 
-        // Clear existing layers
-        window.fullScreenMap.eachLayer((layer) => {
-            if (layer instanceof L.Marker) {
-                window.fullScreenMap.removeLayer(layer);
-            }
-        });
-
-        window.fullScreenMap.invalidateSize();
-
-        // Add Markers (Same logic as mini map)
         const map = window.fullScreenMap;
         const markers = [];
-        const gender = (record.gender || 'other').toLowerCase();
+        const bounds = new google.maps.LatLngBounds();
 
-        const createEmojiIcon = (emoji) => {
-            let markerImage = '/static/images/marker-user.png'; // Default to PNG
+        const getMarkerIcon = (gender) => {
+            let markerImage = '/static/images/marker-user.jpeg';
             if (gender === 'male') markerImage = '/static/images/marker-user.png';
             else if (gender === 'female') markerImage = '/static/images/marker-female.png';
-
-            return L.divIcon({
-                className: 'custom-emoji-marker',
-                html: `<img src="${markerImage}" style="width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));">`,
-                iconSize: [100, 100], // Increased to 100px for full map
-                iconAnchor: [50, 50],
-                popupAnchor: [0, -55]
-            });
+            
+            return {
+                url: markerImage,
+                scaledSize: new google.maps.Size(40, 40),
+                anchor: new google.maps.Point(20, 20)
+            };
         };
 
-        // 1. Check-In
+        // 1. Check-In Location
         if (record.check_in_location) {
             try {
                 const loc = typeof record.check_in_location === 'string' ? JSON.parse(record.check_in_location) : record.check_in_location;
@@ -9643,13 +9555,22 @@ window.openMapModal = function () {
                 const lon = loc.longitude || loc.lon || loc.lng;
                 if (lat && lon) {
                     const timeStr = record.check_in_time ? new Date(`1970-01-01T${record.check_in_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-                    const marker = L.marker([lat, lon], { icon: createEmojiIcon('🧍') }).addTo(map).bindPopup(`<b>Check In</b><br>${timeStr}`);
+                    const pos = { lat, lng: lon };
+                    const marker = new google.maps.Marker({
+                        position: pos,
+                        map: map,
+                        icon: getMarkerIcon(record.gender),
+                        title: `Check In: ${timeStr}`
+                    });
+                    const info = new google.maps.InfoWindow({ content: `<b>Check In</b><br>${timeStr}` });
+                    marker.addListener('click', () => info.open(map, marker));
                     markers.push(marker);
+                    bounds.extend(pos);
                 }
             } catch (e) { }
         }
 
-        // 4. Check Out
+        // 2. Check Out Location
         if (record.check_out_location) {
             try {
                 const loc = typeof record.check_out_location === 'string' ? JSON.parse(record.check_out_location) : record.check_out_location;
@@ -9657,17 +9578,26 @@ window.openMapModal = function () {
                 const lon = loc.longitude || loc.lon || loc.lng;
                 if (lat && lon) {
                     const timeStr = record.check_out_time ? new Date(`1970-01-01T${record.check_out_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-                    const marker = L.marker([lat, lon], { icon: createEmojiIcon('👋') }).addTo(map).bindPopup(`<b>Check Out</b><br>${timeStr}`);
+                    const pos = { lat, lng: lon };
+                    const marker = new google.maps.Marker({
+                        position: pos,
+                        map: map,
+                        icon: getMarkerIcon(record.gender),
+                        title: `Check Out: ${timeStr}`
+                    });
+                    const info = new google.maps.InfoWindow({ content: `<b>Check Out</b><br>${timeStr}` });
+                    marker.addListener('click', () => info.open(map, marker));
                     markers.push(marker);
+                    bounds.extend(pos);
                 }
             } catch (e) { }
         }
 
         if (markers.length > 0) {
-            const group = new L.featureGroup(markers);
-            map.fitBounds(group.getBounds(), { padding: [50, 50] });
+            map.fitBounds(bounds);
         } else {
-            map.setView([20.5937, 78.9629], 4);
+            map.setCenter({ lat: 20.5937, lng: 78.9629 });
+            map.setZoom(4);
         }
 
     }, 100);

@@ -161,6 +161,9 @@ VAPID_PRIVATE_KEY = os.getenv('VAPID_PRIVATE_KEY', '')
 VAPID_PUBLIC_KEY  = os.getenv('VAPID_PUBLIC_KEY', '')
 VAPID_CLAIMS_SUB  = os.getenv('VAPID_CLAIMS_SUB', f'mailto:{DEFAULT_FROM_EMAIL}')
 
+# Google Maps API Configuration
+GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY', '')
+
 # Caching & CORS
 CACHES = {
     'default': {

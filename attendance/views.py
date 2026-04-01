@@ -3983,7 +3983,10 @@ def error_500_view(request):
 @require_valid_token
 def spa_view(request):
     """Protected view to serve the SPA index.html."""
-    return render(request, 'index.html')
+    context = {
+        'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY
+    }
+    return render(request, 'index.html', context)
 
 
 @require_valid_token
@@ -3998,6 +4001,7 @@ def gated_dashboard(request):
         context['gated_user_id'] = data.get('user_id')
         context['is_gated'] = True
         
+    context['google_maps_api_key'] = settings.GOOGLE_MAPS_API_KEY
     return render(request, 'index.html', context)
 
 

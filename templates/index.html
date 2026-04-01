@@ -13,8 +13,11 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Orbitron:wght@400;700;900&family=Dancing+Script:wght@700&family=Pacifico&family=Tilt+Prism&family=Bungee+Spice&family=Nabla&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Google Maps API -->
+    <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=places"></script>
+    <script>
+        window.GOOGLE_MAPS_API_KEY = "{{ google_maps_api_key }}";
+    </script>
 
     <!-- Three.js for 3D Avatar Rendering -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -503,7 +506,7 @@
     <div id="mapModal" class="map-modal">
         <div class="map-modal-content">
             <button class="close-map-btn" onclick="closeMapModal()">&times;</button>
-            <div id="fullMap" style="width: 100%; height: 100%; border-radius: 12px;"></div>
+            <div id="fullMap" style="width: 100%; height: 100%;"></div>
         </div>
     </div>
 
@@ -2269,7 +2272,7 @@
                     <button class="btn btn-warning" onclick="requestNewTaskFromMentor()" style="background: var(--warning-color); color: white; border: none; font-weight: 700;">🚀 Request Task</button>
                     <button class="btn btn-primary" onclick="addNewTask()">➕ Add Task</button>
                     <button class="btn btn-secondary" onclick="refreshMyTasks()">🔄 Refresh</button>
-                    <button class="btn btn-secondary" onclick="closeModal('myTasksModal')">✕ Close</button>
+                    <button class="btn btn-secondary" onclick="closeModal('myTasksModal')">✕</button>
                 </div>
             </div>
 
@@ -3085,8 +3088,8 @@
     <!-- External JavaScript -->
     <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     {% load static %}
-    <script src="{% static 'script.js' %}"></script>
-    <script src="{% static 'predictive_card.js' %}"></script>
+    <script src="{% static 'script.js' %}?v=1.0.1"></script>
+    <script src="{% static 'predictive_card.js' %}?v=1.0.1"></script>
 
     <!-- Birthday Special Effects Container -->
     <div id="birthdayFXContainer"></div>
