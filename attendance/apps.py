@@ -17,6 +17,7 @@ class AttendanceConfig(AppConfig):
             try:
                 from attendance.vapid_setup import ensure_vapid_keys
                 ensure_vapid_keys()
-            except Exception:
-                pass
-
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning("VAPID key setup failed: %s", e)

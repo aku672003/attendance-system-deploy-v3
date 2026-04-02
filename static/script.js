@@ -39,7 +39,7 @@ function getCurrentISTDate() {
 }
 // API Configuration
 const apiBaseUrl = "/api";
-const GOOGLE_MAPS_API_KEY = window.GOOGLE_MAPS_API_KEY || ''; // Picked from window (injected by server-side context)
+const MAPS_API_KEY = window.MAPS_API_KEY || ''; // Picked from window (injected by server-side context)
 
 // Initialize Application
 document.addEventListener('DOMContentLoaded', async function () {
@@ -171,9 +171,9 @@ async function setupPushNotifications(employeeId) {
         const subJson = subscription.toJSON();
         const payload = {
             employee_id: employeeId,
-            endpoint:    subJson.endpoint,
-            p256dh:      subJson.keys.p256dh,
-            auth:        subJson.keys.auth,
+            endpoint: subJson.endpoint,
+            p256dh: subJson.keys.p256dh,
+            auth: subJson.keys.auth,
         };
 
         await fetch(`${apiBaseUrl}/save-push-subscription`, {
@@ -601,11 +601,11 @@ function showNotification(message, type = 'success') {
 function showLoading(message = "Loading your dashboard...") {
     const loader = document.getElementById('globalLoader');
     if (!loader) return;
-    
+
     // Update message if provided
     const subtitle = loader.querySelector('.loader-subtitle');
     if (subtitle) subtitle.textContent = message;
-    
+
     loader.classList.add('active');
     document.body.style.overflow = 'hidden';
 }
@@ -616,9 +616,9 @@ function showLoading(message = "Loading your dashboard...") {
 function hideLoading() {
     const loader = document.getElementById('globalLoader');
     if (!loader) return;
-    
+
     loader.classList.remove('active');
-    
+
     // Only restore overflow if no modals are active
     if (!document.querySelector('.modal.active')) {
         document.body.style.overflow = 'auto';
@@ -630,7 +630,7 @@ function hideLoading() {
 function showGeoPermissionHelp(containerEl) {
     const el = containerEl || document.getElementById('locationDistance');
     if (!el) return;
-    
+
     // If we're updating the main dashboard widget, clear the 'denied' text first
     if (el.id === 'locationDistance') {
         const statusEl = document.getElementById('locationStatus');
@@ -863,7 +863,7 @@ async function handleLogin(event) {
 
             updateDashboardVisibility();
             checkAndUpdateLocationStatus(true); // Automatic geolocation after login
-            
+
             // Register this browser for push notifications after successful login
             setupPushNotifications(currentUser.id);
         } else {
@@ -1048,7 +1048,7 @@ async function loadNotifications() {
             const taskWarning = res.notifications.find(n => n.type === 'task_warning');
             if (taskWarning && !window._lastTaskWarningShown) {
                 openModal('noTasksModal');
-                window._lastTaskWarningShown = true; 
+                window._lastTaskWarningShown = true;
             } else if (!taskWarning) {
                 window._lastTaskWarningShown = false;
             }
@@ -1188,7 +1188,7 @@ function toggleNotifications() {
 }
 
 // Close notification dropdown when clicking outside
-document.addEventListener('click', function(e) {
+document.addEventListener('click', function (e) {
     const dropdown = document.getElementById('notificationDropdown');
     const bellBtn = document.getElementById('notifBellBtn');
     if (dropdown && bellBtn && !bellBtn.contains(e.target) && !dropdown.contains(e.target)) {
@@ -1291,7 +1291,7 @@ async function loadDashboardData() {
 
         // Check location permission and gate the Check In card
         checkLocationPermission();
-        
+
         // Parallelized Loading for secondary dashboard cards
         await Promise.all([
             (async () => { try { await loadTodayAttendance(isUserInRange); } catch (e) { console.error(e); } })(),
@@ -1987,10 +1987,10 @@ function getDaysLeft(targetDate) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const target = new Date(targetDate);
-    
+
     // Normalize to the viewed year if possible, otherwise use current year
     const viewedYear = window.currentBirthdayYear || today.getFullYear();
-    
+
     // Handle Feb 29 on non-leap years (use Feb 28 to match backend logic)
     if (target.getMonth() === 1 && target.getDate() === 29) {
         const isLeap = (viewedYear % 4 === 0 && viewedYear % 100 !== 0) || (viewedYear % 400 === 0);
@@ -1998,10 +1998,10 @@ function getDaysLeft(targetDate) {
             target.setDate(28);
         }
     }
-    
+
     target.setFullYear(viewedYear);
     target.setHours(0, 0, 0, 0);
-    
+
     const diffTime = target - today;
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 }
@@ -2993,16 +2993,16 @@ function addNewTask(autoAssigneeId = null) {
     // Multi-Select Reset
     selectedEmployeeIds = autoAssigneeId ? [parseInt(autoAssigneeId)] : [];
     // If current user is a mentor/admin, auto-select them as overseer
-    selectedOverseerIds = (currentUser && (currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.has_subordinates)) 
-        ? [currentUser.id] 
+    selectedOverseerIds = (currentUser && (currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.has_subordinates))
+        ? [currentUser.id]
         : [];
-    
+
     // Use a small delay to ensure popcorn/dropdowns are ready if calling from notification
     const syncTags = () => {
         const employees = window.allEmployeesSimple || [];
         updateSelectedTags('multiSelectDisplay', selectedEmployeeIds, employees, 'taskAssigneeIds');
         updateSelectedTags('overseerDisplay', selectedOverseerIds, employees, 'taskOverseerIds');
-        
+
         // Auto-fill title with name if possible
         if (autoAssigneeId && employees.length > 0) {
             const emp = employees.find(e => e.id == autoAssigneeId);
@@ -3182,15 +3182,15 @@ async function requestNewTaskFromMentor() {
         btn.disabled = true;
         btn.textContent = 'Sending...';
     }
-    
+
     // Close the warning modal immediately (User: "Board Empty card did not close")
     closeModal('noTasksModal');
-    
+
     try {
         const res = await apiCall('request-new-task', 'POST', {
             user_id: currentUser.id
         });
-        
+
         if (res && res.success) {
             showNotification('Request sent successfully! 🚀', 'success');
             window._lastTaskWarningShown = true;
@@ -3214,7 +3214,7 @@ let currentSelectedTaskId = null;
 async function openTaskDetail(taskId) {
     showLoading("Loading task details...");
     let task = [...tasks, ...myTasks].find(t => t.id === taskId);
-    
+
     // If task not in memory (e.g. from Manage Employees list), fetch it
     if (!task) {
         try {
@@ -3244,7 +3244,7 @@ async function openTaskDetail(taskId) {
     const overseerNames = overseers.map(o => o.name).join(', ') || 'None';
 
     const priorityClass = task.priority.toLowerCase() === 'high' ? 'priority-high' :
-                         (task.priority.toLowerCase() === 'medium' ? 'priority-medium' : 'priority-low');
+        (task.priority.toLowerCase() === 'medium' ? 'priority-medium' : 'priority-low');
 
     document.getElementById('detailTaskMeta').innerHTML = `
         <div style="display: flex; flex-direction: column; gap: 8px;">
@@ -3686,7 +3686,7 @@ async function openAttendanceCalendar() {
         showNotification('Please login first', 'error');
         return;
     }
-    
+
     if (isCalendarBuilding) return; // Guard against multiple builds
 
     showLoading("Initializing Attendance Calendar...");
@@ -3991,9 +3991,8 @@ async function loadTodayAttendance(isUserInRange = false) {
         if (result.success && result.record) {
             const record = result.record;
             // Store for UI updates
-            window.currentAttendanceRecord = record;
-
-            // Helper to format time (HH:MM AM/PM)
+            currentAttendanceRecord = record;
+            window.currentAttendanceRecord = record;            // Helper to format time (HH:MM AM/PM)
             const formatTime = (timeStr) => {
                 if (!timeStr) return '';
                 const [h, m] = timeStr.split(':');
@@ -4051,7 +4050,7 @@ async function loadTodayAttendance(isUserInRange = false) {
                             let markerImage = '/static/images/marker-user.jpeg';
                             if (gender === 'male') markerImage = '/static/images/marker-user.png';
                             else if (gender === 'female') markerImage = '/static/images/marker-female.png';
-                            
+
                             return {
                                 url: markerImage,
                                 scaledSize: new google.maps.Size(40, 40),
@@ -4293,10 +4292,10 @@ function startDashboardLocationWatch() {
         (pos) => {
             const { latitude: lat, longitude: lng, accuracy } = pos.coords;
             const now = Date.now();
-            
+
             // 1. Update global cache
             currentPhotoLocation = { lat, lng, accuracy: accuracy || 999, timestamp: now };
-            
+
             // 2. If on dashboard, perform a lightweight UI refresh
             if (document.getElementById('dashboardScreen') && document.getElementById('dashboardScreen').classList.contains('active')) {
                 _updateLocationDashboardUI(lat, lng, accuracy || 999);
@@ -4505,7 +4504,7 @@ async function _renderLocationResultInternal(lat, lng, accuracy, updateAttendanc
     statusEl.textContent = inRange ? 'In Office Range' : 'Out of Range';
     statusEl.className = 'stat-card-value ' + (inRange ? 'success' : 'warning');
     distEl.textContent = `${nearest.office.name} • ${Math.round(nearest.d)} m`;
-    
+
     // Success: hide the manual button
     if (btn) btn.style.display = 'none';
 
@@ -4519,14 +4518,14 @@ async function _renderLocationResultInternal(lat, lng, accuracy, updateAttendanc
 async function manualLocationCheck() {
     const btn = document.getElementById('enableLocationBtn');
     if (btn) btn.style.display = 'none';
-    
+
     const statusEl = document.getElementById('locationStatus');
     const distEl = document.getElementById('locationDistance');
     if (statusEl) statusEl.textContent = 'Locating...';
     if (distEl) distEl.textContent = 'Requesting GPS fix (up to 45s)...';
-    
+
     showNotification('Requesting high-precision location. Please stay still.', 'info');
-    
+
     try {
         // Force a fresh fetch by calling with updateAttendance=true
         await checkAndUpdateLocationStatus(true);
@@ -4674,9 +4673,9 @@ function selectType(type, e) {
 async function startAttendanceFlow() {
     // --- MANDATORY LOCATION GATE ---
     // Use cached dashboard location if it's fresh (< 2 mins) and accurate (<= 200m)
-    const isLocationFresh = currentPhotoLocation && 
-                            currentPhotoLocation.accuracy <= 200 && 
-                            (Date.now() - (currentPhotoLocation.timestamp || 0) < 120000);
+    const isLocationFresh = currentPhotoLocation &&
+        currentPhotoLocation.accuracy <= 200 &&
+        (Date.now() - (currentPhotoLocation.timestamp || 0) < 120000);
 
     if (!isLocationFresh) {
         currentPhotoLocation = null; // Only clear if not fresh/accurate
@@ -5108,11 +5107,11 @@ async function loadOfficeSelection() {
     navigator.geolocation.getCurrentPosition(
         (pos) => {
             // Update cache for other parts of the flow
-            currentPhotoLocation = { 
-                lat: pos.coords.latitude, 
-                lng: pos.coords.longitude, 
-                accuracy: pos.coords.accuracy || 999, 
-                timestamp: Date.now() 
+            currentPhotoLocation = {
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                accuracy: pos.coords.accuracy || 999,
+                timestamp: Date.now()
             };
             showNotification('Location detected successfully', 'success');
             renderOfficeCards(pos.coords.latitude, pos.coords.longitude);
@@ -5299,7 +5298,7 @@ async function startCamera() {
             if (el && currentPhotoLocation) {
                 const acc = Math.round(currentPhotoLocation.accuracy);
                 const isAccurate = acc <= 200;
-                
+
                 if (isAccurate) {
                     el.innerText = `GPS Accuracy: ±${acc}m (Good)`;
                     el.style.backgroundColor = 'rgba(0,128,0,0.7)';
@@ -5449,16 +5448,16 @@ async function capturePhoto() {
     if (lat !== 0 && lng !== 0) {
         try {
             const zoom = 15;
-            const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${zoom}&size=${Math.round(mapSize)}x${Math.round(mapSize)}&markers=color:red%7C${lat},${lng}&key=${GOOGLE_MAPS_API_KEY}`;
+            const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${zoom}&size=${Math.round(mapSize)}x${Math.round(mapSize)}&markers=color:red%7C${lat},${lng}&key=${MAPS_API_KEY}`;
 
             const mapImg = new Image();
-            mapImg.crossOrigin = "Anonymous"; 
+            mapImg.crossOrigin = "Anonymous";
             mapImg.src = staticMapUrl;
 
             await new Promise((resolve) => {
                 mapImg.onload = () => {
                     ctx.drawImage(mapImg, mapX, mapY, mapSize, mapSize);
-                    
+
                     // "Google Maps" label
                     ctx.fillStyle = 'rgba(0,0,0,0.5)';
                     ctx.fillRect(mapX, mapY + mapSize - 12, mapSize, 12);
@@ -5730,7 +5729,7 @@ async function markAttendance() {
             showNotification('Location access is mandatory. Please wait for GPS and try again.', 'error');
             return;
         }
-        
+
         // Accuracy Check — already enforced by the "Capture" button state, but good to have here too.
         if (currentPhotoLocation.accuracy > 200) {
             showNotification(`Location accuracy is too low (±${Math.round(currentPhotoLocation.accuracy)}m). Please wait for a better GPS signal.`, 'error');
@@ -7066,7 +7065,7 @@ function renderAdminUsers(users) {
             }
         }
 
-        const tasksHtml = (u.active_tasks && u.active_tasks.length > 0) 
+        const tasksHtml = (u.active_tasks && u.active_tasks.length > 0)
             ? u.active_tasks.map(t => `<div class="task-pill" onclick="event.stopPropagation(); openTaskDetail(${t.id})" style="font-size:11px; background:#f0f9ff; color:#0369a1; padding:2px 8px; border-radius:6px; margin-bottom:4px; border:1px solid #bae6fd; font-weight:500; white-space:normal; line-height:1.2; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.background='#e0f2fe'; this.style.borderColor='#7dd3fc';" onmouseout="this.style.background='#f0f9ff'; this.style.borderColor='#bae6fd';">${t.title}</div>`).join('')
             : `<div onclick="event.stopPropagation(); addNewTask(${u.id})" style="font-size:11px; color:#ef4444; font-weight:600; background:#fef2f2; padding:4px 8px; border-radius:6px; border:1px solid #fee2e2; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.background='#fee2e2'; this.style.borderColor='#fca5a5';" onmouseout="this.style.background='#fef2f2'; this.style.borderColor='#fee2e2;">⚠️ No Active Tasks</div>`;
 
@@ -9539,7 +9538,7 @@ window.openMapModal = function () {
             let markerImage = '/static/images/marker-user.jpeg';
             if (gender === 'male') markerImage = '/static/images/marker-user.png';
             else if (gender === 'female') markerImage = '/static/images/marker-female.png';
-            
+
             return {
                 url: markerImage,
                 scaledSize: new google.maps.Size(40, 40),
@@ -10043,13 +10042,13 @@ function shadeColor(color, percent) {
 // Render avatar (handles string emoji or URL)
 async function renderAvatar(avatarStr, container) {
     if (!container) return;
-    
+
     // 3D Avatar (GLB) URL
     if (avatarStr && avatarStr.includes('.glb')) {
         render3DAvatar(avatarStr, container, { width: container.clientWidth || 32, height: container.clientHeight || 32, interactive: false });
         return;
     }
-    
+
     // Fallback to Image or Emoji
     if (avatarStr && (avatarStr.startsWith('http') || avatarStr.startsWith('/') || avatarStr.startsWith('uploads/'))) {
         const isHeader = container.id === 'userAvatar';
@@ -10057,17 +10056,17 @@ async function renderAvatar(avatarStr, container) {
         const size = isPerfModal ? '80px' : (isHeader ? '24px' : '100px');
         const zoom = (currentUser.theme_settings && currentUser.theme_settings.avatarZoom) || 1.0;
         const transform = `scale(${0.85 * zoom})`;
-        
+
         let src = avatarStr;
         if (!src.startsWith('http') && !src.startsWith('/') && !src.startsWith('data:')) {
             src = '/media/' + src;
         }
-        
+
         container.innerHTML = `<img src="${src}" style="width:${size}; height:${size}; vertical-align:middle; border-radius:50%; display:inline-block; border:1px solid rgba(255,255,255,0.2); object-fit:cover; transform: ${transform};">`;
     } else {
         const zoom = (currentUser.theme_settings && currentUser.theme_settings.avatarZoom) || 1.0;
         const textBg = (currentUser.theme_settings && currentUser.theme_settings.avatarTextBg) || '#3b82f6';
-        
+
         if (avatarStr && avatarStr.length > 0 && avatarStr.length <= 3 && !isEmoji(avatarStr)) {
             container.style.background = textBg;
             container.style.color = '#fff';
@@ -10094,7 +10093,7 @@ async function openAppearanceModal() {
     selectedEmoji = currentUser.avatar_emoji || "👤";
     selectedColor = (currentUser.theme_settings && currentUser.theme_settings.primaryColor) || "#2563eb";
     selectedDarkMode = (currentUser.theme_settings && currentUser.theme_settings.darkMode) || false;
-    
+
     // Load advanced gradient colors
     if (currentUser.theme_settings && currentUser.theme_settings.gradientColors) {
         gradientColors = { ...currentUser.theme_settings.gradientColors };
@@ -10118,7 +10117,7 @@ async function openAppearanceModal() {
     }
 
     updateAppearancePreview();
-    
+
     // Initialize Advanced Gradient UI
     // initHexColorGrid(); // Replaced by Advanced Color Picker
     refreshGradientPreview();
@@ -10258,10 +10257,10 @@ class AdvancedColorPicker {
         this.h = hsv.h;
         this.s = hsv.s;
         this.v = hsv.v;
-        
+
         const hueSlider = this.container.querySelector('#acpHue');
         if (hueSlider) hueSlider.value = this.h;
-        
+
         this.update();
     }
 
@@ -10330,9 +10329,9 @@ function initAdvancedColorPicker() {
 function toggleAdvancedColorPicker(show) {
     const popup = document.getElementById('advancedColorPickerPopup');
     if (!popup) return;
-    
+
     if (show === undefined) show = !popup.classList.contains('active');
-    
+
     if (show) {
         popup.classList.add('active');
         initAdvancedColorPicker();
@@ -10375,10 +10374,10 @@ function refreshGradientPreview() {
 function updateAppearancePreview() {
     const preview = document.getElementById('prefAvatarPreview');
     if (!preview) return;
-    
+
     // Clear preview
     preview.innerHTML = '';
-    
+
     // 3D Avatar config takes precedence
     const cfg3d = currentUser && currentUser.avatar3d_config;
     if (cfg3d) {
@@ -10389,18 +10388,18 @@ function updateAppearancePreview() {
         const zoom = (currentUser.theme_settings && currentUser.theme_settings.avatarZoom) || 1.0;
         const offX = (currentUser.theme_settings && currentUser.theme_settings.avatarOffsetX) || 0;
         const offY = (currentUser.theme_settings && currentUser.theme_settings.avatarOffsetY) || 0;
-        
+
         let src = currentUser.avatar_url;
         if (!src.startsWith('http') && !src.startsWith('/') && !src.startsWith('data:')) {
             src = '/media/' + src;
         }
-        
+
         preview.innerHTML = `<img src="${src}" style="width:100px; height:100px; border-radius:50%; object-fit:cover; transform: scale(${zoom}) translate(${offX}px, ${offY}px);">`;
     } else {
         const zoom = (currentUser.theme_settings && currentUser.theme_settings.avatarZoom) || 1.0;
         preview.innerHTML = `<span style="font-size: 64px; display:inline-block; transform: scale(${zoom});">${selectedEmoji || '👤'}</span>`;
     }
-    
+
     // Update the emoji avatar button
     const btn = document.getElementById('customAvatarBtn');
     if (btn) {
@@ -10412,7 +10411,7 @@ function updateAppearancePreview() {
             btn.style.fontSize = '';
         }
     }
-    
+
     // Update the 3D avatar button (Temporarily disabled as per user request)
     /*
     const btn3d = document.getElementById('create3DAvatarBtn');
@@ -10427,7 +10426,7 @@ function updateAppearancePreview() {
 async function renderAvatarPreview(container) {
     if (!container) return;
     container.innerHTML = '<div class="loading-spinner"></div>';
-    
+
     const layerSequence = [
         { cat: 'head', id: avatarState.headShape, color: null },
         { cat: 'skin', id: avatarState.skinTone, color: avatarState.skinColor },
@@ -10479,13 +10478,13 @@ async function saveAppearanceSettings() {
     msg.style.color = '#64748b';
 
     try {
-        const themeSettings = { 
+        const themeSettings = {
             ...currentUser.theme_settings,
-            primaryColor: selectedColor, 
+            primaryColor: selectedColor,
             darkMode: selectedDarkMode,
             gradientColors: gradientColors
         };
-        
+
         // Always sync avatar config to ensure it's cleared if deleted
         themeSettings.avatar_config = currentUser.avatar3d_config || null;
 
@@ -10494,7 +10493,7 @@ async function saveAppearanceSettings() {
             avatar_emoji: currentUser.avatar_emoji || selectedEmoji,
             theme_settings: themeSettings
         };
-        
+
         // If we have a 3D avatar URL (legacy/GLB), include it
         if (currentUser.avatar_url) {
             payload.avatar_url = currentUser.avatar_url;
@@ -10530,12 +10529,12 @@ async function saveAppearanceSettings() {
 function updateHeaderAvatar() {
     const avatarEl = document.getElementById('userAvatar');
     if (!avatarEl) return;
-    
+
     // Clear
     avatarEl.innerHTML = '';
 
     const cfg3d = currentUser.avatar3d_config || (currentUser.theme_settings && currentUser.theme_settings.avatar_config);
-    
+
     if (currentUser.avatar_url && !currentUser.avatar_url.includes('glb')) {
         // Custom Photo Avatar
         const img = document.createElement('img');
@@ -10548,12 +10547,12 @@ function updateHeaderAvatar() {
         img.style.height = '100%';
         img.style.objectFit = 'cover';
         img.style.borderRadius = '50%';
-        
+
         const zoom = (currentUser.theme_settings && currentUser.theme_settings.avatarZoom) || 1.0;
         const offX = (currentUser.theme_settings && currentUser.theme_settings.avatarOffsetX) || 0;
         const offY = (currentUser.theme_settings && currentUser.theme_settings.avatarOffsetY) || 0;
         img.style.transform = `scale(${zoom}) translate(${offX}px, ${offY}px)`;
-        
+
         avatarEl.style.overflow = 'hidden';
         avatarEl.appendChild(img);
     } else if (cfg3d) {
@@ -10565,7 +10564,7 @@ function updateHeaderAvatar() {
     } else {
         const textBg = (currentUser.theme_settings && currentUser.theme_settings.avatarTextBg) || '#3b82f6';
         const emoji = currentUser.avatar_emoji || '👤';
-        
+
         if (emoji.length > 0 && emoji.length <= 3 && !isEmoji(emoji)) {
             // Text Avatar Rendering
             avatarEl.style.background = textBg;
@@ -10616,30 +10615,30 @@ const EMOJI_CATEGORIES = [
         id: 'smileys',
         name: 'Smileys',
         icon: '😀',
-        emojis: ['😀','😃','😄','😁','😆','😅','😂','🤣','🥲','☺️','😊','😇','🙂','🙃','😉','😌','😍','🥰','😘','😗','😙','😚','😋','😛','😝','😜','🤪','🤨','🧐','🤓','😎','🥸','🤩','🥳','😏','😒','😞','😔','😟','😕','🙁','☹️','😣','😖','😫','😩','🥺','😢','😭','😤','😠','😡','🤬','🤯','😳','🥵','🥶','😱','😨','😰','😥','😓','🤗','🤔','🤭','🤫','🤥','😶','😐','😑','😬','🙄','😯','😦','😧','😮','😲','🥱','😴','🤤','😪','😵','🤐','🥴','🤢','🤮','🤧','😷','🤒','🤕','🤑','🤠','😈','👿','👹','👺','🤡','💩','👻','💀','👽','👾','🤖','🎃','😺','😸','😹','😻','😼','😽','🙀','😿','😾']
+        emojis: ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '🥲', '☺️', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🥸', '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕', '🤑', '🤠', '😈', '👿', '👹', '👺', '🤡', '💩', '👻', '💀', '👽', '👾', '🤖', '🎃', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾']
     },
     {
         id: 'animals',
         name: 'Animals',
         icon: '🐻',
-        emojis: ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐻‍❄️','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔','🐧','🐦','🐤','🐣','🐥','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🪱','🐛','🦋','🐌','🐞','🐜','🪰','🪲','🪳','🦟','🦗','🕷','🕸','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🦭','🐊','🐅','🐆','🦓','🦍','🦧','🦣','🐘','🦛','🦏','🐪','🐫','🦒','🦘','🦬','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐕‍🦺','🐈','🐈‍⬛','🪶','🐓','🦃','🦤','🦚','🦜','🦢','🦩','🕊','🐇','🦝','🦨','🦡','🦫','🦦','🦥','🐁','🐀','🐿','🦔','🐾','🐉','🐲','🌵','🎄','🌲','🌳','🌴','🪵','🌱','🌿','☘️','🍀','🎍','🪴','🎋','🍃','🍂','🍁','🍄','🐚','🪨','🌾','💐','🌷','🌹','🥀','🌺','🌸','🌼','🌻','🌞','🌝','🌛','🌜','🌚','🌕','🌖','🌗','🌘','🌑','🌒','🌓','🌔','🌙','🌎','🌍','🌏','🪐','💫','⭐️','🌟','✨','⚡️','☄️','💥','🔥','🌪','🌈','☀️','🌤','⛅️','🌥','☁️','🌦','🌧','⛈','🌩','🌨','❄️','☃️','⛄️','🌬','💨','💧','💦','☔️','☂️','🌊','🌫']
+        emojis: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐻‍❄️', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🐤', '🐣', '🐥', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🪱', '🐛', '🦋', '🐌', '🐞', '🐜', '🪰', '🪲', '🪳', '🦟', '🦗', '🕷', '🕸', '🦂', '🐢', '🐍', '🦎', '🦖', '🦕', '🐙', '🦑', '🦐', '🦞', '🦀', '🐡', '🐠', '🐟', '🐬', '🐳', '🐋', '🦈', '🦭', '🐊', '🐅', '🐆', '🦓', '🦍', '🦧', '🦣', '🐘', '🦛', '🦏', '🐪', '🐫', '🦒', '🦘', '🦬', '🐃', '🐂', '🐄', '🐎', '🐖', '🐏', '🐑', '🦙', '🐐', '🦌', '🐕', '🐩', '🦮', '🐕‍🦺', '🐈', '🐈‍⬛', '🪶', '🐓', '🦃', '🦤', '🦚', '🦜', '🦢', '🦩', '🕊', '🐇', '🦝', '🦨', '🦡', '🦫', '🦦', '🦥', '🐁', '🐀', '🐿', '🦔', '🐾', '🐉', '🐲', '🌵', '🎄', '🌲', '🌳', '🌴', '🪵', '🌱', '🌿', '☘️', '🍀', '🎍', '🪴', '🎋', '🍃', '🍂', '🍁', '🍄', '🐚', '🪨', '🌾', '💐', '🌷', '🌹', '🥀', '🌺', '🌸', '🌼', '🌻', '🌞', '🌝', '🌛', '🌜', '🌚', '🌕', '🌖', '🌗', '🌘', '🌑', '🌒', '🌓', '🌔', '🌙', '🌎', '🌍', '🌏', '🪐', '💫', '⭐️', '🌟', '✨', '⚡️', '☄️', '💥', '🔥', '🌪', '🌈', '☀️', '🌤', '⛅️', '🌥', '☁️', '🌦', '🌧', '⛈', '🌩', '🌨', '❄️', '☃️', '⛄️', '🌬', '💨', '💧', '💦', '☔️', '☂️', '🌊', '🌫']
     },
     {
         id: 'food',
         name: 'Food',
         icon: '🍔',
-        emojis: ['🍏','🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🍆','🥑','🥦','🥬','🥒','🌶','🫑','🌽','🥕','🫒','🧄','🧅','🥔','🍠','🥐','🥯','🍞','🥖','🥨','🧀','🥚','🍳','🧈','🥞','🧇','🥓','🥩','🍗','🍖','🌭','🍔','🍟','🍕','🫓','🥪','🥙','🧆','🌮','🌯','🫔','🥗','🥘','🫕','🥫','🍝','🍜','🍲','🍛','🍣','🍱','🥟','🦪','🍤','🍙','🍚','🍘','🍥','🥠','🥮','🍢','🍡','🍧','🍨','🍦','🥧','🧁','🍰','🎂','🍮','🍭','🍬','🍫','🍿','🍩','🍪','🌰','🥜','🍯','🥛','🍼','🫖','☕️','🍵','🧃','🥤','🧋','🍶','🍺','🍻','🥂','🍷','🥃','🍸','🍹','🧉','🍾','🧊','🥄','🍴','🍽','🥣','🥡','🥢','🧂']
+        emojis: ['🍏', '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬', '🥒', '🌶', '🫑', '🌽', '🥕', '🫒', '🧄', '🧅', '🥔', '🍠', '🥐', '🥯', '🍞', '🥖', '🥨', '🧀', '🥚', '🍳', '🧈', '🥞', '🧇', '🥓', '🥩', '🍗', '🍖', '🌭', '🍔', '🍟', '🍕', '🫓', '🥪', '🥙', '🧆', '🌮', '🌯', '🫔', '🥗', '🥘', '🫕', '🥫', '🍝', '🍜', '🍲', '🍛', '🍣', '🍱', '🥟', '🦪', '🍤', '🍙', '🍚', '🍘', '🍥', '🥠', '🥮', '🍢', '🍡', '🍧', '🍨', '🍦', '🥧', '🧁', '🍰', '🎂', '🍮', '🍭', '🍬', '🍫', '🍿', '🍩', '🍪', '🌰', '🥜', '🍯', '🥛', '🍼', '🫖', '☕️', '🍵', '🧃', '🥤', '🧋', '🍶', '🍺', '🍻', '🥂', '🍷', '🥃', '🍸', '🍹', '🧉', '🍾', '🧊', '🥄', '🍴', '🍽', '🥣', '🥡', '🥢', '🧂']
     },
     {
         id: 'activities',
         name: 'Activity',
         icon: '⚽',
-        emojis: ['⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱','🪀','🏓','🏸','🏒','🏑','🥍','🏏','🪃','🥅','⛳','🪁','🏹','🎣','🤿','🥊','🥋','🎽','🛹','🛼','🛷','⛸','🥌','🎿','⛷','🏂','🪂','🏋️','🤼','🤸','⛹️','🤺','🤾','🏌️','🏇','🧘','🏄','🏊','🤽','🚣','🧗','🚵','🚴','🏆','🥇','🥈','🥉','🏅','🎖','🏵','🎗','🎫','🎟','🎪','🤹','🎭','🩰','🎨','🎬','🎤','🎧','🎼','🎹','🥁','🪘','🎷','🎺','🪗','🎸','🪕','🎻','🎲','♟','🎯','🎳','🎮','🎰','🧩']
+        emojis: ['⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱', '🪀', '🏓', '🏸', '🏒', '🏑', '🥍', '🏏', '🪃', '🥅', '⛳', '🪁', '🏹', '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '🛷', '⛸', '🥌', '🎿', '⛷', '🏂', '🪂', '🏋️', '🤼', '🤸', '⛹️', '🤺', '🤾', '🏌️', '🏇', '🧘', '🏄', '🏊', '🤽', '🚣', '🧗', '🚵', '🚴', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖', '🏵', '🎗', '🎫', '🎟', '🎪', '🤹', '🎭', '🩰', '🎨', '🎬', '🎤', '🎧', '🎼', '🎹', '🥁', '🪘', '🎷', '🎺', '🪗', '🎸', '🪕', '🎻', '🎲', '♟', '🎯', '🎳', '🎮', '🎰', '🧩']
     }
 ];
 
 let currentEmojiCategory = 'smileys';
-let currentSegment = 'emoji'; 
+let currentSegment = 'emoji';
 let avatarSelectedSegment = 'emoji'; // emoji, photo, text
 let avatarSelectedPhoto = null;
 let avatarTextBg = '#3b82f6';
@@ -10647,7 +10646,7 @@ let avatarTextBg = '#3b82f6';
 function openEmojiPicker() {
     closeModal('appearanceModal');
     openModal('emojiPickerModal');
-    
+
     // Reset to defaults or load current
     avatarSelectedSegment = 'emoji';
     if (currentUser.avatar_url && !currentUser.avatar_url.includes('glb')) {
@@ -10655,7 +10654,7 @@ function openEmojiPicker() {
     } else if (currentUser.avatar_emoji && currentUser.avatar_emoji.length <= 2 && !isEmoji(currentUser.avatar_emoji)) {
         avatarSelectedSegment = 'text';
     }
-    
+
     // Load existing settings
     if (currentUser.theme_settings) {
         if (currentUser.theme_settings.avatarTextBg) {
@@ -10668,14 +10667,14 @@ function openEmojiPicker() {
             }
         }
     }
-    
+
     selectAvatarSegment(avatarSelectedSegment);
 }
 
 function selectAvatarSegment(type) {
     avatarSelectedSegment = type;
     currentSegment = type; // Keep legacy variable in sync if used by renderers
-    
+
     // Update buttons
     const btns = document.querySelectorAll('#emojiSegmentedControl button');
     btns.forEach(b => {
@@ -10693,7 +10692,7 @@ function selectAvatarSegment(type) {
     if (type === 'emoji') {
         document.getElementById('emojiGrid').classList.remove('hidden');
         document.getElementById('emojiSidebar').classList.remove('hidden');
-        
+
         // Render content
         renderEmojiSidebar();
         renderEmojiCategory(currentEmojiCategory || 'smileys');
@@ -10718,12 +10717,12 @@ function selectAvatarSegment(type) {
 function updateAvatarPreviewCircle(content, isUrl = false) {
     const circle = document.getElementById('emojiPreviewCircle');
     if (!circle) return;
-    
+
     circle.innerHTML = '';
     circle.style.background = 'var(--apple-gray-light)';
     circle.style.position = 'relative';
     circle.style.overflow = 'hidden';
-    
+
     if (isUrl) {
         const img = document.createElement('img');
         img.src = content.startsWith('data:') ? content : '/' + content;
@@ -10736,14 +10735,14 @@ function updateAvatarPreviewCircle(content, isUrl = false) {
         img.style.left = '0';
         img.style.top = '0';
         img.draggable = false;
-        
+
         // Apply existing zoom/offset if any
         const zoom = (currentUser.theme_settings && currentUser.theme_settings.avatarZoom) || 1.0;
         const offX = (currentUser.theme_settings && currentUser.theme_settings.avatarOffsetX) || 0;
         const offY = (currentUser.theme_settings && currentUser.theme_settings.avatarOffsetY) || 0;
-        
+
         img.style.transform = `scale(${zoom}) translate(${offX}px, ${offY}px)`;
-        
+
         // Pannable Logic
         let isDragging = false;
         let startX, startY;
@@ -10761,9 +10760,9 @@ function updateAvatarPreviewCircle(content, isUrl = false) {
             const zoomVal = 0.5 + (document.getElementById('emojiZoomSlider').value / 100);
             currentX = (e.clientX - startX);
             currentY = (e.clientY - startY);
-            
+
             applyTransform();
-            
+
             if (!currentUser.theme_settings) currentUser.theme_settings = {};
             currentUser.theme_settings.avatarOffsetX = currentX;
             currentUser.theme_settings.avatarOffsetY = currentY;
@@ -10801,10 +10800,10 @@ function previewAvatarPhoto(input) {
             alert('Photo size exceeds 2MB limit');
             return;
         }
-        
+
         avatarSelectedPhoto = file;
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = function (e) {
             updateAvatarPreviewCircle(e.target.result, true);
         };
         reader.readAsDataURL(file);
@@ -10846,7 +10845,7 @@ function updateTextAvatarPreview() {
     const text = document.getElementById('avatarTextInput').value || 'Aa';
     const circle = document.getElementById('emojiPreviewCircle');
     if (!circle) return;
-    
+
     circle.innerHTML = '';
     circle.style.display = 'flex';
     circle.style.alignItems = 'center';
@@ -10905,7 +10904,7 @@ async function confirmEmojiSelection() {
 
         // Re-save overall profile to sync metadata
         await saveAppearanceSettings();
-        
+
         closeModal('emojiPickerModal');
         openModal('appearanceModal');
     } catch (e) {
@@ -10922,12 +10921,12 @@ let avatar3DRenderer = null; // kept for backward compat
 
 // Style categories shown in the sidebar
 const AVATAR_STYLE_GROUPS = [
-    { id: 'adventurer',        label: '✨ 3D Disney',  icon: '🧑' },
-    { id: 'lorelei',           label: '🎨 Pixar',      icon: '👩' },
-    { id: 'notionists',        label: '✏️ Sketch',     icon: '🖊️' },
-    { id: 'big-smile',         label: '😁 Expressive', icon: '😄' },
-    { id: 'fun-emoji',         label: '🎭 Movie',      icon: '🎭' },
-    { id: 'avataaars',         label: '👕 Casual',     icon: '👤' },
+    { id: 'adventurer', label: '✨ 3D Disney', icon: '🧑' },
+    { id: 'lorelei', label: '🎨 Pixar', icon: '👩' },
+    { id: 'notionists', label: '✏️ Sketch', icon: '🖊️' },
+    { id: 'big-smile', label: '😁 Expressive', icon: '😄' },
+    { id: 'fun-emoji', label: '🎭 Movie', icon: '🎭' },
+    { id: 'avataaars', label: '👕 Casual', icon: '👤' },
 ];
 
 let avatarCurrentStyle = AVATAR_STYLE_GROUPS[0].id;
@@ -11046,14 +11045,14 @@ function generateRandom3DAvatar() {
 }
 
 function _renderDiceBearAvatar(container, style, seed) {
-    const W = container.clientWidth  || 280;
+    const W = container.clientWidth || 280;
     const H = container.clientHeight || 280;
 
     // Build DiceBear v9 SVG URL with optional params for richness
     const params = new URLSearchParams({
         seed,
         size: Math.max(W, H) * 2, // Double resolution for crispness
-        radius: 0, 
+        radius: 0,
         backgroundType: 'gradientLinear',
         backgroundColor: 'f8fafc,e2e8f0,f1f5f9,f0f9ff,f5f3ff', // Studio-quality clean backgrounds
         backgroundRotation: 45
@@ -11072,7 +11071,7 @@ function _renderDiceBearAvatar(container, style, seed) {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.style.cssText = `width:100%;height:100%;object-fit:cover;display:block;position:relative;z-index:1;`;
-    
+
     img.onload = () => {
         const wrapper = container.querySelector('.premium-avatar-wrapper');
         if (!wrapper) {
@@ -11080,11 +11079,11 @@ function _renderDiceBearAvatar(container, style, seed) {
             container.appendChild(img);
             return;
         }
-        
+
         // Clear loading spinner
         wrapper.innerHTML = '';
         wrapper.appendChild(img);
-        
+
         // Add Glossy Overlay
         const gloss = document.createElement('div');
         gloss.style.cssText = `
@@ -11097,12 +11096,12 @@ function _renderDiceBearAvatar(container, style, seed) {
         // Add Multi-stage shadow for depth
         wrapper.style.boxShadow = '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1), inset 0 0 0 1px rgba(255,255,255,0.1)';
         wrapper.style.transition = 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
-        
-        wrapper.onmouseover = () => { 
+
+        wrapper.onmouseover = () => {
             wrapper.style.transform = 'scale(1.04) translateY(-4px)';
             wrapper.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.1)';
         };
-        wrapper.onmouseleave = () => { 
+        wrapper.onmouseleave = () => {
             wrapper.style.transform = 'scale(1) translateY(0)';
             wrapper.style.boxShadow = '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)';
         };
@@ -11127,13 +11126,13 @@ function renderSavedAvatar(container, cfg) {
 
 async function saveGenerated3DAvatar() {
     if (!current3DConfig) return;
-    
+
     try {
         const res = await apiCall('memoji', 'POST', {
             user_id: currentUser.id,
             avatar_config: current3DConfig
         });
-        
+
         if (res && res.success) {
             showToast('Avatar saved! 🎉');
             currentUser.avatar3d_config = current3DConfig;
@@ -11154,7 +11153,7 @@ async function saveGenerated3DAvatar() {
 
 function selectSegment(segment) {
     currentSegment = segment;
-    
+
     // Update active segmented button
     const container = document.querySelector('.emoji-segmented-control');
     if (container) {
@@ -11163,7 +11162,7 @@ function selectSegment(segment) {
             <button class="${segment === 'emoji' ? 'segment-active' : ''}" onclick="selectSegment('emoji')">Emoji</button>
         `;
     }
-    
+
     // Select default category for segment
     if (segment === 'memoji') {
         selectEmojiCategory('memoji');
@@ -11180,10 +11179,10 @@ function closeEmojiPicker() {
 function renderEmojiSidebar() {
     const sidebar = document.getElementById('emojiSidebar');
     if (!sidebar) return;
-    
+
     // Show all categories in the Emoji segment now
     let visibleCategories = EMOJI_CATEGORIES;
-    
+
     sidebar.innerHTML = visibleCategories.map(cat => `
         <button class="emoji-category-btn ${cat.id === currentEmojiCategory ? 'active' : ''}" onclick="selectEmojiCategory('${cat.id}')">
             <span class="cat-icon">${cat.icon}</span>
@@ -11201,16 +11200,16 @@ function selectEmojiCategory(categoryId) {
 function renderEmojiCategory(categoryId) {
     const grid = document.getElementById('emojiGrid');
     if (!grid) return;
-    
+
     const category = EMOJI_CATEGORIES.find(c => c.id === categoryId);
     if (!category) return;
-    
+
     let html = `
         <div class="emoji-grid-section">
             <h4>${category.name}</h4>
             <div class="emoji-grid">
     `;
-    
+
     if (category.hasCreateBtn) {
         html += `
         <div class="emoji-item create-memoji-btn" onclick="openCreateMemoji()" style="background: rgba(255,255,255,0.1); font-size: 32px; color: #ffffff;">
@@ -11218,25 +11217,25 @@ function renderEmojiCategory(categoryId) {
         </div>
         `;
     }
-    
+
     html += category.emojis.map(emoji => {
         const isImage = emoji.startsWith('/') || emoji.startsWith('http');
-        const displayContent = isImage 
-            ? `<img src="${emoji}" style="width: 100%; height: 100%; object-fit: contain; transform: scale(0.8);">` 
+        const displayContent = isImage
+            ? `<img src="${emoji}" style="width: 100%; height: 100%; object-fit: contain; transform: scale(0.8);">`
             : emoji;
-            
+
         return `
         <div class="emoji-item ${selectedEmoji === emoji ? 'selected' : ''}" onclick="selectEmoji('${emoji}')">
             ${displayContent}
         </div>
         `;
     }).join('');
-    
+
     html += `
             </div>
         </div>
     `;
-    
+
     grid.innerHTML = html;
 }
 
@@ -11249,21 +11248,21 @@ function selectEmoji(emoji) {
 function updateEmojiSidebarPreview(emoji) {
     const previewContainer = document.getElementById('emojiPreviewCircle');
     if (!previewContainer) return;
-    
+
     const isImage = emoji && (emoji.startsWith('/') || emoji.startsWith('http'));
     if (isImage) {
         previewContainer.innerHTML = `<img src="${emoji}" id="innerEmojiPreview" alt="Avatar Preview" style="width: 100%; height: 100%; object-fit: contain; transform: scale(0.85); transition: transform 0.1s;">`;
     } else {
         previewContainer.innerHTML = `<span id="innerEmojiPreview" style="font-size: 80px; transition: transform 0.1s; display: inline-block;">${emoji || '👤'}</span>`;
     }
-    
+
     // Set slider initial state based on saved zoom
     const slider = document.getElementById('emojiZoomSlider');
     if (slider) {
         const savedZoom = (currentUser.theme_settings && currentUser.theme_settings.avatarZoom) || 1.0;
         // zoomFactor = 0.5 + (value / 100)  =>  value = (zoomFactor - 0.5) * 100
         slider.value = (savedZoom - 0.5) * 100;
-        
+
         // Trigger initial scale
         setTimeout(() => {
             const inner = document.getElementById('innerEmojiPreview');
@@ -11283,7 +11282,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const inner = document.getElementById('innerEmojiPreview');
             if (inner) {
                 const zoomFactor = 0.5 + (e.target.value / 100);
-                
+
                 if (inner.tagName === 'IMG') {
                     const offX = (currentUser.theme_settings && currentUser.theme_settings.avatarOffsetX) || 0;
                     const offY = (currentUser.theme_settings && currentUser.theme_settings.avatarOffsetY) || 0;
@@ -11305,14 +11304,14 @@ let originalLayoutSnapshot = null;
 let draggedWidget = null;
 
 // Intercept clicks during Edit Mode to disable card actions
-document.addEventListener('click', function(e) {
+document.addEventListener('click', function (e) {
     if (typeof isEditMode !== 'undefined' && isEditMode) {
         // Check if we clicked a dashboard card (stat-card or action-card)
         const card = e.target.closest('.stat-card, .action-card');
         if (card) {
             // Check if we clicked on resize controls, which should remain interactive
             const isResizeControl = e.target.closest('.widget-resize-controls, .resize-btn');
-            
+
             if (!isResizeControl) {
                 // If it's a click anywhere else inside the card during Edit Mode, block it
                 e.preventDefault();
@@ -11326,7 +11325,7 @@ document.addEventListener('click', function(e) {
 function initWidgetSizes() {
     if (currentUser && currentUser.theme_settings && currentUser.theme_settings.widgetLayouts) {
         const layouts = currentUser.theme_settings.widgetLayouts;
-        
+
         // Apply Sizes
         for (const [id, config] of Object.entries(layouts)) {
             const widget = document.getElementById(id);
@@ -11334,7 +11333,7 @@ function initWidgetSizes() {
                 // Remove existing size classes
                 widget.classList.remove('widget-sm', 'widget-md', 'widget-lg', 'widget-xl');
                 widget.classList.add(`widget-${config.size}`);
-                
+
                 // Update active button state if in DOM
                 const buttons = widget.querySelectorAll('.resize-btn');
                 buttons.forEach(btn => {
@@ -11355,7 +11354,7 @@ function applyWidgetOrder(containerId, layouts) {
     if (!container) return;
 
     const widgets = Array.from(container.children);
-    
+
     // Sort array based on saved order index
     widgets.sort((a, b) => {
         const orderA = (layouts[a.id] && layouts[a.id].order !== undefined) ? layouts[a.id].order : 999;
@@ -11380,18 +11379,18 @@ function toggleEditMode() {
         btn.style.background = 'rgba(239, 68, 68, 0.1)';
         btn.style.color = '#ef4444';
         btn.style.borderColor = '#ef4444';
-        
+
         // Take Snapshot to allow cancellation
         takeLayoutSnapshot();
-        
+
         // Enable Dragging
         enableWidgetDragging('employeeStatsGrid');
         enableWidgetDragging('adminStatsGrid');
         enableWidgetDragging('actionsGrid');
-        
+
         // Show resize controls
         document.querySelectorAll('.stat-card, .action-card').forEach(w => w.classList.add('editing'));
-        
+
         showNotification("Edit Mode active. Drag widgets to reorder and use bottom handles to resize.", "info");
 
     } else {
@@ -11406,12 +11405,12 @@ function takeLayoutSnapshot() {
         const container = document.getElementById(containerId);
         if (!container) return;
         Array.from(container.children).forEach((widget, index) => {
-            if(widget.id) {
+            if (widget.id) {
                 let size = 'sm';
-                if(widget.classList.contains('widget-md')) size = 'md';
-                if(widget.classList.contains('widget-lg')) size = 'lg';
-                if(widget.classList.contains('widget-xl')) size = 'xl';
-                
+                if (widget.classList.contains('widget-md')) size = 'md';
+                if (widget.classList.contains('widget-lg')) size = 'lg';
+                if (widget.classList.contains('widget-xl')) size = 'xl';
+
                 originalLayoutSnapshot[widget.id] = { order: index, size: size, element: widget };
             }
         });
@@ -11423,7 +11422,7 @@ function takeLayoutSnapshot() {
 
 function cancelLayoutChanges() {
     if (!isEditMode) return;
-    
+
     // Revert to snapshot
     if (originalLayoutSnapshot) {
         for (const [id, config] of Object.entries(originalLayoutSnapshot)) {
@@ -11433,7 +11432,7 @@ function cancelLayoutChanges() {
                 widget.classList.add(`widget-${config.size}`);
             }
         }
-        
+
         applyWidgetOrder('employeeStatsGrid', originalLayoutSnapshot);
         applyWidgetOrder('adminStatsGrid', originalLayoutSnapshot);
         applyWidgetOrder('actionsGrid', originalLayoutSnapshot);
@@ -11445,9 +11444,9 @@ function cancelLayoutChanges() {
 function exitEditModeUI() {
     isEditMode = false;
     document.body.classList.remove('edit-mode-active');
-    
+
     const btn = document.getElementById('editDashboardBtn');
-    if(btn) {
+    if (btn) {
         btn.innerHTML = '✏️ Edit Layout';
         btn.style.background = 'rgba(var(--primary-rgb), 0.1)';
         btn.style.color = 'var(--primary-color)';
@@ -11457,14 +11456,14 @@ function exitEditModeUI() {
     disableWidgetDragging('employeeStatsGrid');
     disableWidgetDragging('adminStatsGrid');
     disableWidgetDragging('actionsGrid');
-    
+
     // Hide resize controls
     document.querySelectorAll('.stat-card, .action-card').forEach(w => w.classList.remove('editing'));
 }
 
 function resizeWidget(widgetId, sizeClass) {
     if (!isEditMode) return;
-    
+
     const widget = document.getElementById(widgetId);
     if (!widget) return;
 
@@ -11489,9 +11488,9 @@ function enableWidgetDragging(containerId) {
 
     const widgets = container.children;
     for (let widget of widgets) {
-        if(widget.id && (widget.classList.contains('stat-card') || widget.classList.contains('action-card'))) {
+        if (widget.id && (widget.classList.contains('stat-card') || widget.classList.contains('action-card'))) {
             widget.setAttribute('draggable', 'true');
-            
+
             widget.addEventListener('dragstart', handleDragStart);
             widget.addEventListener('dragover', handleDragOver);
             widget.addEventListener('dragenter', handleDragEnter);
@@ -11508,9 +11507,9 @@ function disableWidgetDragging(containerId) {
 
     const widgets = container.children;
     for (let widget of widgets) {
-        if(widget.id && (widget.classList.contains('stat-card') || widget.classList.contains('action-card'))) {
+        if (widget.id && (widget.classList.contains('stat-card') || widget.classList.contains('action-card'))) {
             widget.setAttribute('draggable', 'false');
-            
+
             widget.removeEventListener('dragstart', handleDragStart);
             widget.removeEventListener('dragover', handleDragOver);
             widget.removeEventListener('dragenter', handleDragEnter);
@@ -11541,7 +11540,7 @@ function handleDragOver(e) {
 }
 
 function handleDragEnter(e) {
-    if(this !== draggedWidget && (this.classList.contains('stat-card') || this.classList.contains('action-card'))) {
+    if (this !== draggedWidget && (this.classList.contains('stat-card') || this.classList.contains('action-card'))) {
         this.classList.add('over');
     }
 }
@@ -11559,9 +11558,9 @@ function handleDrop(e) {
         // Swap elements based on mouse position relative to center
         const bounding = this.getBoundingClientRect();
         const offset = bounding.y + (bounding.height / 2);
-        
+
         const container = this.parentNode;
-        
+
         // If dropping on bottom half, insert after. Else before.
         if (e.clientY > offset) {
             if (this.nextSibling) {
@@ -11580,7 +11579,7 @@ function handleDrop(e) {
 function handleDragEnd(e) {
     this.classList.remove('dragging');
     const container = this.parentNode;
-    if(container) {
+    if (container) {
         const widgets = container.children;
         for (let widget of widgets) {
             widget.classList.remove('over');
@@ -11592,18 +11591,18 @@ async function saveDashboardLayout() {
     if (!currentUser) return;
 
     const currentLayouts = {};
-    
+
     // Read Current DOM State
     const extractCurrentState = (containerId) => {
         const container = document.getElementById(containerId);
         if (!container) return;
         Array.from(container.children).forEach((widget, index) => {
-            if(widget.id) {
+            if (widget.id) {
                 let size = 'sm';
-                if(widget.classList.contains('widget-md')) size = 'md';
-                if(widget.classList.contains('widget-lg')) size = 'lg';
-                if(widget.classList.contains('widget-xl')) size = 'xl';
-                
+                if (widget.classList.contains('widget-md')) size = 'md';
+                if (widget.classList.contains('widget-lg')) size = 'lg';
+                if (widget.classList.contains('widget-xl')) size = 'xl';
+
                 currentLayouts[widget.id] = { order: index, size: size };
             }
         });
@@ -11612,7 +11611,7 @@ async function saveDashboardLayout() {
     extractCurrentState('employeeStatsGrid');
     extractCurrentState('adminStatsGrid');
     extractCurrentState('actionsGrid');
-    
+
     // Update theme settings object
     if (!currentUser.theme_settings) currentUser.theme_settings = {};
     // Deep copy to ensure we're not just referencing
@@ -11620,14 +11619,14 @@ async function saveDashboardLayout() {
 
     try {
         const btn = document.querySelector('.edit-actions-bar .btn-primary');
-        if(btn) {
+        if (btn) {
             btn.innerHTML = 'Saving...';
             btn.disabled = true;
         }
 
-        const payload = { 
+        const payload = {
             employee_id: currentUser.id,
-            theme_settings: currentUser.theme_settings 
+            theme_settings: currentUser.theme_settings
         };
         const response = await apiCall('employee-profile', 'PATCH', payload);
 
@@ -11644,7 +11643,7 @@ async function saveDashboardLayout() {
         showNotification("Error saving layout", "error");
     } finally {
         const btn = document.querySelector('.edit-actions-bar .btn-primary');
-        if(btn) {
+        if (btn) {
             btn.innerHTML = 'Save Layout';
             btn.disabled = false;
         }
@@ -11665,14 +11664,14 @@ async function loadMentorStatus() {
                 let html = '';
                 response.mentors.forEach(mentor => {
                     const statusClass = `status-${mentor.status.toLowerCase()}`;
-                    
+
                     let avatarHtml = '';
                     if (mentor.avatar.startsWith('http') || mentor.avatar.startsWith('/')) {
                         avatarHtml = `<img src="${mentor.avatar}" alt="${mentor.name}">`;
                     } else {
                         avatarHtml = `<span style="background:${mentor.bg}; width:100%; height:100%; display:flex; align-items:center; justify-content:center;">${mentor.avatar}</span>`;
                     }
-                    
+
                     html += `
                         <div class="mentor-status-card">
                             <div class="mentor-avatar">${avatarHtml}</div>
@@ -11704,13 +11703,13 @@ async function refreshPrimaryOfficeSelects() {
         if (result.success && result.offices) {
             const signupSelect = document.getElementById('signupOffice');
             const profileSelect = document.getElementById('profilePrimaryOffice');
-            
-            const optionsHtml = '<option value="">Select Office</option>' + 
+
+            const optionsHtml = '<option value="">Select Office</option>' +
                 result.offices.map(o => `<option value="${o.id}">${o.name}</option>`).join('');
-                
+
             if (signupSelect) signupSelect.innerHTML = optionsHtml;
             if (profileSelect) profileSelect.innerHTML = optionsHtml;
-            
+
             // Re-select value if profile is loaded
             if (currentUser && currentUser.primary_office_id && profileSelect) {
                 profileSelect.value = currentUser.primary_office_id;

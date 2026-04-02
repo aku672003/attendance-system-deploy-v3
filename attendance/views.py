@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect
-from django.http import HttpResponse, JsonResponse, HttpResponseForbidden
+from django.http import HttpResponse, JsonResponse, HttpResponseForbidden, FileResponse
 from .security import require_valid_token
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -3984,7 +3984,7 @@ def error_500_view(request):
 def spa_view(request):
     """Protected view to serve the SPA index.html."""
     context = {
-        'google_maps_api_key': settings.GOOGLE_MAPS_API_KEY
+        'maps_api_key': settings.MAPS_API_KEY
     }
     return render(request, 'index.html', context)
 
@@ -4001,7 +4001,7 @@ def gated_dashboard(request):
         context['gated_user_id'] = data.get('user_id')
         context['is_gated'] = True
         
-    context['google_maps_api_key'] = settings.GOOGLE_MAPS_API_KEY
+    context['maps_api_key'] = settings.MAPS_API_KEY
     return render(request, 'index.html', context)
 
 
