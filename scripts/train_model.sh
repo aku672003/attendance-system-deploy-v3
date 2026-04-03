@@ -1,6 +1,6 @@
 #!/bin/bash
 # train_model.sh - Run attendance forecast model training
-# Recommended Cron: 30 18 * * * /home/ubuntu/attendance-system/scripts/train_model.sh >> /home/ubuntu/attendance-system/logs/training_cron.log 2>&1
+# Recommended Cron: 0 20 * * * /home/ubuntu/attendance-system/scripts/train_model.sh >> /home/ubuntu/attendance-system/logs/training_cron.log 2>&1
 
 # Get the script's directory and navigate to the project root (assuming script is in /scripts)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

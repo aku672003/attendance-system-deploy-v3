@@ -616,7 +616,7 @@ function openPredictiveAnalysisModal(data, predictDays = 3) {
                     <div style="min-width: 0;">
                         <div style="font-size: 12px; font-weight: 900; color: #4f46e5; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;">Neural Core</div>
                         <div style="font-size: 11px; color: #475569; line-height: 1.6; font-weight: 600;">
-                            ${summary.ai_insight || 'Rhythm is consistent.'} Pro-tip: Implement flexible check-ins for the 'Surveyors' team and reward punctual departments to drive peak momentum.
+                            ${summary.ai_insight || 'Rhythm is consistent.'}
                         </div>
                     </div>
                 </div>
@@ -971,7 +971,7 @@ function renderEmployeePerformanceModal(data, employeeId, predictDays = 3) {
                                 <div style="font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Avg Working Hrs</div>
                             </div>
                             <div>
-                                <div style="font-size: 18px; font-weight: 900; color: #0f172a;">${p.tomorrow_day.substring(0,3)}</div>
+                                <div style="font-size: 18px; font-weight: 900; color: #0f172a;">${(p.peak_day || 'N/A').substring(0,3)}</div>
                                 <div style="font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Best Day</div>
                             </div>
                         </div>

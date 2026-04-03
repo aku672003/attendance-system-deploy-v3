@@ -730,7 +730,6 @@ body {
 }
 
 .camera-container.mirrored video,
-.camera-container.mirrored img,
 .camera-container.mirrored #overlayCanvas {
     transform: scaleX(-1);
 }

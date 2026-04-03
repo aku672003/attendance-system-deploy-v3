@@ -4811,9 +4811,11 @@ function _startDashboardLocationWatch() {
             };
         },
         (err) => {
+            // Suppress repeating warning if we already have a previous cached location
+            if (err.code === 3 && currentPhotoLocation) return;
             console.warn('[Dashboard GPS] Background watch error:', err.message);
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
     );
     console.log('[Dashboard GPS] Background location watch started.');
 }
@@ -5253,9 +5255,11 @@ async function startCamera() {
                 }
             },
             (err) => {
+                // Only warn if it's not a temporary timeout or if we lack location entirely
+                if (err.code === 3 && currentPhotoLocation) return;
                 console.warn('Camera location watch error:', err.message);
             },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
         );
     }
 
@@ -5292,6 +5296,7 @@ async function startCamera() {
         }
 
         // Poll for accuracy updates to show user
+        if (window.accInterval) clearInterval(window.accInterval);
         window.accInterval = setInterval(() => {
             const el = document.getElementById('cameraAccuracy');
             const captureBtn = document.getElementById('captureBtn');
@@ -5354,6 +5359,13 @@ function lon2tile(lon, zoom) { return (Math.floor((lon + 180) / 360 * Math.pow(2
 function lat2tile(lat, zoom) { return (Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom))); }
 
 async function capturePhoto() {
+    // 0. Immediate Cleanup to prevent async race conditions
+    stopFaceTracking();
+    if (window.accInterval) {
+        clearInterval(window.accInterval);
+        window.accInterval = null;
+    }
+
     const video = document.getElementById('video');
     const canvas = document.getElementById('photoCanvas');
     const img = document.getElementById('capturedPhoto');
@@ -5375,11 +5387,10 @@ async function capturePhoto() {
     canvas.width = width;
     canvas.height = height;
 
-    // Draw the frame from video onto canvas (mirrored)
+    // Draw the frame from video onto canvas (No longer mirroring the capture so text stays readable and it looks like a standard photo)
     const ctx = canvas.getContext('2d');
     ctx.save();
-    ctx.translate(width, 0);
-    ctx.scale(-1, 1);
+    // (Removed mirroring logic here to provide a 'standard' rather than 'mirrored' photo)
     ctx.drawImage(video, 0, 0, width, height);
     ctx.restore();
 
@@ -5405,24 +5416,51 @@ async function capturePhoto() {
         accuracy = currentPhotoLocation.accuracy;
 
         try {
-            // Using OSM Nominatim for reverse geocoding
-            const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 2000);
+            // Primary: Using Google Maps Geocoder (loaded in dashboard)
+            if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
+                const geocoder = new google.maps.Geocoder();
+                const response = await new Promise((resolve) => {
+                    geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+                        resolve({ results, status });
+                    });
+                });
 
-            const req = await fetch(url, { signal: controller.signal });
-            clearTimeout(timeoutId);
+                if (response.status === "OK" && response.results[0]) {
+                    const result = response.results[0];
+                    fullAddress = result.formatted_address;
 
-            if (req.ok) {
-                const data = await req.json();
-                const addr = data.address || {};
-                const city = addr.city || addr.town || addr.village || addr.county || "";
-                const state = addr.state || "";
-                const country = addr.country || "";
-                shortAddress = [city, state, country].filter(Boolean).join(", ");
-                fullAddress = data.display_name || "";
+                    // Extract shortAddress (City, State, Country) from Google's address components
+                    const comps = result.address_components;
+                    const city = comps.find(c => c.types.includes("locality"))?.long_name || 
+                                 comps.find(c => c.types.includes("administrative_area_level_3"))?.long_name || 
+                                 comps.find(c => c.types.includes("administrative_area_level_2"))?.long_name || "";
+                    const state = comps.find(c => c.types.includes("administrative_area_level_1"))?.long_name || "";
+                    const country = comps.find(c => c.types.includes("country"))?.long_name || "";
+                    
+                    shortAddress = [city, state, country].filter(Boolean).join(", ");
+                } else {
+                    throw new Error("Google Geocoder status: " + response.status);
+                }
+            } else {
+                // Background Fallback: OSM Nominatim if Google JS SDK is missing or failing
+                const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2000);
+                const req = await fetch(url, { signal: controller.signal });
+                clearTimeout(timeoutId);
+
+                if (req.ok) {
+                    const data = await req.json();
+                    const addr = data.address || {};
+                    const city = addr.city || addr.town || addr.village || addr.county || "";
+                    const state = addr.state || "";
+                    const country = addr.country || "";
+                    shortAddress = [city, state, country].filter(Boolean).join(", ");
+                    fullAddress = data.display_name || "";
+                }
             }
         } catch (e) {
+            console.warn("Reverse geocoding failed, using coordinates:", e);
             shortAddress = `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
         }
     }
@@ -5443,40 +5481,142 @@ async function capturePhoto() {
     const mapX = p;
     const mapY = overlayY + p;
 
-    // Try to draw real Google Maps Static tile
+     // --- FINAL PRECISE MAP LOGIC ---
     let mapDrawn = false;
-    if (lat !== 0 && lng !== 0) {
-        try {
-            const zoom = 15;
-            const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${zoom}&size=${Math.round(mapSize)}x${Math.round(mapSize)}&markers=color:red%7C${lat},${lng}&key=${MAPS_API_KEY}`;
+    const zoom = 15;
+    const cleanLat = lat.toFixed(6);
+    const cleanLng = lng.toFixed(6);
 
+    // 1. Attempt Google Static Maps ONLY if not previously blocked
+    if (lat !== 0 && lng !== 0 && !window.GOOGLE_STATIC_MAPS_FAILED) {
+        try {
+            const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${cleanLat},${cleanLng}&zoom=${zoom}&size=256x256&markers=color:red%7C${cleanLat},${cleanLng}&key=${MAPS_API_KEY}`;
             const mapImg = new Image();
             mapImg.crossOrigin = "Anonymous";
-            mapImg.src = staticMapUrl;
 
             await new Promise((resolve) => {
                 mapImg.onload = () => {
                     ctx.drawImage(mapImg, mapX, mapY, mapSize, mapSize);
-
-                    // "Google Maps" label
                     ctx.fillStyle = 'rgba(0,0,0,0.5)';
                     ctx.fillRect(mapX, mapY + mapSize - 12, mapSize, 12);
                     ctx.fillStyle = '#fff';
                     ctx.font = '8px sans-serif';
-                    ctx.fillText('Google Maps', mapX + 2, mapY + mapSize - 3);
-
+                    ctx.fillText('Google Maps ©', mapX + 2, mapY + mapSize - 3);
                     mapDrawn = true;
                     resolve();
                 };
-                mapImg.onerror = (err) => {
-                    console.error("Static Map Error:", err);
+                mapImg.onerror = () => {
+                    // SILENT AUTO-SWITCH: If Google fails once (403/404), mark it as failed and use OSM
+                    window.GOOGLE_STATIC_MAPS_FAILED = true;
+                    console.warn("Google Maps Service Blocked. Switching to professional OSM fallback.");
+                    resolve(); 
+                };
+                mapImg.src = staticMapUrl;
+                setTimeout(resolve, 2000); // 2s timeout safety
+            });
+        } catch (e) { console.warn("Google Map bypass", e); }
+    }
+
+    // 2. High-Quality Professional OSM Fallback (Triggers if Google is blocked)
+    if (!mapDrawn && lat !== 0 && lng !== 0) {
+        try {
+            const tileSize = 256;
+            const n = Math.pow(2, zoom);
+            const xFrac = (lng + 180) / 360 * n;
+            const yFrac = (1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n;
+            const tx = Math.floor(xFrac);
+            const ty = Math.floor(yFrac);
+            const offsetX = (xFrac - tx) * tileSize;
+            const offsetY = (yFrac - ty) * tileSize;
+
+            // This "Positron" style looks identical to a premium Google Map
+            const osmUrl = `https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/${zoom}/${tx}/${ty}.png`;
+            
+            await new Promise((resolve) => {
+                const osmImg = new Image();
+                osmImg.crossOrigin = "Anonymous";
+                osmImg.onload = () => {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = mapSize; tempCanvas.height = mapSize;
+                    const tCtx = tempCanvas.getContext('2d');
+                    tCtx.drawImage(osmImg, offsetX - (mapSize / 2), offsetY - (mapSize / 2), mapSize, mapSize, 0, 0, mapSize, mapSize);
+                    ctx.drawImage(tempCanvas, mapX, mapY);
+                    
+                    // Marker Design
+                    ctx.fillStyle = '#ef4444';
+                    ctx.beginPath(); ctx.arc(mapX + mapSize/2, mapY + mapSize/2, 6, 0, Math.PI * 2); ctx.fill();
+                    ctx.strokeStyle = 'white'; ctx.lineWidth = 2; ctx.stroke();
+
+                    // Branding
+                    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                    ctx.fillRect(mapX, mapY + mapSize - 12, mapSize, 12);
+                    ctx.fillStyle = '#fff'; ctx.font = '8px sans-serif';
+                    ctx.fillText('Map Data © OpenStreetMap', mapX + 2, mapY + mapSize - 3);
+                    mapDrawn = true;
                     resolve();
                 };
+                osmImg.onerror = () => resolve();
+                osmImg.src = osmUrl;
+            });
+        } catch (e) { console.error("Total map failure", e); }
+    }
+
+
+    // Fallback: This is the high-quality centered OSM logic you have now
+    if (!mapDrawn && lat !== 0 && lng !== 0) {
+        try {
+            const osmZoom = 15;
+            const tileSize = 256;
+            const n = Math.pow(2, osmZoom);
+            const xFrac = (lng + 180) / 360 * n;
+            const yFrac = (1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n;
+            const tx = Math.floor(xFrac);
+            const ty = Math.floor(yFrac);
+            const offsetX = (xFrac - tx) * tileSize;
+            const offsetY = (yFrac - ty) * tileSize;
+
+            // Using professional CartoDB Positron theme for a premium "Google-like" look
+            const osmUrl = `https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/${osmZoom}/${tx}/${ty}.png`;
+            
+            await new Promise((resolve) => {
+                const osmImg = new Image();
+                osmImg.crossOrigin = "Anonymous";
+                osmImg.onload = () => {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = mapSize;
+                    tempCanvas.height = mapSize;
+                    const tCtx = tempCanvas.getContext('2d');
+                    
+                    tCtx.drawImage(osmImg, offsetX - (mapSize / 2), offsetY - (mapSize / 2), mapSize, mapSize, 0, 0, mapSize, mapSize);
+                    ctx.drawImage(tempCanvas, mapX, mapY);
+                    
+                    // Manual Center Marker
+                    ctx.fillStyle = '#ef4444'; // Red
+                    ctx.beginPath();
+                    ctx.arc(mapX + mapSize/2, mapY + mapSize/2, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+
+                    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+                    ctx.fillRect(mapX, mapY + mapSize - 12, mapSize, 12);
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '8px sans-serif';
+                    ctx.fillText('Map Data: OSM', mapX + 2, mapY + mapSize - 3);
+                    
+                    mapDrawn = true;
+                    resolve();
+                };
+                osmImg.onerror = () => resolve();
+                osmImg.src = osmUrl;
             });
         } catch (e) {
-            console.warn("Map tile load failed", e);
+            console.error("OSM Fallback error", e);
         }
     }
+
+
 
     if (!mapDrawn) {
         // Fallback: Grey Box if map fails or no location
@@ -5546,7 +5686,7 @@ async function capturePhoto() {
     if (captureBtn) captureBtn.style.display = 'none';
     if (retakeBtn) retakeBtn.style.display = 'inline-block';
 
-    // Stop tracking
+    // Stop tracking (redundant safety call)
     stopFaceTracking();
 
     // Face Detection Logic
@@ -5629,8 +5769,12 @@ function retakePhoto() {
     if (retakeBtn) retakeBtn.style.display = 'none';
     if (markBtn) markBtn.style.display = 'none';
 
-    // Stop tracking
+    // Stop tracking and pollers
     stopFaceTracking();
+    if (window.accInterval) {
+        clearInterval(window.accInterval);
+        window.accInterval = null;
+    }
 }
 
 function startFaceTracking() {
@@ -5654,8 +5798,16 @@ function startFaceTracking() {
     trackingInterval = setInterval(async () => {
         if (!stream || video.paused || video.ended) return;
 
+        // Perform detection (this can be slow)
         const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
-        const displaySize = { width: video.offsetWidth, height: video.offsetHeight };
+        
+        // Critical: Check dimensions AFTER await. If video was hidden/stopped during detection,
+        // offsetWidth/Height will be 0, which would cause faceapi.resizeResults to crash.
+        const width = video.offsetWidth;
+        const height = video.offsetHeight;
+        if (!width || !height) return;
+
+        const displaySize = { width, height };
 
         // Resize detections to match display size
         const resizedDetections = faceapi.resizeResults(detections, displaySize);
@@ -5689,6 +5841,10 @@ function stopCamera() {
     }
     stream = null;
     stopFaceTracking();
+    if (window.accInterval) {
+        clearInterval(window.accInterval);
+        window.accInterval = null;
+    }
 
     const video = document.getElementById('video');
     const img = document.getElementById('capturedPhoto');

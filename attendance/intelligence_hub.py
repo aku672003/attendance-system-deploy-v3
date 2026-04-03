@@ -269,8 +269,9 @@ class OrganizationSTLM:
     Decomposes attendance into Trend, Seasonality, and Residuals.
     """
     def __init__(self):
-        self.model_path = os.path.join(settings.BASE_DIR, 'attendance', 'org_stlm_model.joblib')
-        self.state_path = os.path.join(settings.BASE_DIR, 'attendance', 'org_stlm_state.json')
+        self.model_path = os.path.join(settings.BASE_DIR, 'attendance', 'ml_models', 'org_stlm_model.joblib')
+        self.state_path = os.path.join(settings.BASE_DIR, 'attendance', 'ml_models', 'org_stlm_state.json')
+        os.makedirs(os.path.dirname(self.model_path), exist_ok=True)
         self.model = self._load_model()
         self.state = self._load_state()
 
@@ -375,7 +376,8 @@ class OrganizationSTLM:
 class IndividualPredictor:
     """Individual Performance Predictor using Random Forest with Normalized Hours"""
     def __init__(self):
-        self.model_path = os.path.join(settings.BASE_DIR, 'attendance', 'individual_rf_model.joblib')
+        self.model_path = os.path.join(settings.BASE_DIR, 'attendance', 'ml_models', 'individual_rf_model.joblib')
+        os.makedirs(os.path.dirname(self.model_path), exist_ok=True)
         self.model = self._load_model()
 
     def _load_model(self):
@@ -443,9 +445,9 @@ class IndividualPredictor:
 
         return avg_score, normalized_hours, consistency, recent_leaves, efficiency
 
-    def predict(self, employee, org_forecast):
+    def predict(self, employee, org_forecast, target_date=None):
         """Predict individual attendance probability with weighted features"""
-        avg_score, normalized_hours, consistency, recent_leaves, efficiency = self._get_historical_features(employee)
+        avg_score, normalized_hours, consistency, recent_leaves, efficiency = self._get_historical_features(employee, target_date=target_date)
         
         if not self.model:
             # Hybrid heuristic: Weight individual score, hours, efficiency, logic against org forecast
@@ -462,7 +464,7 @@ class IndividualPredictor:
             X = pd.DataFrame([{
                 'dept_id': (hashlib.md5(employee.department.encode()).digest()[0] % 100) if employee.department else 0,
                 'org_forecast': org_forecast,
-                'day_of_week': datetime.now().weekday(),
+                'day_of_week': target_date.weekday() if target_date else datetime.now().weekday(),
                 'avg_score': avg_score,
                 'normalized_hours': normalized_hours,
                 'consistency': consistency,
@@ -584,7 +586,7 @@ class SLMInsightGenerator:
 
 def load_model_state():
     """Load the trained model state from JSON"""
-    file_path = os.path.join(settings.BASE_DIR, 'attendance', 'model_state.json')
+    file_path = os.path.join(settings.BASE_DIR, 'attendance', 'ml_models', 'model_state.json')
     if os.path.exists(file_path):
         try:
             with open(file_path, 'r') as f:
@@ -679,7 +681,8 @@ def train_forecast_model():
     }
     
     # Save to file
-    file_path = os.path.join(settings.BASE_DIR, 'attendance', 'model_state.json')
+    file_path = os.path.join(settings.BASE_DIR, 'attendance', 'ml_models', 'model_state.json')
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
     try:
         with open(file_path, 'w') as f:
             json.dump(model_state, f, indent=4)

@@ -2130,7 +2130,7 @@ def employee_performance_analysis(request, employee_id):
         # Create predictive graph data for individual
         predict_days = int(request.GET.get('predict_days', 3))
         history_days = 3
-        graph_data = []
+        history_points = []
 
         graph_dates = []
         for i in range(history_days, 0, -1):
@@ -2161,27 +2161,39 @@ def employee_performance_analysis(request, employee_id):
             else:
                 day_name = d.strftime('%A')
             
-            graph_data.append({
+            history_points.append({
                 'date': d.strftime('%Y-%m-%d'),
                 'day_name': day_name,
                 'hours': hours,
                 'is_prediction': False
             })
 
-        from .intelligence_hub import calculate_forecast, IndividualPredictor
-        org_forecast, _, _ = calculate_forecast()
+        # Calculate Prediction Peak scaling from history to avoid "stuck at 8h"
+        max_seen = max([p['hours'] for p in history_points] + [8.0])
+        limit_hours = min(12.0, max_seen)
+
+        from .intelligence_hub import calculate_multi_day_forecast, IndividualPredictor
+        multi_forecast = calculate_multi_day_forecast(predict_days)
+        org_forecast_map = {f['date']: f['rate'] for f in multi_forecast}
         individual_engine = IndividualPredictor()
+
+        graph_data = history_points.copy()
 
         for i in range(1, predict_days + 1):
             target_date = today + timedelta(days=i)
-            base_pred = individual_engine.predict(employee, org_forecast)
+            target_date_str = target_date.strftime('%Y-%m-%d')
+            current_org_forecast = org_forecast_map.get(target_date_str, 85.0)
+            
+            base_pred = individual_engine.predict(employee, current_org_forecast, target_date=target_date)
+            
             if target_date.weekday() >= 5:
                 pred_hours = 0.0
             else:
-                pred_hours = (base_pred / 100) * 8.0
+                # Dynamic scaling based on user's actual capacity
+                pred_hours = (base_pred / 100) * limit_hours
             
             graph_data.append({
-                'date': target_date.strftime('%Y-%m-%d'),
+                'date': target_date_str,
                 'day_name': target_date.strftime('%A'),
                 'hours': round(pred_hours, 1),
                 'is_prediction': True
@@ -2314,6 +2326,16 @@ def employee_performance_analysis(request, employee_id):
 
         profile = employee.profile if hasattr(employee, 'profile') else None
 
+        # Calculate Peak Day (Best Day) based on history (Mon-Fri only)
+        dow_counts = {0:0, 1:0, 2:0, 3:0, 4:0}
+        for r in records:
+            if r.status in ['present', 'half_day', 'wfh', 'client'] and r.date.weekday() < 5:
+                dow_counts[r.date.weekday()] += 1
+        
+        best_dow = max(dow_counts, key=dow_counts.get) if any(dow_counts.values()) else 0
+        day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+        peak_day_individual = day_names[best_dow]
+
         return Response({
             'success': True,
             'employee_name': employee.name,
@@ -2351,6 +2373,7 @@ def employee_performance_analysis(request, employee_id):
             'prediction': {
                 'likelihood': round(prediction_score, 1),
                 'tomorrow_day': tomorrow.strftime('%A'),
+                'peak_day': peak_day_individual,
                 'habit_summary': f"Usually present on {tomorrow.strftime('%A')}s" if prediction_score > 70 else f"Irregular pattern on {tomorrow.strftime('%A')}s",
                 'graph_data': graph_data
             }

@@ -30,14 +30,14 @@ def start():
         replace_existing=True,
     )
 
-    # Job 2: Train forecast model at 6:30 PM IST (DEPRECATED - Moved to System Cron)
-    # scheduler.add_job(
-    #     run_train_forecast_model,
-    #     trigger=CronTrigger(hour=18, minute=30, timezone='Asia/Kolkata'),
-    #     id='train_forecast_model',
-    #     name='Train forecast model daily at 6:30 PM IST',
-    #     replace_existing=True,
-    # )
+    # Job 2: Train forecast model at 8:00 PM IST
+    scheduler.add_job(
+        run_train_forecast_model,
+        trigger=CronTrigger(hour=20, minute=0, timezone='Asia/Kolkata'),
+        id='train_forecast_model',
+        name='Train forecast model daily at 8:00 PM IST',
+        replace_existing=True,
+    )
 
     # Job 3: Check-in reminder at 9:30 AM IST for employees who haven't checked in
     scheduler.add_job(
@@ -58,5 +58,5 @@ def start():
     )
 
     scheduler.start()
-    logger.info("Scheduler started: auto-absent (18:00), check-in reminder (09:30), check-out reminder (17:30). [Model Training moved to System Cron]")
+    logger.info("Scheduler started: auto-absent (18:00), model training (20:00), check-in reminder (09:30), check-out reminder (17:30).")
 
