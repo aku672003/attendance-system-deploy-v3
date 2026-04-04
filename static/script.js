@@ -10561,7 +10561,7 @@ function updateAppearancePreview() {
             src = '/media/' + src;
         }
 
-        preview.innerHTML = `<img src="${src}" style="width:100px; height:100px; border-radius:50%; object-fit:cover; transform: scale(${zoom}) translate(${offX}px, ${offY}px);">`;
+        preview.innerHTML = `<img src="${src}" style="width:100%; height:100%; border-radius:50%; object-fit:cover; transform: scale(${zoom}) translate(${offX}px, ${offY}px);">`;
     } else {
         const zoom = (currentUser.theme_settings && currentUser.theme_settings.avatarZoom) || 1.0;
         preview.innerHTML = `<span style="font-size: 64px; display:inline-block; transform: scale(${zoom});">${selectedEmoji || '👤'}</span>`;

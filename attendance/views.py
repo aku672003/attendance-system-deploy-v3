@@ -171,6 +171,7 @@ def login(request):
                 'gender': profile.gender if profile else None,
                 'date_of_birth': str(profile.date_of_birth) if profile and profile.date_of_birth else None,
                 'avatar_emoji': profile.avatar_emoji if profile else "👤",
+                'avatar_url': profile.avatar_url if profile else None,
                 'theme_settings': profile.theme_settings if profile else {},
             }
             return Response({
@@ -1129,6 +1130,7 @@ def employee_profile(request, employee_id=None):
             'gender': profile.gender,
             'date_of_birth': str(profile.date_of_birth) if profile.date_of_birth else None,
             'avatar_emoji': profile.avatar_emoji,
+            'avatar_url': profile.avatar_url,
             'theme_settings': profile.theme_settings,
             'documents': docs_data,
         }
