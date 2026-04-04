@@ -4508,6 +4508,13 @@ async function _renderLocationResultInternal(lat, lng, accuracy, updateAttendanc
     // Success: hide the manual button
     if (btn) btn.style.display = 'none';
 
+    // If we successfully get location, ensure the Check In card is enabled
+    // This overrides any false-positive from navigator.permissions API
+    const checkInCard = document.getElementById('checkInCard');
+    if (checkInCard && typeof _enableCheckInCard === 'function') {
+        _enableCheckInCard(checkInCard);
+    }
+
     if (updateAttendance) { isUserGeoInRange = inRange; updateCheckOutButtonState(); }
     return { inRange: inRange };
 }
@@ -4809,6 +4816,10 @@ function _startDashboardLocationWatch() {
                 accuracy: pos.coords.accuracy,
                 timestamp: pos.timestamp
             };
+            const checkInCard = document.getElementById('checkInCard');
+            if (checkInCard && typeof _enableCheckInCard === 'function') {
+                _enableCheckInCard(checkInCard);
+            }
         },
         (err) => {
             // Suppress repeating warning if we already have a previous cached location
