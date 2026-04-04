@@ -10886,13 +10886,20 @@ function updateAvatarPreviewCircle(content, isUrl = false) {
     if (!circle) return;
 
     circle.innerHTML = '';
-    circle.style.background = 'var(--apple-gray-light)';
     circle.style.position = 'relative';
     circle.style.overflow = 'hidden';
 
     if (isUrl) {
         const img = document.createElement('img');
-        img.src = content.startsWith('data:') ? content : '/' + content;
+        if (content.startsWith('data:')) {
+            img.src = content;
+        } else {
+            let src = content;
+            if (!src.startsWith('http') && !src.startsWith('/')) {
+                src = '/media/' + src;
+            }
+            img.src = src;
+        }
         img.id = 'innerEmojiPreview';
         img.style.width = '100%';
         img.style.height = '100%';
