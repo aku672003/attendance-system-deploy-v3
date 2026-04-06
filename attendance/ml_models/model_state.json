@@ -1,48 +1,48 @@
 {
-    "average_rate": 77.61,
-    "stability_factor": 0.9166,
+    "average_rate": 77.01,
+    "stability_factor": 0.9049,
     "dow_patterns": {
-        "0": 77.85,
-        "1": 78.96,
-        "2": 80.11,
-        "3": 76.19,
-        "4": 75.24
+        "0": 77.6,
+        "1": 77.49,
+        "2": 78.9,
+        "3": 75.76,
+        "4": 75.47
     },
-    "data_points": 40,
-    "last_trained": "2026-03-30 13:28:56",
+    "data_points": 45,
+    "last_trained": "2026-04-06 12:07:42",
     "ml_model_active": true,
     "version": "2.0.0 (SLM Engine)",
     "logs": [
         {
-            "timestamp": "13:28:01",
+            "timestamp": "12:06:59",
             "message": "Initializing SLM-powered intelligence training sequence..."
         },
         {
-            "timestamp": "13:28:01",
-            "message": "Accessing history for 79 personnel."
+            "timestamp": "12:06:59",
+            "message": "Accessing history for 77 personnel."
         },
         {
-            "timestamp": "13:28:01",
-            "message": "Retrieved 60 days of historical weighted vectors."
+            "timestamp": "12:06:59",
+            "message": "Retrieved 73 days of historical weighted vectors."
         },
         {
-            "timestamp": "13:28:01",
+            "timestamp": "12:06:59",
             "message": "Step 1/3: Training OrganizationSTLM..."
         },
         {
-            "timestamp": "13:28:15",
+            "timestamp": "12:07:12",
             "message": "STLM Organizational Model trained"
         },
         {
-            "timestamp": "13:28:15",
+            "timestamp": "12:07:12",
             "message": "Step 2/3: Training IndividualPredictor..."
         },
         {
-            "timestamp": "13:28:56",
+            "timestamp": "12:07:42",
             "message": "Individual RF Model Trained successfully"
         },
         {
-            "timestamp": "13:28:56",
+            "timestamp": "12:07:42",
             "message": "Step 3/3: Updating organizational performance metrics..."
         }
     ]

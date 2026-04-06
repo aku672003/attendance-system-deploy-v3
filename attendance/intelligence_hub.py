@@ -181,36 +181,37 @@ def calculate_multi_day_forecast(days=7):
 
 def calculate_hybrid_forecast(predict_days=3, history_days=3):
     """
-    Returns a list of points: history_days before today, Today, and the next predict_days prediction.
+    Returns a list of points: history_days calendar days before today, Today, and the next predict_days days.
+    ALL calendar days (including weekends) are included in history — weekends show real attendance
+    (e.g. Surveyors who work on Saturdays), or naturally 0% if nobody was present.
     """
     total_employees = Employee.objects.filter(role='employee').count()
     if total_employees == 0:
         return []
 
-    # 1. Get History and Today
     today = datetime.now().date()
-    
+
+    # 1. History: all calendar days (including weekends) + Today — sourced from live DB
     dates = []
     for i in range(history_days, 0, -1):
         dates.append(today - timedelta(days=i))
     dates.append(today)
-    
+
     actual_data = []
-    
     for d in dates:
         count = AttendanceRecord.objects.filter(
-            date=d, 
+            date=d,
             status__in=['present', 'wfh', 'client']
         ).count()
         rate = round((count / total_employees * 100), 1)
-        
+
         if d == today:
             day_name = 'Today'
         elif d == today - timedelta(days=1):
             day_name = 'Yesterday'
         else:
             day_name = d.strftime('%A')
-            
+
         actual_data.append({
             'date': d.strftime('%Y-%m-%d'),
             'day_name': day_name,
@@ -218,36 +219,36 @@ def calculate_hybrid_forecast(predict_days=3, history_days=3):
             'is_prediction': False
         })
 
-    # 2. Get history for prediction context (30 days)
+    # 2. Get 30-day history for ML prediction context (live DB)
     daily_rates = calculate_daily_attendance_rates(30)
     history = [d['rate'] for d in daily_rates]
-    
-    # 3. Predict next N days
+
+    # 3. Predict next N days — weekends included if weekend attendance exists in DB
     ml_engine = AttendanceMLModel()
     predictions = []
     temp_history = history.copy()
-    
+
     for i in range(1, predict_days + 1):
         target_date = today + timedelta(days=i)
         is_weekend = target_date.weekday() >= 5
-        
+
         # ML Prediction
         pred = ml_engine.predict(target_date, temp_history)
-        
+
         if is_weekend:
-            # Django week_day: 1=Sunday, 7=Saturday
+            # Only predict non-zero on weekends if real weekend attendance exists in DB
             weekend_history = AttendanceRecord.objects.filter(
                 Q(date__week_day=1) | Q(date__week_day=7),
                 status__in=['present', 'wfh', 'client']
             ).exists()
             if not weekend_history:
                 pred = 0.0
-        
-        # Fallback to Moving Average
+
+        # Fallback to Moving Average if ML unavailable
         if pred is None:
             recent_count = min(7, len(temp_history))
             pred = sum(list(temp_history)[-recent_count:]) / recent_count
-        
+
         pred = round(float(pred), 1)
         predictions.append({
             'date': target_date.strftime('%Y-%m-%d'),
@@ -256,7 +257,7 @@ def calculate_hybrid_forecast(predict_days=3, history_days=3):
             'is_prediction': True
         })
         temp_history.append(pred)
-        
+
     return actual_data + predictions
 
 
@@ -287,14 +288,60 @@ class OrganizationSTLM:
             except: return {}
         return {}
 
+    def _is_state_fresh(self):
+        """Returns True if the model state was trained within the last 48 hours."""
+        last_trained_str = self.state.get('last_trained')
+        if not last_trained_str:
+            return False
+        try:
+            last_trained = datetime.fromisoformat(str(last_trained_str).split('.')[0])
+            return (datetime.now() - last_trained).total_seconds() < 48 * 3600
+        except Exception:
+            return False
+
+    def _live_dow_pattern(self, weekday):
+        """Calculate a fresh day-of-week average directly from the DB (last 60 days)."""
+        from django.db.models import Count
+        from django.db.models.functions import ExtractWeekDay
+        total_employees = Employee.objects.filter(role='employee').count()
+        if total_employees == 0:
+            return None
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=60)
+        # Django weekday: 1=Sunday ... 7=Saturday; Python weekday: 0=Monday ... 6=Sunday
+        # Convert Python weekday to Django week_day filter
+        django_wd = (weekday + 2) % 7 or 7  # Mon=2, Tue=3, ..., Sun=1
+        records = AttendanceRecord.objects.filter(
+            date__gte=start_date,
+            date__lte=end_date,
+            status__in=['present', 'wfh', 'client'],
+            date__week_day=django_wd
+        ).values('date').annotate(cnt=Count('id'))
+        if not records:
+            return None
+        rates = [(r['cnt'] / total_employees) * 100 for r in records]
+        return round(statistics.mean(rates), 1) if rates else None
+
     def predict(self, date_obj, historical_rates):
-        """Predict organizational rate using Structural Time-Series logic"""
+        """Predict organizational rate using Structural Time-Series logic.
+        Uses fresh live-DB DOW patterns when the stored state is stale."""
         if not historical_rates: return None
-        
+
         # 1. Seasonality Component (Day of Week average)
         dow = str(date_obj.weekday())
         seasonal_patterns = self.state.get('dow_patterns', {})
-        base_seasonal = float(seasonal_patterns.get(dow, statistics.mean(historical_rates[-7:])))
+
+        # If state is stale, recalculate DOW pattern live from DB
+        if self._is_state_fresh() and dow in seasonal_patterns:
+            base_seasonal = float(seasonal_patterns[dow])
+        else:
+            live_pattern = self._live_dow_pattern(date_obj.weekday())
+            if live_pattern is not None:
+                base_seasonal = live_pattern
+            elif seasonal_patterns.get(dow):
+                base_seasonal = float(seasonal_patterns[dow])
+            else:
+                base_seasonal = statistics.mean(historical_rates[-7:]) if len(historical_rates) >= 7 else statistics.mean(historical_rates)
 
         # 2. Trend/Momentum Component
         recent_avg = statistics.mean(historical_rates[-3:]) if len(historical_rates) >= 3 else historical_rates[-1]
@@ -303,7 +350,7 @@ class OrganizationSTLM:
 
         # 3. Residual prediction (using ML if available)
         residual_pred = 0
-        if self.model:
+        if self.model and self._is_state_fresh():
             try:
                 import pandas as pd
                 X = pd.DataFrame([{
@@ -318,7 +365,12 @@ class OrganizationSTLM:
             except: pass
 
         # Combine: (Seasonal * Momentum) + Residual
-        forecast = (base_seasonal * 0.7 + recent_avg * 0.3) + residual_pred
+        # When model state is fresh, weight it higher; otherwise lean on live data momentum
+        if self._is_state_fresh():
+            forecast = (base_seasonal * 0.7 + recent_avg * 0.3) + residual_pred
+        else:
+            # Stale model: trust live recent data much more
+            forecast = (base_seasonal * 0.4 + recent_avg * 0.6)
         return round(float(max(0, min(100, forecast))), 1)
 
     def train(self, daily_counts, all_employees_count):
