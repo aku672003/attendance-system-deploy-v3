@@ -6081,7 +6081,8 @@ async function showCheckOut() {
         `;
 
         const halfDayWarning = document.getElementById('halfDayWarning');
-        if (workHours < 9) {
+        // Buffer included: 8 hours required for a full day (9h - 1h buffer)
+        if (workHours < 8) {
             halfDayWarning.classList.remove('hidden');
         } else {
             halfDayWarning.classList.add('hidden');

@@ -680,7 +680,8 @@ def check_out(request):
         elif record.type == 'client':
             record.status = 'client'
         else:
-            record.status = 'half_day' if worked_hours < 9 else 'present'
+            # Full day present if worked >= 8 hours (standard 9h with 1h buffer)
+            record.status = 'half_day' if worked_hours < 8 else 'present'
             
         record.save()
         
