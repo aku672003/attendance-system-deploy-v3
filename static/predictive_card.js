@@ -743,21 +743,33 @@ function renderPersonnelResults(results) {
 
     let html = `
         <table style="width: 100%; border-collapse: collapse;">
-            <thead style="background: #f1f5f9;">
-                <tr>
-                    <th style="padding: 12px; text-align: left;">Name</th>
-                    <th style="padding: 12px; text-align: left;">Department</th>
-                    <th style="padding: 12px; text-align: center;">Rate</th>
-                    <th style="padding: 12px; text-align: center;">Actions</th>
+            <thead>
+                <tr style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">
+                    <th style="padding: 14px 16px; text-align: left; color: white; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Employee</th>
+                    <th style="padding: 14px 16px; text-align: left; color: white; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Department</th>
+                    <th style="padding: 14px 16px; text-align: center; color: white; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Attendance Rate</th>
+                    <th style="padding: 14px 16px; text-align: center; color: white; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                ${results.map(p => `
-                    <tr style="border-bottom: 1px solid #e2e8f0; cursor: pointer;" onclick="showEmployeePerformanceAnalysis(${p.id})">
-                        <td style="padding: 12px;">${p.name}</td>
-                        <td style="padding: 12px;">${p.department}</td>
-                        <td style="padding: 12px; text-align: center; font-weight: 700;">${p.attendance_rate}%</td>
-                        <td style="padding: 12px; text-align: center; color: var(--primary);">View Analysis →</td>
+                ${results.map((p, idx) => `
+                    <tr style="border-bottom: 1px solid #f1f5f9; background: ${idx % 2 === 0 ? '#ffffff' : '#fafbff'}; transition: background 0.15s;" onmouseover="this.style.background='#f5f3ff'" onmouseout="this.style.background='${idx % 2 === 0 ? '#ffffff' : '#fafbff'}'">
+                        <td style="padding: 14px 16px;">
+                            <div style="font-weight: 700; color: #0f172a; font-size: 14px;">${p.name}</div>
+                            <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">ID: ${p.id}</div>
+                        </td>
+                        <td style="padding: 14px 16px;">
+                            <span style="display: inline-block; background: rgba(99,102,241,0.1); color: #4f46e5; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;">${p.department}</span>
+                        </td>
+                        <td style="padding: 14px 16px; text-align: center;">
+                            <span style="font-size: 16px; font-weight: 900; color: ${p.attendance_rate >= 80 ? '#10b981' : p.attendance_rate >= 60 ? '#f59e0b' : '#ef4444'};">${p.attendance_rate}%</span>
+                        </td>
+                        <td style="padding: 14px 16px; text-align: center;">
+                            <div style="display: flex; gap: 8px; justify-content: center; align-items: center;">
+                                <button onclick="event.stopPropagation(); showEmployeePerformanceAnalysis(${p.id})" style="padding: 7px 14px; border-radius: 8px; border: 1px solid #e2e8f0; background: white; color: #475569; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; white-space: nowrap;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='white'">View Analysis</button>
+                                <button onclick="event.stopPropagation(); showHRReportDatePicker(${p.id}, '${p.name.replace(/'/g, "\\'")}'  , '${(p.department||'').replace(/'/g, "\\'")}'  )" style="padding: 7px 14px; border-radius: 8px; border: none; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; white-space: nowrap; box-shadow: 0 2px 8px rgba(99,102,241,0.3);" id="reportBtn${p.id}">📋 Generate Report</button>
+                            </div>
+                        </td>
                     </tr>
                 `).join('')}
             </tbody>
@@ -1087,6 +1099,519 @@ function renderEmployeePerformanceModal(data, employeeId, predictDays = 3) {
             animateValue(value, 0, p.likelihood, 1500);
         }
     }, 100);
+}
+
+// ========== HR Report Generation ==========
+
+function showHRReportDatePicker(employeeId, employeeName, department) {
+    // Remove existing picker if any
+    const existing = document.getElementById('hrReportDatePickerModal');
+    if (existing) existing.remove();
+
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const thirtyAgo = new Date(today); thirtyAgo.setDate(today.getDate() - 30);
+    const thirtyAgoStr = thirtyAgo.toISOString().split('T')[0];
+
+    const modal = document.createElement('div');
+    modal.id = 'hrReportDatePickerModal';
+    modal.className = 'modal active';
+    modal.style.zIndex = '9999999';
+    modal.innerHTML = `
+        <div style="background: white; border-radius: 28px; padding: 0; width: 480px; max-width: 95vw; box-shadow: 0 32px 80px rgba(0,0,0,0.2); overflow: hidden; display: flex; flex-direction: column;">
+            <!-- Header -->
+            <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 28px 32px; color: white;">
+                <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.8; margin-bottom: 6px;">HR INTELLIGENCE REPORT</div>
+                <div style="font-size: 22px; font-weight: 900; letter-spacing: -0.5px;">${employeeName}</div>
+                <div style="font-size: 12px; opacity: 0.8; margin-top: 4px;">${department} &bull; Attendance & Performance Report</div>
+            </div>
+
+            <div style="padding: 28px 32px;">
+                <div style="font-size: 12px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px;">Select Report Period (Max 1 Month)</div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+                    <div>
+                        <label style="display: block; font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 6px;">FROM DATE</label>
+                        <input type="date" id="hrReportStartDate" value="${thirtyAgoStr}" max="${todayStr}"
+                            style="width: 100%; padding: 10px 12px; border: 1.5px solid #e2e8f0; border-radius: 10px; font-size: 13px; font-weight: 600; color: #0f172a; outline: none; box-sizing: border-box;"
+                            oninput="validateHRReportDates()">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 6px;">TO DATE</label>
+                        <input type="date" id="hrReportEndDate" value="${todayStr}" max="${todayStr}"
+                            style="width: 100%; padding: 10px 12px; border: 1.5px solid #e2e8f0; border-radius: 10px; font-size: 13px; font-weight: 600; color: #0f172a; outline: none; box-sizing: border-box;"
+                            oninput="validateHRReportDates()">
+                    </div>
+                </div>
+
+                <!-- Quick Selectors -->
+                <div style="font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Quick Select</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px;">
+                    <button onclick="setHRReportPeriod(7)" style="padding: 6px 14px; border-radius: 8px; border: 1px solid #e2e8f0; background: white; color: #475569; font-size: 11px; font-weight: 700; cursor: pointer;">Last 7 Days</button>
+                    <button onclick="setHRReportPeriod(14)" style="padding: 6px 14px; border-radius: 8px; border: 1px solid #e2e8f0; background: white; color: #475569; font-size: 11px; font-weight: 700; cursor: pointer;">Last 14 Days</button>
+                    <button onclick="setHRReportPeriod(30)" style="padding: 6px 14px; border-radius: 8px; border: none; background: #eef2ff; color: #4f46e5; font-size: 11px; font-weight: 700; cursor: pointer;">Last 30 Days</button>
+                    <button onclick="setHRReportCurrentMonth()" style="padding: 6px 14px; border-radius: 8px; border: 1px solid #e2e8f0; background: white; color: #475569; font-size: 11px; font-weight: 700; cursor: pointer;">This Month</button>
+                </div>
+
+                <div id="hrReportDateError" style="color: #ef4444; font-size: 12px; font-weight: 700; margin-bottom: 16px; display: none; background: #fff5f5; padding: 10px 14px; border-radius: 8px; border: 1px solid #fecaca;"></div>
+
+                <div style="display: flex; gap: 12px;">
+                    <button onclick="closeHRReportDatePicker()" style="flex: 1; padding: 14px; border-radius: 14px; border: 1.5px solid #e2e8f0; background: white; color: #64748b; font-weight: 800; font-size: 13px; cursor: pointer;">Cancel</button>
+                    <button onclick="fetchAndDownloadHRReport(${employeeId}, '${employeeName.replace(/'/g, "\\'")}'  )" id="hrReportGenerateBtn"
+                        style="flex: 2; padding: 14px; border-radius: 14px; border: none; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; font-weight: 900; font-size: 13px; cursor: pointer; box-shadow: 0 8px 20px rgba(99,102,241,0.3); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        📋 Generate PDF Report
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function validateHRReportDates() {
+    const startInput = document.getElementById('hrReportStartDate');
+    const endInput   = document.getElementById('hrReportEndDate');
+    const errorDiv   = document.getElementById('hrReportDateError');
+    const generateBtn = document.getElementById('hrReportGenerateBtn');
+    if (!startInput || !endInput || !errorDiv) return;
+
+    const start = new Date(startInput.value);
+    const end   = new Date(endInput.value);
+    const diffDays = (end - start) / (1000 * 60 * 60 * 24);
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+
+    if (isNaN(start) || isNaN(end)) {
+        errorDiv.style.display = 'none';
+        return;
+    }
+    if (start > end) {
+        errorDiv.textContent = 'Start date cannot be after end date.';
+        errorDiv.style.display = 'block';
+        if (generateBtn) generateBtn.disabled = true;
+        return;
+    }
+    if (end > today) {
+        errorDiv.textContent = 'End date cannot be in the future.';
+        errorDiv.style.display = 'block';
+        if (generateBtn) generateBtn.disabled = true;
+        return;
+    }
+    if (diffDays > 31) {
+        errorDiv.textContent = 'Date range cannot exceed 31 days. Please narrow your selection.';
+        errorDiv.style.display = 'block';
+        if (generateBtn) generateBtn.disabled = true;
+        return;
+    }
+    errorDiv.style.display = 'none';
+    if (generateBtn) { generateBtn.disabled = false; generateBtn.style.opacity = '1'; }
+}
+
+function setHRReportPeriod(days) {
+    const today = new Date();
+    const from  = new Date(today);
+    from.setDate(today.getDate() - days);
+    const pad = d => String(d).padStart(2, '0');
+    const fmt = dt => `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}`;
+    const s = document.getElementById('hrReportStartDate');
+    const e = document.getElementById('hrReportEndDate');
+    if (s) s.value = fmt(from);
+    if (e) e.value = fmt(today);
+    validateHRReportDates();
+}
+
+function setHRReportCurrentMonth() {
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    const pad = d => String(d).padStart(2, '0');
+    const fmt = dt => `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}`;
+    const s = document.getElementById('hrReportStartDate');
+    const e = document.getElementById('hrReportEndDate');
+    if (s) s.value = fmt(firstDay);
+    if (e) e.value = fmt(today);
+    validateHRReportDates();
+}
+
+function closeHRReportDatePicker() {
+    const modal = document.getElementById('hrReportDatePickerModal');
+    if (modal) modal.remove();
+}
+
+async function fetchAndDownloadHRReport(employeeId, employeeName) {
+    const startDate = document.getElementById('hrReportStartDate')?.value;
+    const endDate   = document.getElementById('hrReportEndDate')?.value;
+    if (!startDate || !endDate) return;
+
+    const btn = document.getElementById('hrReportGenerateBtn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Generating...'; }
+
+    try {
+        const result = await apiCall(`employee-hr-report/${employeeId}?start_date=${startDate}&end_date=${endDate}`, 'GET');
+        if (!result.success) {
+            showNotification(result.message || 'Failed to generate report', 'error');
+            return;
+        }
+        closeHRReportDatePicker();
+        await buildAndDownloadHRReportPDF(result.report);
+    } catch (err) {
+        console.error('HR Report Error:', err);
+        showNotification('Failed to generate report', 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '📋 Generate PDF Report'; }
+    }
+}
+
+async function buildAndDownloadHRReportPDF(report) {
+    showLoading('Building HR Report...');
+    const emp     = report.employee;
+    const period  = report.period;
+    const summary = report.summary;
+    const log     = report.daily_log || [];
+
+    // ── Punctuality Score Color
+    const getPunctColor = (rate) => rate >= 85 ? '#10b981' : rate >= 65 ? '#f59e0b' : '#ef4444';
+    const getAttColor   = (rate) => rate >= 80 ? '#10b981' : rate >= 60 ? '#f59e0b' : '#ef4444';
+
+    // ── Status Badge helper
+    const statusBadge = (status, type) => {
+        const map = {
+            present: { bg: '#d1fae5', color: '#065f46', label: 'Present' },
+            absent:  { bg: '#fee2e2', color: '#991b1b', label: 'Absent'  },
+            leave:   { bg: '#fef3c7', color: '#92400e', label: 'Leave'   },
+            half_day:{ bg: '#e0e7ff', color: '#3730a3', label: 'Half Day'},
+            wfh:     { bg: '#dbeafe', color: '#1e40af', label: 'WFH'     },
+        };
+        const key = (type === 'wfh' && status !== 'absent' && status !== 'leave') ? 'wfh' : status;
+        const s = map[key] || { bg: '#f1f5f9', color: '#475569', label: status };
+        return `<span style="background:${s.bg};color:${s.color};padding:3px 10px;border-radius:20px;font-size:10px;font-weight:800;">${s.label}</span>`;
+    };
+
+    // ── Build bar chart SVG (status counts)
+    const barData = [
+        { label: 'Present',  value: summary.present,  color: '#10b981' },
+        { label: 'WFH',      value: summary.wfh,      color: '#3b82f6' },
+        { label: 'Half Day', value: summary.half_day,  color: '#6366f1' },
+        { label: 'Leave',    value: summary.leave,     color: '#f59e0b' },
+        { label: 'Absent',   value: summary.absent,    color: '#ef4444' },
+    ];
+    const maxVal = Math.max(...barData.map(d => d.value), 1);
+    const barWidth = 40;
+    const barGap   = 20;
+    const chartH   = 120;
+    const svgW     = barData.length * (barWidth + barGap) + barGap;
+    const barsSVG  = barData.map((d, i) => {
+        const bh = Math.max((d.value / maxVal) * chartH, d.value > 0 ? 4 : 0);
+        const x  = barGap + i * (barWidth + barGap);
+        const y  = chartH - bh;
+        return `
+            <rect x="${x}" y="${y}" width="${barWidth}" height="${bh}" rx="6" fill="${d.color}" opacity="0.85"/>
+            <text x="${x + barWidth/2}" y="${y - 5}" text-anchor="middle" font-size="11" font-weight="800" fill="${d.color}">${d.value}</text>
+            <text x="${x + barWidth/2}" y="${chartH + 16}" text-anchor="middle" font-size="9" font-weight="700" fill="#64748b">${d.label}</text>
+        `;
+    }).join('');
+
+    // ── Punctuality donut SVG
+    const pRate   = summary.punctuality_rate;
+    const radius  = 50;
+    const circumf = 2 * Math.PI * radius;
+    const offset  = circumf - (pRate / 100) * circumf;
+    const pCol    = getPunctColor(pRate);
+
+    // ── Format a date string nicely
+    const fmtDate = (d) => {
+        const dt = new Date(d + 'T00:00:00');
+        return dt.toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'});
+    };
+
+    // ── Generate today date for the report footer
+    const reportDate = new Date().toLocaleDateString('en-IN', {day:'2-digit', month:'long', year:'numeric'});
+
+    // ── Determine overall performance tier
+    const overallScore = (summary.attendance_rate * 0.5) + (summary.punctuality_rate * 0.5);
+    let performanceTier = 'Exceptional';
+    let tierColor = '#10b981';
+    if (overallScore < 50) { performanceTier = 'Needs Improvement'; tierColor = '#ef4444'; }
+    else if (overallScore < 65) { performanceTier = 'Below Average'; tierColor = '#f59e0b'; }
+    else if (overallScore < 80) { performanceTier = 'Satisfactory'; tierColor = '#3b82f6'; }
+    else if (overallScore < 92) { performanceTier = 'Good'; tierColor = '#6366f1'; }
+
+    // ── Working hours timeline bar
+    const timelineItems = log.slice(-15).map(entry => {
+        const pct = Math.min((entry.hours / 9) * 100, 100);
+        const col = entry.hours >= 9 ? '#10b981' : entry.hours >= 6 ? '#6366f1' : entry.hours > 0 ? '#f59e0b' : '#e2e8f0';
+        return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;">
+            <div style="width:100%; background:#f1f5f9; border-radius:4px; height:60px; display:flex; align-items:flex-end;">
+                <div style="width:100%; height:${Math.max(pct,0)}%; background:${col}; border-radius:4px; transition:height 0.3s;"></div>
+            </div>
+            <div style="font-size:7px; color:#94a3b8; font-weight:700; white-space:nowrap;">${entry.date.split(' ').slice(0,2).join(' ')}</div>
+            <div style="font-size:8px; color:${col}; font-weight:800;">${entry.hours > 0 ? entry.hours+'h' : '—'}</div>
+        </div>`;
+    }).join('');
+
+    // ── Build log table rows (paginate in PDF via html2canvas)
+    const logRows = log.map((entry, idx) => {
+        const rowBg = idx % 2 === 0 ? '#ffffff' : '#fafbff';
+        return `<tr style="background:${rowBg};">
+            <td style="padding:7px 10px; font-size:11px; color:#374151; font-weight:600;">${entry.date}</td>
+            <td style="padding:7px 10px; font-size:11px; color:#64748b;">${entry.day}</td>
+            <td style="padding:7px 10px;">${statusBadge(entry.status, entry.type)}</td>
+            <td style="padding:7px 10px; font-size:11px; color:#374151; font-weight:700; text-align:center;">${entry.check_in}</td>
+            <td style="padding:7px 10px; font-size:11px; color:#374151; font-weight:700; text-align:center;">${entry.check_out}</td>
+            <td style="padding:7px 10px; font-size:12px; font-weight:800; text-align:center; color:${entry.hours >= 9 ? '#10b981' : entry.hours >= 6 ? '#6366f1' : '#94a3b8'};">${entry.hours > 0 ? entry.hours+'h' : '—'}</td>
+        </tr>`;
+    }).join('');
+
+    // ── Main HTML for PDF
+    const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body { font-family: 'Segoe UI', Arial, sans-serif; background: #ffffff; color: #0f172a; }
+                .page { width: 900px; margin: 0 auto; padding: 0; }
+            </style>
+        </head>
+        <body>
+        <div class="page" id="hrReportPage">
+
+            <!-- ═══ PAGE 1: COVER HEADER ═══ -->
+            <div style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%); padding: 48px 52px 40px; color: white; position: relative; overflow: hidden;">
+                <div style="position:absolute; top:-30px; right:-30px; width:200px; height:200px; background:rgba(255,255,255,0.03); border-radius:50%;"></div>
+                <div style="position:absolute; bottom:-50px; left:-50px; width:250px; height:250px; background:rgba(255,255,255,0.02); border-radius:50%;"></div>
+
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:32px;">
+                    <div>
+                        <div style="font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:3px; opacity:0.6; margin-bottom:8px;">OFFICIAL HR DOCUMENT</div>
+                        <div style="font-size:30px; font-weight:900; letter-spacing:-1px; line-height:1.1;">Employee Attendance<br>&amp; Performance Report</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); padding:12px 20px; border-radius:14px; backdrop-filter:blur(10px);">
+                            <div style="font-size:9px; font-weight:800; opacity:0.7; text-transform:uppercase; letter-spacing:1px;">Generated On</div>
+                            <div style="font-size:14px; font-weight:800; margin-top:4px;">${reportDate}</div>
+                            <div style="font-size:9px; opacity:0.6; margin-top:4px;">HanuAI Intelligence Hub</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Employee Info Strip -->
+                <div style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12); border-radius:20px; padding:24px 28px; display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; align-items:center; gap:20px;">
+                        <div style="width:64px; height:64px; background:rgba(255,255,255,0.15); border-radius:18px; display:flex; align-items:center; justify-content:center; font-size:32px;">${emp.avatar_emoji || '👤'}</div>
+                        <div>
+                            <div style="font-size:22px; font-weight:900; letter-spacing:-0.5px;">${emp.name}</div>
+                            <div style="font-size:12px; opacity:0.7; margin-top:4px;">${emp.designation || emp.department} &bull; ${emp.department}</div>
+                            <div style="font-size:11px; opacity:0.5; margin-top:2px;">${emp.email}</div>
+                        </div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:10px; opacity:0.6; font-weight:700; text-transform:uppercase; letter-spacing:1px;">Report Period</div>
+                        <div style="font-size:15px; font-weight:800; margin-top:4px;">${fmtDate(period.start_date)}</div>
+                        <div style="font-size:11px; opacity:0.6;">to</div>
+                        <div style="font-size:15px; font-weight:800;">${fmtDate(period.end_date)}</div>
+                        <div style="margin-top:8px; background:rgba(255,255,255,0.15); padding:4px 12px; border-radius:20px; font-size:10px; font-weight:800;">${period.working_days} Working Days</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ PERFORMANCE TIER BANNER ═══ -->
+            <div style="background:${tierColor}10; border-left:6px solid ${tierColor}; padding:16px 28px; display:flex; align-items:center; gap:16px;">
+                <div style="width:40px; height:40px; background:${tierColor}; border-radius:10px; display:flex; align-items:center; justify-content:center; color:white; font-size:18px; flex-shrink:0;">🏅</div>
+                <div>
+                    <div style="font-size:10px; color:${tierColor}; font-weight:800; text-transform:uppercase; letter-spacing:1.5px;">Overall Performance Tier</div>
+                    <div style="font-size:22px; font-weight:900; color:${tierColor}; letter-spacing:-0.5px;">${performanceTier}</div>
+                </div>
+                <div style="margin-left:auto; text-align:right;">
+                    <div style="font-size:36px; font-weight:900; color:${tierColor};">${Math.round(overallScore)}%</div>
+                    <div style="font-size:10px; color:#64748b; font-weight:700;">Combined Score</div>
+                </div>
+            </div>
+
+            <!-- ═══ KEY METRICS GRID ═══ -->
+            <div style="padding:32px 40px;">
+                <div style="font-size:12px; font-weight:900; color:#94a3b8; text-transform:uppercase; letter-spacing:2px; margin-bottom:20px;">Key Performance Indicators</div>
+                <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:32px;">
+                    ${[
+                        { icon: '📅', label: 'Days Attended', value: summary.attended_days, sub: `of ${period.working_days} working days`, color: getAttColor(summary.attendance_rate) },
+                        { icon: '📊', label: 'Attendance Rate', value: summary.attendance_rate + '%', sub: 'Of expected working days', color: getAttColor(summary.attendance_rate) },
+                        { icon: '⏱️', label: 'Avg. Work Hours', value: summary.avg_hours_per_day + 'h', sub: 'Per attended day', color: '#6366f1' },
+                        { icon: '🎯', label: 'Punctuality Rate', value: summary.punctuality_rate + '%', sub: `${summary.punctual_days} on-time of ${summary.attended_days}`, color: getPunctColor(summary.punctuality_rate) },
+                    ].map(m => `
+                        <div style="background:#fafbff; border:1.5px solid #e2e8f0; border-top:4px solid ${m.color}; border-radius:16px; padding:20px; text-align:center;">
+                            <div style="font-size:24px; margin-bottom:8px;">${m.icon}</div>
+                            <div style="font-size:24px; font-weight:900; color:${m.color}; letter-spacing:-1px;">${m.value}</div>
+                            <div style="font-size:10px; font-weight:800; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-top:4px;">${m.label}</div>
+                            <div style="font-size:9px; color:#94a3b8; margin-top:4px;">${m.sub}</div>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <!-- ═══ ATTENDANCE BREAKDOWN ═══ -->
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:32px;">
+                    <!-- Left: Status Distribution Chart -->
+                    <div style="background:#fafbff; border:1.5px solid #e2e8f0; border-radius:20px; padding:24px;">
+                        <div style="font-size:12px; font-weight:900; color:#0f172a; text-transform:uppercase; letter-spacing:1px; margin-bottom:20px;">Attendance Breakdown</div>
+                        <div style="display:flex; justify-content:center;">
+                            <svg viewBox="0 0 ${svgW} ${chartH + 30}" style="width:100%; max-width:300px; height:${chartH + 30}px;">
+                                ${barsSVG}
+                            </svg>
+                        </div>
+                    </div>
+
+                    <!-- Right: Punctuality Donut -->
+                    <div style="background:#fafbff; border:1.5px solid #e2e8f0; border-radius:20px; padding:24px; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                        <div style="font-size:12px; font-weight:900; color:#0f172a; text-transform:uppercase; letter-spacing:1px; margin-bottom:20px;">Punctuality Index</div>
+                        <div style="position:relative; width:140px; height:140px;">
+                            <svg viewBox="0 0 120 120" style="transform:rotate(-90deg); width:140px; height:140px;">
+                                <circle cx="60" cy="60" r="${radius}" fill="none" stroke="#f1f5f9" stroke-width="12"/>
+                                <circle cx="60" cy="60" r="${radius}" fill="none" stroke="${pCol}" stroke-width="12" stroke-linecap="round"
+                                    stroke-dasharray="${circumf}" stroke-dashoffset="${offset}"/>
+                            </svg>
+                            <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                                <div style="font-size:24px; font-weight:900; color:${pCol};">${pRate}%</div>
+                                <div style="font-size:9px; color:#94a3b8; font-weight:700;">ON TIME</div>
+                            </div>
+                        </div>
+                        <div style="margin-top:16px; display:grid; grid-template-columns:1fr 1fr; gap:12px; width:100%;">
+                            <div style="text-align:center; background:#d1fae510; border:1px solid #d1fae5; border-radius:10px; padding:10px;">
+                                <div style="font-size:18px; font-weight:900; color:#10b981;">${summary.punctual_days}</div>
+                                <div style="font-size:9px; color:#64748b; font-weight:700;">On-Time Days</div>
+                            </div>
+                            <div style="text-align:center; background:#fee2e210; border:1px solid #fecaca; border-radius:10px; padding:10px;">
+                                <div style="font-size:18px; font-weight:900; color:#ef4444;">${summary.late_days}</div>
+                                <div style="font-size:9px; color:#64748b; font-weight:700;">Late Days</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ═══ SECONDARY METRICS ROW ═══ -->
+                <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:32px;">
+                    ${[
+                        { label: 'Total Hours Worked',   value: summary.total_hours + 'h',     icon: '⏰', color: '#6366f1' },
+                        { label: 'Avg. Check-In Time',   value: summary.avg_check_in,          icon: '🟢', color: '#10b981' },
+                        { label: 'Avg. Check-Out Time',  value: summary.avg_check_out,         icon: '🔴', color: '#ef4444' },
+                        { label: 'Office Present Days',  value: summary.present,               icon: '🏢', color: '#3b82f6' },
+                        { label: 'Work From Home Days',  value: summary.wfh,                   icon: '🏠', color: '#8b5cf6' },
+                        { label: 'Leave / Absent Days',  value: (summary.leave + summary.absent), icon: '📋', color: '#f59e0b' },
+                    ].map(m => `
+                        <div style="background:#fafbff; border:1.5px solid #e2e8f0; border-radius:14px; padding:16px; display:flex; align-items:center; gap:14px;">
+                            <div style="font-size:22px;">${m.icon}</div>
+                            <div>
+                                <div style="font-size:18px; font-weight:900; color:${m.color};">${m.value}</div>
+                                <div style="font-size:10px; color:#64748b; font-weight:700;">${m.label}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <!-- ═══ WORKING HOURS TIMELINE ═══ -->
+                ${log.length > 0 ? `
+                <div style="background:#fafbff; border:1.5px solid #e2e8f0; border-radius:20px; padding:24px; margin-bottom:32px;">
+                    <div style="font-size:12px; font-weight:900; color:#0f172a; text-transform:uppercase; letter-spacing:1px; margin-bottom:16px;">Working Hours Timeline <span style="font-size:9px; color:#94a3b8; font-weight:700;">(Last ${Math.min(log.length,15)} Days · 9h = Full Target)</span></div>
+                    <div style="display:flex; gap:6px; align-items:flex-end; height:100px;">
+                        ${timelineItems}
+                    </div>
+                </div>` : ''}
+
+                <!-- ═══ DAILY ATTENDANCE LOG TABLE ═══ -->
+                <div style="margin-bottom:32px;">
+                    <div style="font-size:12px; font-weight:900; color:#0f172a; text-transform:uppercase; letter-spacing:1px; margin-bottom:16px;">Day-by-Day Attendance Log</div>
+                    <table style="width:100%; border-collapse:collapse; border-radius:14px; overflow:hidden; border:1.5px solid #e2e8f0;">
+                        <thead>
+                            <tr style="background:linear-gradient(135deg,#6366f1,#8b5cf6); color:white;">
+                                <th style="padding:11px 14px; text-align:left; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1px;">Date</th>
+                                <th style="padding:11px 14px; text-align:left; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1px;">Day</th>
+                                <th style="padding:11px 14px; text-align:left; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1px;">Status</th>
+                                <th style="padding:11px 14px; text-align:center; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1px;">Check-In</th>
+                                <th style="padding:11px 14px; text-align:center; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1px;">Check-Out</th>
+                                <th style="padding:11px 14px; text-align:center; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1px;">Hours</th>
+                            </tr>
+                        </thead>
+                        <tbody>${logRows}</tbody>
+                    </table>
+                </div>
+
+                <!-- ═══ FOOTER ═══ -->
+                <div style="border-top:2px solid #f1f5f9; padding-top:20px; display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <div style="font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:1px;">Generated by</div>
+                        <div style="font-size:14px; font-weight:900; color:#6366f1;">HanuAI Intelligence Hub</div>
+                        <div style="font-size:9px; color:#94a3b8; margin-top:2px;">This is a system-generated report. For HR use only.</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:10px; color:#94a3b8; font-weight:700;">CONFIDENTIAL</div>
+                        <div style="font-size:10px; color:#94a3b8;">${reportDate}</div>
+                        <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6); color:white; padding:4px 14px; border-radius:20px; font-size:10px; font-weight:800; margin-top:6px; display:inline-block;">${emp.department} Department</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        </body>
+        </html>
+    `;
+
+    // Render to PDF using html2canvas + jsPDF
+    const container = document.createElement('div');
+    container.style.cssText = 'position:fixed; left:-9999px; top:0; width:900px; background:white; z-index:-1;';
+    container.innerHTML = htmlContent;
+    document.body.appendChild(container);
+
+    try {
+        const canvas = await html2canvas(container.querySelector('#hrReportPage'), {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            width: 900,
+            logging: false
+        });
+
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+        const pageW  = pdf.internal.pageSize.getWidth();
+        const pageH  = pdf.internal.pageSize.getHeight();
+        const margin = 0;
+        const imgW   = pageW - margin * 2;
+        const imgH   = (canvas.height * imgW) / canvas.width;
+
+        let yPos = margin;
+        let remainH = imgH;
+
+        // Multi-page support
+        while (remainH > 0) {
+            const sliceH = Math.min(pageH - margin * 2, remainH);
+            const srcY   = (imgH - remainH) * (canvas.height / imgH);
+            const srcH   = sliceH * (canvas.height / imgH);
+
+            const sliceCanvas = document.createElement('canvas');
+            sliceCanvas.width  = canvas.width;
+            sliceCanvas.height = srcH;
+            const ctx = sliceCanvas.getContext('2d');
+            ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
+
+            const sliceImg = sliceCanvas.toDataURL('image/jpeg', 0.95);
+            pdf.addImage(sliceImg, 'JPEG', margin, yPos, imgW, sliceH);
+
+            remainH -= sliceH;
+            if (remainH > 0) {
+                pdf.addPage();
+                yPos = margin;
+            }
+        }
+
+        const safeName = emp.name.replace(/[^a-zA-Z0-9]/g, '_');
+        pdf.save(`HR_Report_${safeName}_${period.start_date}_to_${period.end_date}.pdf`);
+        showNotification('HR Report downloaded successfully!', 'success');
+    } catch (err) {
+        console.error('PDF generation error:', err);
+        showNotification('Failed to generate PDF report', 'error');
+    } finally {
+        document.body.removeChild(container);
+        hideLoading();
+    }
 }
 
 // ========== Shared Helpers ==========

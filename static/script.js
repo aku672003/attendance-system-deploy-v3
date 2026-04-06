@@ -4919,32 +4919,22 @@ async function refreshWFHAvailability() {
         wfhStatus.style.color = 'var(--gray-600)';
     }
 
-    // ---------- 3) Check for APPROVED WFH request ----------
+    // ---------- 3) Remove Pre-Approval Requirement ----------
     try {
         const today = getCurrentDateTime().date;
         const r = await apiCall('wfh-eligibility', 'GET', { employee_id: currentUser.id, date: today });
 
-        // New logic: Only enable if there is an approved request
-        if (r && r.has_approved_request === true) {
-            // Authorized
-            wfhStatus.textContent = 'Approved for today';
-            wfhStatus.style.color = 'var(--success-color)';
-            wfhOption.classList.remove('disabled');
-            if (requestBtn) requestBtn.style.display = 'none';
-        } else {
-            // Not authorized
-            wfhStatus.textContent = 'Approval required';
-            wfhStatus.style.color = 'var(--warning-color)';
-            wfhOption.classList.add('disabled');
-            // Hide the request button here as requests should be made via the calendar/requests modal
-            if (requestBtn) requestBtn.style.display = 'none';
-        }
+        // New logic: Pre-approval is NO LONGER required! WFH is validated post-checkout.
+        wfhStatus.textContent = 'Post-Approval Required';
+        wfhStatus.style.color = 'var(--success-color)';
+        wfhOption.classList.remove('disabled');
+        if (requestBtn) requestBtn.style.display = 'none';
 
     } catch (e) {
         console.error("WFH check failed", e);
-        // Fallback: disable to be safe
-        wfhStatus.textContent = 'Status unknown';
-        wfhOption.classList.add('disabled');
+        // Fallback: still enable but label unknown
+        wfhStatus.textContent = 'Status unknown - Proceed';
+        wfhOption.classList.remove('disabled');
     }
 }
 
@@ -6091,7 +6081,7 @@ async function showCheckOut() {
         `;
 
         const halfDayWarning = document.getElementById('halfDayWarning');
-        if (workHours < 8) {
+        if (workHours < 9) {
             halfDayWarning.classList.remove('hidden');
         } else {
             halfDayWarning.classList.add('hidden');

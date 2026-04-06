@@ -260,9 +260,6 @@ def calculate_hybrid_forecast(predict_days=3, history_days=3):
     return actual_data + predictions
 
 
-    return actual_data + predictions
-
-
 class OrganizationSTLM:
     """
     Structural Time-Series LSTM-inspired (STLM) Organizational Model.
@@ -1138,8 +1135,7 @@ def get_company_overview(days=30, predict_days=3):
         'model_accuracy': (load_model_state() or {}).get('stability_factor', 0.95) * 100,
         'forecast_7d': calculate_multi_day_forecast(7),
         'hybrid_forecast': calculate_hybrid_forecast(predict_days),
-        'ai_insight': ai_insight
-    }
+        'model_accuracy': (load_model_state() or {}).get('stability_factor', 0.0) * 100,    }
     
     return {
         'summary': summary,

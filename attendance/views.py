@@ -649,7 +649,39 @@ def check_out(request):
 
         record.check_out_time = now_local.time().strftime('%H:%M:%S')
         record.total_hours = worked_hours
-        record.status = 'half_day' if worked_hours < 8 else 'present'
+        
+        if record.type == 'wfh':
+            record.status = 'wfh'
+            # Check tasks completed for today
+            from .models import Task
+            today_tasks = Task.objects.filter(assignees=employee_id, due_date=record.date)
+            total_tasks = today_tasks.count()
+            completed_tasks = today_tasks.filter(status='completed').count()
+            
+            task_status_msg = f'Tasks: {completed_tasks}/{total_tasks} completed.'
+            if total_tasks > 0 and completed_tasks == total_tasks:
+                task_status_msg += ' (All clear!)'
+            elif total_tasks > 0:
+                task_status_msg += ' (Pending!)'
+            else:
+                task_status_msg += ' (No tasks due today)'
+                
+            # Automate an approval request for Mentor/Admin to verify tasks at the end of the day
+            EmployeeRequest.objects.get_or_create(
+                employee_id=employee_id,
+                request_type='wfh',
+                start_date=record.date,
+                end_date=record.date,
+                defaults={
+                    'status': 'pending', 
+                    'reason': f'WFH log: {worked_hours} hours worked. {task_status_msg}'
+                }
+            )
+        elif record.type == 'client':
+            record.status = 'client'
+        else:
+            record.status = 'half_day' if worked_hours < 9 else 'present'
+            
         record.save()
         
         return Response({'success': True, 'message': 'Checked out successfully'})
@@ -3390,12 +3422,13 @@ def wfh_request_approve(request):
             # Determine the status to set based on request type
             req_type = request_obj.request_type
             
-            # WFH requests should NOT auto-create attendance records.
-            # The employee must manually check-in using the WFH button.
             if req_type == 'wfh':
-                # Do nothing here. The 'check_wfh_eligibility' will now return True,
-                # allowing the user to mark attendance themselves.
-                pass 
+                # Mark as WFH approved
+                AttendanceRecord.objects.filter(
+                    employee=request_obj.employee,
+                    date=request_obj.start_date,
+                    type='wfh'
+                ).update(status='wfh')
             else:
                 # For leaves (full/half day), we generally DO want to auto-mark 
                 # because the employee isn't working.
@@ -3429,6 +3462,14 @@ def wfh_request_approve(request):
                         defaults=defaults
                     )
                     current_date += timedelta(days=1)
+
+        elif status_val == 'rejected':
+            if request_obj.request_type == 'wfh':
+                AttendanceRecord.objects.filter(
+                    employee=request_obj.employee,
+                    date=request_obj.start_date,
+                    type='wfh'
+                ).update(status='absent', notes='WFH Rejected (Incomplete Tasks)')
 
         return Response({
             'success': True,
@@ -3792,6 +3833,199 @@ def intelligence_hub_search(request):
             'success': False,
             'message': f'Failed to search personnel: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def employee_hr_report(request, employee_id):
+    """
+    Generate a comprehensive HR attendance report for a single employee
+    over a given date range (max 31 days). Returns all the metrics
+    needed for a professional PDF report.
+    """
+    try:
+        employee = Employee.objects.get(id=employee_id)
+        today = date.today()
+
+        # Parse date range — max 31 days, default last 30 days
+        start_str = request.GET.get('start_date')
+        end_str   = request.GET.get('end_date')
+
+        try:
+            start_date = datetime.strptime(start_str, '%Y-%m-%d').date() if start_str else today - timedelta(days=30)
+            end_date   = datetime.strptime(end_str,   '%Y-%m-%d').date() if end_str   else today
+        except ValueError:
+            start_date = today - timedelta(days=30)
+            end_date   = today
+
+        # Cap the range to 31 days
+        if (end_date - start_date).days > 30:
+            start_date = end_date - timedelta(days=30)
+
+        # Clamp end_date to today
+        if end_date > today:
+            end_date = today
+
+        # ── Attendance Records ──────────────────────────────────────────────
+        records = AttendanceRecord.objects.filter(
+            employee=employee,
+            date__range=[start_date, end_date]
+        ).order_by('date')
+
+        now_local = timezone.localtime(timezone.now())
+
+        # Count breakdown and build daily log
+        daily_log   = []
+        total_hours = 0.0
+        status_counts = {
+            'present': 0,
+            'absent':  0,
+            'leave':   0,
+            'wfh':     0,
+            'half_day':0,
+        }
+
+        check_in_seconds_list  = []
+        check_out_seconds_list = []
+        late_days = 0
+        PUNCTUAL_THRESHOLD_H  = 10   # After 10:00 AM = late
+        PUNCTUAL_THRESHOLD_M  = 0
+
+        for r in records:
+            hours = float(r.total_hours or 0)
+            if not r.check_out_time and r.check_in_time and r.date == now_local.date():
+                try:
+                    ci = datetime.strptime(str(r.check_in_time), '%H:%M:%S').time()
+                    ci_dt = timezone.make_aware(datetime.combine(r.date, ci))
+                    hours = round(min(max(0.0, (now_local - ci_dt).total_seconds() / 3600), 14.0), 2)
+                except Exception:
+                    pass
+
+            total_hours += hours
+
+            # Status bucket
+            if r.type == 'wfh' and r.status in ['present', 'half_day', 'wfh', 'client']:
+                status_counts['wfh'] += 1
+            elif r.status == 'present':
+                status_counts['present'] += 1
+            elif r.status == 'absent':
+                status_counts['absent'] += 1
+            elif r.status == 'leave':
+                status_counts['leave'] += 1
+            elif r.status == 'half_day':
+                status_counts['half_day'] += 1
+            else:
+                status_counts['absent'] += 1
+
+            # Punctuality
+            if r.check_in_time:
+                sec = r.check_in_time.hour * 3600 + r.check_in_time.minute * 60 + r.check_in_time.second
+                check_in_seconds_list.append(sec)
+                threshold_sec = PUNCTUAL_THRESHOLD_H * 3600 + PUNCTUAL_THRESHOLD_M * 60
+                if sec > threshold_sec:
+                    late_days += 1
+
+            if r.check_out_time:
+                sec = r.check_out_time.hour * 3600 + r.check_out_time.minute * 60 + r.check_out_time.second
+                check_out_seconds_list.append(sec)
+
+            daily_log.append({
+                'date':        r.date.strftime('%d %b %Y'),
+                'day':         r.date.strftime('%A'),
+                'status':      r.status,
+                'type':        r.type,
+                'check_in':    str(r.check_in_time)[:5] if r.check_in_time else '—',
+                'check_out':   str(r.check_out_time)[:5] if r.check_out_time else '—',
+                'hours':       round(hours, 2),
+            })
+
+        # ── Summary Metrics ─────────────────────────────────────────────────
+        total_days  = (end_date - start_date).days + 1
+        working_days = sum(
+            1 for i in range(total_days)
+            if (start_date + timedelta(days=i)).weekday() < 5
+        )
+
+        attended_days = status_counts['present'] + status_counts['wfh'] + status_counts['half_day']
+        attendance_rate = round((attended_days / working_days * 100), 1) if working_days else 0
+
+        avg_check_in  = None
+        avg_check_out = None
+        if check_in_seconds_list:
+            s = sum(check_in_seconds_list) / len(check_in_seconds_list)
+            avg_check_in = f"{int(s//3600):02d}:{int((s%3600)//60):02d}"
+        if check_out_seconds_list:
+            s = sum(check_out_seconds_list) / len(check_out_seconds_list)
+            avg_check_out = f"{int(s//3600):02d}:{int((s%3600)//60):02d}"
+
+        punctual_days = attended_days - late_days
+        punctuality_rate = round((punctual_days / attended_days * 100), 1) if attended_days else 0
+
+        avg_hours_per_day = round(total_hours / attended_days, 2) if attended_days else 0
+
+        # ── Task Performance (optional, best-effort) ────────────────────────
+        try:
+            tasks_qs = Task.objects.filter(assignees=employee).filter(
+                Q(created_at__date__range=[start_date, end_date]) |
+                Q(completed_at__date__range=[start_date, end_date]) |
+                Q(status__in=['todo', 'in_progress'])
+            ).distinct()
+            total_tasks     = tasks_qs.count()
+            completed_tasks = tasks_qs.filter(status='completed').count()
+            task_completion_rate = round((completed_tasks / total_tasks * 100), 1) if total_tasks else 0
+        except Exception:
+            total_tasks = completed_tasks = task_completion_rate = 0
+
+        # ── Profile ─────────────────────────────────────────────────────────
+        profile = getattr(employee, 'profile', None)
+        designation = getattr(profile, 'designation', '') or ''
+
+        return Response({
+            'success': True,
+            'report': {
+                'employee': {
+                    'id':          employee.id,
+                    'name':        employee.name,
+                    'username':    employee.username,
+                    'email':       employee.email,
+                    'department':  employee.department,
+                    'designation': designation,
+                    'avatar_emoji': profile.avatar_emoji if profile else '👤',
+                },
+                'period': {
+                    'start_date':  str(start_date),
+                    'end_date':    str(end_date),
+                    'total_days':  total_days,
+                    'working_days': working_days,
+                },
+                'summary': {
+                    'present':          status_counts['present'],
+                    'wfh':              status_counts['wfh'],
+                    'half_day':         status_counts['half_day'],
+                    'leave':            status_counts['leave'],
+                    'absent':           status_counts['absent'],
+                    'attended_days':    attended_days,
+                    'attendance_rate':  attendance_rate,
+                    'total_hours':      round(total_hours, 1),
+                    'avg_hours_per_day': avg_hours_per_day,
+                    'avg_check_in':     avg_check_in or '—',
+                    'avg_check_out':    avg_check_out or '—',
+                    'late_days':        late_days,
+                    'punctual_days':    punctual_days,
+                    'punctuality_rate': punctuality_rate,
+                    'task_total':       total_tasks,
+                    'task_completed':   completed_tasks,
+                    'task_completion_rate': task_completion_rate,
+                },
+                'daily_log': daily_log,
+            }
+        })
+
+    except Employee.DoesNotExist:
+        return Response({'success': False, 'message': 'Employee not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])

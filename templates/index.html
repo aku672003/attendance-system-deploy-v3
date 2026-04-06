@@ -24,6 +24,10 @@
     <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/controls/OrbitControls.js"></script>
 
+    <!-- PDF Generation Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
     <!-- External Stylesheet -->
     {% load static %}
     <link rel="stylesheet" href="{% static 'style.css' %}">
@@ -1766,7 +1770,7 @@
                             <label class="form-label">Role</label>
                             <select id="newUserRole" class="form-control">
                                 <option value="employee">Employee</option>
-                                <option value="Mentor">Mentor</option>
+                                <option value="mentor">Mentor</option>
                                 <option value="admin">Admin</option>
                             </select>
                         </div>
@@ -1885,7 +1889,7 @@
                 <div id="halfDayWarning" class="hidden"
                     style="background: #fef3c7; padding: 16px; border-radius: 8px; margin-bottom: 20px; color: #92400e;">
                     <h4>⚠️ Half Day Warning</h4>
-                    <p>You have worked less than 8 hours. This will be marked as a half day.</p>
+                    <p>You have worked less than 9 hours. This will be marked as a half day.</p>
                 </div>
                 <div style="display: flex; gap: 12px; justify-content: center;">
                     <button onclick="closeModal('checkOutModal')" class="btn btn-secondary">Cancel</button>
