@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect
 from django.http import HttpResponse, JsonResponse, HttpResponseForbidden, FileResponse
-from .security import require_valid_token
+from .security import require_valid_token, require_gated_token_api
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils.decorators import method_decorator
@@ -49,6 +49,7 @@ def calculate_distance(lat1, lon1, lat2, lon2):
 
 
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def send_otp(request):
     """
@@ -95,6 +96,7 @@ def send_otp(request):
 
 
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def reset_password(request):
     """
@@ -135,6 +137,7 @@ def reset_password(request):
 
 
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def login(request):
     """Authenticate user credentials and return profile data"""
@@ -202,6 +205,7 @@ def login(request):
 
 
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def register(request):
     """Register a new employee with validated details"""
@@ -262,6 +266,7 @@ def register(request):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 def offices_list(request):
     """Retrieve registered active office locations"""
     department = request.GET.get('department')
@@ -307,6 +312,7 @@ def offices_list(request):
 
 
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def check_location(request):
     """Check if user location is within office geofence"""
@@ -350,6 +356,7 @@ def check_location(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def mark_attendance(request):
     data = request.data
@@ -445,6 +452,7 @@ def mark_attendance(request):
         return Response({'success': False, 'message': str(e)}, status=500)
 
 @api_view(['GET'])
+@require_gated_token_api
 def get_server_time(request):
     """Return the current server time in IST for frontend synchronization"""
     now_local = timezone.localtime(timezone.now())
@@ -625,6 +633,7 @@ def check_wfh_eligibility(employee_id, check_date):
 
 
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def check_out(request):
     data = request.data
@@ -680,8 +689,8 @@ def check_out(request):
         elif record.type == 'client':
             record.status = 'client'
         else:
-            # Full day present if worked >= 8 hours (standard 9h with 1h buffer)
-            record.status = 'half_day' if worked_hours < 8 else 'present'
+            # Full day present if worked >= 8.25 hours (standard 9h with 45m buffer)
+            record.status = 'half_day' if worked_hours < 8.25 else 'present'
             
         record.save()
         
@@ -692,6 +701,7 @@ def check_out(request):
         return Response({'success': False, 'message': f'Check-out failed: {str(e)}'}, status=500)
 
 @api_view(['GET'])
+@require_gated_token_api
 def today_attendance(request):
     """Get today's attendance for an employee"""
     employee_id = request.GET.get('employee_id')
@@ -745,6 +755,7 @@ def today_attendance(request):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 def attendance_records(request):
     """Get attendance records with filters"""
     employee_id = request.GET.get('employee_id')
@@ -932,6 +943,7 @@ def monthly_stats(request):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 def wfh_eligibility(request):
     """Check WFH eligibility"""
     employee_id = request.GET.get('employee_id')
@@ -951,6 +963,7 @@ def wfh_eligibility(request):
 
 
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def wfh_request(request):
     """Submit WFH request"""
@@ -987,6 +1000,7 @@ def wfh_request(request):
 
 # Profile Management Views
 @api_view(['GET', 'POST', 'PATCH'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def employee_profile(request, employee_id=None):
     """Get or save employee profile"""
@@ -1185,6 +1199,7 @@ def employee_profile(request, employee_id=None):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 def check_profile_completeness(request):
     """Check if employee profile has all required fields and documents"""
     employee_id = request.GET.get('employee_id')
@@ -1242,6 +1257,7 @@ def check_profile_completeness(request):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 def admin_profiles_list(request):
     """List all employee profiles (admin)"""
     user_id = request.GET.get('user_id')
@@ -1290,6 +1306,7 @@ def admin_profiles_list(request):
 
 # Admin Views
 @api_view(['GET'])
+@require_gated_token_api
 def admin_users(request):
     """Get all users (admin)"""
     user_id = request.GET.get('user_id')
@@ -1348,6 +1365,7 @@ def admin_users(request):
 
 
 @api_view(['GET', 'POST', 'DELETE'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def admin_user_detail(request, user_id):
     """Get, update, or delete a user (admin)"""
@@ -1441,6 +1459,7 @@ def admin_user_detail(request, user_id):
 
 
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def create_office(request):
     """Create a new office (admin)"""
@@ -1489,6 +1508,7 @@ def create_office(request):
 
 
 @api_view(['GET', 'POST', 'DELETE'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def office_detail(request, office_id):
     """Get, update, or delete an office"""
@@ -1550,6 +1570,7 @@ def office_detail(request, office_id):
 
 
 @api_view(['GET', 'POST', 'DELETE'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def attendance_record_detail(request, record_id):
     """Get, update, or delete an attendance record (admin)"""
@@ -1610,6 +1631,7 @@ def attendance_record_detail(request, record_id):
 
 # Document Upload Views
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([MultiPartParser, FormParser])
 def upload_documents(request):
     """Upload employee documents"""
@@ -1734,6 +1756,7 @@ def upload_documents(request):
 
 
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def delete_documents(request):
     """Delete selected documents"""
@@ -1770,6 +1793,7 @@ def delete_documents(request):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 def admin_user_docs_list(request, employee_id):
     """List documents for a user (admin)"""
     try:
@@ -1799,6 +1823,7 @@ def admin_user_docs_list(request, employee_id):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 def admin_user_docs_zip(request, employee_id):
     """Download all documents as ZIP (admin)"""
     try:
@@ -1843,6 +1868,7 @@ def admin_user_docs_zip(request, employee_id):
 
 # Admin Dashboard API Views
 @api_view(['GET'])
+@require_gated_token_api
 def admin_summary(request):
     """Get admin dashboard summary"""
     user_id = request.GET.get('user_id')
@@ -1906,6 +1932,7 @@ def admin_summary(request):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 def predict_attendance(request):
     """Predict attendance for tomorrow based on historical patterns"""
     try:
@@ -2012,6 +2039,7 @@ def predict_attendance(request):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 def employee_performance_analysis(request, employee_id):
     """Detailed performance and prediction analysis for a single employee"""
     try:
@@ -2420,6 +2448,7 @@ def employee_performance_analysis(request, employee_id):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 def upcoming_birthdays(request):
     """Get upcoming birthdays for filtered month"""
     try:
@@ -2484,6 +2513,7 @@ def upcoming_birthdays(request):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def get_notifications(request):
     """Get notifications for the current user"""
@@ -2663,6 +2693,7 @@ def get_notifications(request):
     })
 
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def request_new_task(request):
     """Employee requests a new task from their mentor"""
@@ -2700,6 +2731,7 @@ def request_new_task(request):
         return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def mark_notifications_read(request):
     """Mark all notifications or a specific one as read"""
@@ -2721,6 +2753,7 @@ def mark_notifications_read(request):
 
 
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def send_birthday_wish(request):
     """Send a birthday wish to an employee"""
@@ -2759,6 +2792,7 @@ def send_birthday_wish(request):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 def pending_requests(request):
     """Get pending or history (approved/rejected) WFH and leave requests"""
     user_id = request.GET.get('user_id')
@@ -2815,6 +2849,7 @@ def pending_requests(request):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 def my_requests(request):
     """Get request history for an employee"""
     try:
@@ -2858,6 +2893,7 @@ def my_requests(request):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 def active_tasks(request):
     """Get count of active tasks"""
     try:
@@ -3007,6 +3043,7 @@ def _create_task_admin(data, creator):
     return task
 
 @api_view(['GET', 'POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def tasks_api(request):
     """Get all tasks or create a new task (Separated Admin/Employee Logic)"""
@@ -3181,6 +3218,7 @@ def _update_task_employee(task, data, user=None):
     return True
 
 @api_view(['GET', 'POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def task_detail_api(request, task_id):
     """Update, delete or fetch a task (Separated Admin/Employee Logic)"""
@@ -3253,6 +3291,7 @@ def task_detail_api(request, task_id):
 
 
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def task_comment_api(request):
     """Add a comment to a task"""
@@ -3484,6 +3523,7 @@ def wfh_request_approve(request):
 
 
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def unblock_attendance(request):
     """Create a request to unblock attendance after 3 consecutive missed checkouts"""
@@ -3526,6 +3566,7 @@ def unblock_attendance(request):
         return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def leave_request(request):
     """Create a new leave request (Full Day or Half Day)"""
@@ -3595,6 +3636,7 @@ def leave_request(request):
 
 
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def leave_request_approve(request):
     """Approve or reject a leave request"""
@@ -3669,6 +3711,7 @@ def leave_request_approve(request):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 def attendance_predictions(request):
     """Get AI-powered attendance predictions for all employees (Admin only)"""
     try:
@@ -3716,6 +3759,7 @@ def attendance_predictions(request):
 # ========== Intelligence Hub API Endpoints ==========
 
 @api_view(['GET'])
+@require_gated_token_api
 def intelligence_hub_forecast(request):
     """Get current attendance forecast with confidence and trend"""
     try:
@@ -3784,6 +3828,7 @@ def intelligence_hub_forecast(request):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 def intelligence_hub_trends(request):
     """Get 30-day trend data with comprehensive company overview"""
     try:
@@ -3807,6 +3852,7 @@ def intelligence_hub_trends(request):
 
 
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def intelligence_hub_search(request):
     """Search personnel with attendance predictions"""
@@ -3837,6 +3883,7 @@ def intelligence_hub_search(request):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 def employee_hr_report(request, employee_id):
     """
     Generate a comprehensive HR attendance report for a single employee
@@ -4030,6 +4077,7 @@ def employee_hr_report(request, employee_id):
 
 
 @api_view(['POST'])
+@require_gated_token_api
 def intelligence_hub_train(request):
     """Trigger training of the forecast model using all historical data"""
     try:
@@ -4128,6 +4176,7 @@ def clear_training_history(request):
 
 
 @api_view(['GET', 'POST', 'DELETE'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def temporary_tags_api(request):
     """API for managing temporary tags"""
@@ -4225,9 +4274,9 @@ def error_400_view(request, exception=None):
     return render(request, '400.html', status=400)
 
 
-def error_403_view(request, exception=None):
-    """Custom 403 Forbidden handler"""
-    return render(request, '403.html', status=403)
+def error_403_view(request, exception=None, message="None Provided"):
+    """Custom 403 Forbidden handler with diagnostic info"""
+    return render(request, '403.html', {'error_message': message}, status=403)
 
 
 def error_404_view(request, exception=None):
@@ -4244,9 +4293,11 @@ def error_500_view(request):
 def spa_view(request):
     """Protected view to serve the SPA index.html."""
     context = {
-        'maps_api_key': settings.MAPS_API_KEY
+        'maps_api_key': settings.MAPS_API_KEY,
+        'gated_token': request.GET.get('token')
     }
     return render(request, 'index.html', context)
+
 
 
 @require_valid_token
@@ -4260,6 +4311,7 @@ def gated_dashboard(request):
     if success:
         context['gated_user_id'] = data.get('user_id')
         context['is_gated'] = True
+        context['gated_token'] = token_str
         
     context['maps_api_key'] = settings.MAPS_API_KEY
     return render(request, 'index.html', context)
@@ -4286,6 +4338,7 @@ def employee_list_summary(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
+@require_gated_token_api
 def avatar_assets_list(request):
     """Returns available assets grouped by category"""
     category = request.GET.get('category')
@@ -4300,6 +4353,7 @@ def avatar_assets_list(request):
     })
 
 @api_view(['GET', 'POST', 'PUT'])
+@require_gated_token_api
 def user_memoji_api(request, user_id=None):
     """Retrieve or update a user's memoji configuration"""
     if not user_id:
@@ -4357,6 +4411,7 @@ def user_memoji_api(request, user_id=None):
 
 
 @api_view(['POST'])
+@require_gated_token_api
 @csrf_exempt
 @parser_classes([MultiPartParser, FormParser])
 def upload_avatar(request):
@@ -4417,6 +4472,7 @@ def upload_avatar(request):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def mentor_status(request):
     """Get today's attendance status for all mentors of the current employee"""
@@ -4468,6 +4524,7 @@ def mentor_status(request):
 # ========== Web Push Notification API ==========
 
 @api_view(['GET'])
+@require_gated_token_api
 def get_vapid_public_key(request):
     """Return the VAPID public key so the browser can subscribe to push notifications."""
     from django.conf import settings
@@ -4478,6 +4535,7 @@ def get_vapid_public_key(request):
 
 
 @api_view(['POST', 'DELETE'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def save_push_subscription(request):
     """

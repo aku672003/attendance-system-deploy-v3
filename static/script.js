@@ -781,11 +781,22 @@ async function apiCall(path, method = 'GET', data = null) {
     const opts = { method, headers: {} };
     opts.cache = 'no-store';
     opts.headers['Cache-Control'] = 'no-cache';
+    
+    // Add Gated Token to all API calls for security
+    if (window.GATED_TOKEN && window.GATED_TOKEN !== "") {
+        // Appending to headers
+        opts.headers['X-Gated-Token'] = window.GATED_TOKEN;
+        
+        // Also appending as a parameter for maximum compatibility (as requested)
+        const separator = url.includes('?') ? '&' : '?';
+        url += `${separator}token=${encodeURIComponent(window.GATED_TOKEN)}`;
+    }
 
     if (method !== 'GET' && data !== null) {
         opts.headers['Content-Type'] = 'application/json';
         opts.body = JSON.stringify(data);
     }
+
 
     try {
         const res = await fetch(url, opts);
@@ -6074,18 +6085,28 @@ async function showCheckOut() {
         // Populate modal
         const detailsDiv = document.getElementById('checkOutDetails');
         detailsDiv.innerHTML = `
-            <div style="margin-bottom: 12px;"><strong>Office:</strong> ${record.office_name || 'N/A'}</div>
-            <div style="margin-bottom: 12px;"><strong>Check In:</strong> ${record.check_in_time}</div>
-            <div style="margin-bottom: 12px;"><strong>Current Time:</strong> ${getCurrentDateTime().time}</div>
-            <div style="margin-bottom: 12px;"><strong>Work Hours:</strong> ${hh}h ${mm}m</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; background: #f8fafc; padding: 16px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                <div><span style="color: #64748b; font-size: 0.8rem; text-transform: uppercase; font-weight: 700;">Check In</span><br><strong>${record.check_in_time}</strong></div>
+                <div><span style="color: #64748b; font-size: 0.8rem; text-transform: uppercase; font-weight: 700;">Current</span><br><strong>${getCurrentDateTime().time}</strong></div>
+                <div><span style="color: #64748b; font-size: 0.8rem; text-transform: uppercase; font-weight: 700;">Work Goal</span><br><strong>9h 00m</strong></div>
+                <div><span style="color: #64748b; font-size: 0.8rem; text-transform: uppercase; font-weight: 700;">Total Worked</span><br><strong style="color: var(--primary-color);">${hh}h ${mm}m</strong></div>
+            </div>
+            <div style="margin-bottom: 12px; font-size: 0.9rem;"><strong>Office:</strong> ${record.office_name || 'N/A'}</div>
         `;
 
         const halfDayWarning = document.getElementById('halfDayWarning');
-        // Buffer included: 8 hours required for a full day (9h - 1h buffer)
-        if (workHours < 8) {
+        const earlyCheckoutWarning = document.getElementById('earlyCheckoutWarning');
+
+        // New Logic: 45 min buffer (8.25 hours)
+        if (workHours < 8.25) {
             halfDayWarning.classList.remove('hidden');
+            earlyCheckoutWarning.classList.add('hidden');
+        } else if (workHours < 9) {
+            halfDayWarning.classList.add('hidden');
+            earlyCheckoutWarning.classList.remove('hidden');
         } else {
             halfDayWarning.classList.add('hidden');
+            earlyCheckoutWarning.classList.add('hidden');
         }
 
         openModal('checkOutModal');
@@ -6140,15 +6161,19 @@ async function confirmCheckOut() {
             return;
         }
 
-        // 2️⃣ Between 4.5 and 8 hours → warning + confirmation
-        if (workHours < 8) {
+        // 2️⃣ Between 4.5 and 8.25 hours → warning + confirmation
+        if (workHours < 8.25) {
             const proceed = await showConfirm(
                 `You have worked ${workHours.toFixed(2)} hours. ` +
-                'You have worked less than 8 hours. This will be marked as a half day.',
+                'You have worked less than 8.25 hours. This will be marked as a half day in your monthly records.',
                 'Half Day Warning',
                 '⏳'
             );
             if (!proceed) {
+                // Restore UI if they cancel
+                confirmBtn.disabled = false;
+                checkOutBtnText.classList.remove('hidden');
+                checkOutSpinner.classList.add('hidden');
                 return; // user cancelled
             }
         }
