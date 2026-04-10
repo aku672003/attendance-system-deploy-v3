@@ -39,7 +39,26 @@ function getCurrentISTDate() {
 }
 // API Configuration
 const apiBaseUrl = "/api";
-const MAPS_API_KEY = window.MAPS_API_KEY || ''; // Picked from window (injected by server-side context)
+const MAPS_API_KEY = window.MAPS_API_KEY || ''; 
+
+// Helper: Format Date to DD-MM-YYYY
+function formatDateDMY(dateInput) {
+    if (!dateInput) return 'N/A';
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return dateInput;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+}
+
+// Helper: Format Time only
+function formatTimeOnly(dateInput) {
+    if (!dateInput) return 'N/A';
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
 
 // Initialize Application
 document.addEventListener('DOMContentLoaded', async function () {
@@ -150,7 +169,10 @@ async function setupPushNotifications(employeeId) {
         }
 
         // Fetch VAPID public key from the backend
-        const keyRes = await fetch(`${apiBaseUrl}/get-vapid-public-key`);
+        const keyUrl = `${apiBaseUrl}/get-vapid-public-key` + (window.GATED_TOKEN ? `?token=${encodeURIComponent(window.GATED_TOKEN)}` : '');
+        const keyRes = await fetch(keyUrl, {
+            headers: { 'X-Gated-Token': window.GATED_TOKEN || '' }
+        });
         const keyData = await keyRes.json();
         if (!keyData.success || !keyData.public_key) {
             console.warn('[Push] VAPID public key not available — push disabled.');
@@ -176,11 +198,13 @@ async function setupPushNotifications(employeeId) {
             auth: subJson.keys.auth,
         };
 
-        await fetch(`${apiBaseUrl}/save-push-subscription`, {
+        const saveUrl = `${apiBaseUrl}/save-push-subscription` + (window.GATED_TOKEN ? `?token=${encodeURIComponent(window.GATED_TOKEN)}` : '');
+        await fetch(saveUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCsrfToken(),
+                'X-Gated-Token': window.GATED_TOKEN || ''
             },
             body: JSON.stringify(payload),
         });
@@ -253,15 +277,18 @@ document.addEventListener("dblclick", e => {
 function openModal(id) {
     const el = document.getElementById(id);
     if (!el) return;
-    if (el.classList.contains('active')) return; // Guard against multiple opens
+    if (el.classList.contains('active')) return;
     el.classList.add('active');
-    document.body.style.overflow = 'hidden';
+    updateScrollLock();
 }
 
 async function syncServerTime() {
     try {
         const start = Date.now();
-        const response = await fetch(`${apiBaseUrl}/server-time`);
+        const timeUrl = `${apiBaseUrl}/server-time` + (window.GATED_TOKEN ? `?token=${encodeURIComponent(window.GATED_TOKEN)}` : '');
+        const response = await fetch(timeUrl, {
+            headers: { 'X-Gated-Token': window.GATED_TOKEN || '' }
+        });
         const result = await response.json();
         const end = Date.now();
 
@@ -284,8 +311,8 @@ function closeModal(id) {
     const el = document.getElementById(id);
     if (!el) return;
     el.classList.remove('active');
-    document.body.style.overflow = 'auto';
-    document.documentElement.style.overflow = 'auto';
+    updateScrollLock();
+
 
     // If board-empty warning is closed, mark as shown to avoid pop-up loops
     if (id === 'noTasksModal') {
@@ -607,7 +634,7 @@ function showLoading(message = "Loading your dashboard...") {
     if (subtitle) subtitle.textContent = message;
 
     loader.classList.add('active');
-    document.body.style.overflow = 'hidden';
+    updateScrollLock();
 }
 
 /**
@@ -618,12 +645,7 @@ function hideLoading() {
     if (!loader) return;
 
     loader.classList.remove('active');
-
-    // Only restore overflow if no modals are active
-    if (!document.querySelector('.modal.active')) {
-        document.body.style.overflow = 'auto';
-        document.documentElement.style.overflow = 'auto';
-    }
+    updateScrollLock();
 }
 
 // Geolocation permission help UI
@@ -693,18 +715,10 @@ function getCurrentDateTime() {
 
 function formatDisplayDate(dateString) {
     if (!dateString) return 'Unknown Date';
-
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) {
-        return dateString;
-    }
-
-    // Just "December 4, 2025"
-    return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
+    // Return formatted as "Day, DD-MM-YYYY" or similar if requested, 
+    // but the user wants dd-mm-yyyy for the whole task manager.
+    // Let's use our standardized helper.
+    return formatDateDMY(dateString);
 }
 function getDateRange(startDate, endDate) {
     const dates = [];
@@ -1115,21 +1129,29 @@ async function handleNotificationClick(notif) {
     const type = notif.type;
     const id = notif.id;
 
-    if (type === 'wish') {
-        // Mark this specific wish as read
+    if (type === 'wish' || id.startsWith('dn_')) {
+        // Mark as read
         await apiCall('mark-notifications-read', 'POST', {
             user_id: currentUser.id,
             notification_id: id
         });
         loadNotifications();
-        showNotification('Wish marked as read', 'success');
-    } else if (type === 'birthday') {
+        if (type === 'wish') showNotification('Wish marked as read', 'success');
+    }
+
+    if (type === 'birthday') {
         openBirthdayCalendar();
     } else if (type === 'task' || type === 'task_warning') {
         if (currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.role === 'mentor' || currentUser.has_subordinates) {
             openTaskMentor();
         } else {
             openMyTasks();
+        }
+    } else if (type === 'task_comment') {
+        // Open the specific task detail
+        const taskId = notif.task_id;
+        if (taskId) {
+            openTaskDetail(parseInt(taskId));
         }
     } else if (type === 'task_request' || type === 'idle_employee' || type === 'idle_employees_summary') {
         if (type === 'idle_employees_summary') {
@@ -1380,9 +1402,28 @@ async function loadAdminSummary() {
     try {
         const res = await apiCall('admin-summary', 'GET', { user_id: currentUser.id });
         if (res && res.success) {
-            document.getElementById('totalEmployees').textContent = res.total_employees || 0;
-            document.getElementById('presentToday').textContent = `${res.present_today || 0} present today`;
-            document.getElementById('surveyorsPresent').textContent = `${res.surveyors_present || 0} surveyors present`;
+            // Update Main Workforce Card (Excluding Admins)
+            const summaryCard = document.getElementById('widget-admin-summary');
+            if (summaryCard) {
+                const titleEl = summaryCard.querySelector('.stat-card-title');
+                if (titleEl) titleEl.innerHTML = '📊 Daily Workforce <small style="font-size:0.7rem; opacity:0.6;">(Excl. Admin)</small>';
+            }
+
+            const totalEl = document.getElementById('totalEmployees');
+            const presentEl = document.getElementById('presentToday');
+            const surveyorSummaryEl = document.getElementById('surveyorsPresent');
+            
+            if (totalEl) totalEl.textContent = res.total_employees || 0;
+            if (presentEl) presentEl.textContent = `${res.present_today || 0} active today`;
+            
+            // Keep a simple summary line on the dashboard card
+            if (surveyorSummaryEl) {
+                surveyorSummaryEl.textContent = `${res.surveyors_present || 0} Surveyors Active Today`;
+                surveyorSummaryEl.style.fontSize = '0.85rem';
+                surveyorSummaryEl.style.marginTop = '4px';
+                surveyorSummaryEl.style.color = 'var(--primary, #2563eb)';
+                surveyorSummaryEl.style.fontWeight = '600';
+            }
         }
     } catch (error) {
         console.error('Error loading admin summary:', error);
@@ -1428,17 +1469,17 @@ async function showEmployeeSummary() {
             // Create premium modal content
             const content = `
                 <div class="summary-modal-container">
-                    <button class="modal-close-btn" onclick="this.closest('.modal').remove()">✕</button>
+                    <button class="modal-close-btn" onclick="safeRemoveModal(this.closest('.modal'))">✕</button>
                     
                     <div class="summary-header">
                         <h3>📊 Daily Overview</h3>
-                        <span style="font-size:0.9rem; color:var(--gray-500);">${new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</span>
+                        <span style="font-size:0.9rem; color:var(--gray-500);">${formatDateDMY(new Date())}</span>
                     </div>
 
                     <div class="summary-hero">
-                        <span class="hero-label">Total Workforce</span>
+                        <span class="hero-label">TOTAL WORKFORCE</span>
                         <span class="hero-value">${summary.total_employees || 0}</span>
-                        <div style="font-size:0.9rem; opacity:0.8; margin-top:8px;">Active Employees</div>
+                        <div class="hero-subtitle">Active Employees <small>(Excl. Admin)</small></div>
                     </div>
 
                     <div class="summary-grid">
@@ -1474,11 +1515,47 @@ async function showEmployeeSummary() {
                             </div>
                         </div>
                         
-                         <div class="summary-card" style="grid-column: span 2;">
-                            <div class="summary-icon icon-survey">📋</div>
-                            <div class="summary-data">
-                                <span class="value">${summary.surveyors_present || 0}</span>
-                                <span class="label">Surveyors in Field</span>
+                        <!-- INTEGRATED SURVEYOR REPORT SECTION -->
+                        <div class="surveyor-report-container">
+                            <!-- Header Row -->
+                            <div class="surveyor-report-header">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div class="surveyor-report-icon">📋</div>
+                                    <div>
+                                        <div class="surveyor-report-title">Surveyors Report</div>
+                                        <div class="surveyor-report-subtitle">Real-time Presence</div>
+                                    </div>
+                                </div>
+                                <div class="surveyor-report-stat">
+                                    <div class="surveyor-report-count">
+                                        ${summary.surveyors_present || 0}<small>/${summary.surveyors_total || 0}</small>
+                                    </div>
+                                    <div class="surveyor-report-label">Present Today</div>
+                                </div>
+                            </div>
+                            
+                            <!-- Breakdown Grid -->
+                            <div class="surveyor-breakdown-grid">
+                                <div class="surveyor-breakdown-item">
+                                    <div style="font-size: 1.3rem; font-weight: 800; color: #10b981;">${summary.surveyors_client || 0}</div>
+                                    <div style="font-size: 0.65rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-top: 4px;">Field</div>
+                                </div>
+                                <div class="surveyor-breakdown-item">
+                                    <div style="font-size: 1.3rem; font-weight: 800; color: #3b82f6;">${summary.surveyors_office || 0}</div>
+                                    <div style="font-size: 0.65rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-top: 4px;">Office</div>
+                                </div>
+                                <div class="surveyor-breakdown-item">
+                                    <div style="font-size: 1.3rem; font-weight: 800; color: #f59e0b;">${summary.surveyors_wfh || 0}</div>
+                                    <div style="font-size: 0.65rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-top: 4px;">WFH</div>
+                                </div>
+                                <div class="surveyor-breakdown-item">
+                                    <div style="font-size: 1.3rem; font-weight: 800; color: #ef4444;">${summary.surveyors_leave || 0}</div>
+                                    <div style="font-size: 0.65rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-top: 4px;">Leave</div>
+                                </div>
+                                <div class="surveyor-breakdown-item">
+                                    <div style="font-size: 1.3rem; font-weight: 800; color: #64748b;">${summary.surveyors_absent || 0}</div>
+                                    <div style="font-size: 0.65rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-top: 4px;">Absent</div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1487,10 +1564,14 @@ async function showEmployeeSummary() {
 
             // Create modal wrapper
             const modal = document.createElement('div');
-            modal.className = 'modal';
-            modal.style.display = 'flex'; // Ensure flex centering
+            modal.className = 'modal'; // 'modal' class in CSS already has position: fixed, inset: 0, etc.
+            modal.style.display = 'flex'; 
+            modal.style.alignItems = 'flex-start'; // Start from top to allow full page scroll
+            modal.style.overflowY = 'auto'; // Enable scrolling on the backdrop
+            modal.style.padding = '40px 10px'; // Breathing room
+            
             modal.innerHTML = `
-                <div class="modal-content" style="max-width: 600px; padding: 0; overflow: hidden; border-radius: 20px;">
+                <div class="modal-content" style="max-width: 600px; width: 95%; padding: 0; border-radius: 20px; border: none; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); margin: auto; overflow: visible; flex: none;">
                     ${content}
                 </div>
             `;
@@ -1500,11 +1581,12 @@ async function showEmployeeSummary() {
             // Trigger animation
             requestAnimationFrame(() => {
                 modal.classList.add('active');
+                updateScrollLock();
             });
 
             // Close on outside click
             modal.addEventListener('click', (e) => {
-                if (e.target === modal) modal.remove();
+                if (e.target === modal) safeRemoveModal(modal);
             });
 
         }
@@ -1515,6 +1597,8 @@ async function showEmployeeSummary() {
         hideLoading();
     }
 }
+
+
 
 
 
@@ -2518,6 +2602,15 @@ async function openTaskMentor(autoAssigneeId = null) {
         }
     }
 
+    const priorityBtn = document.getElementById('btnEnterPriorityMode');
+    if (priorityBtn) {
+        if (typeof currentUser !== 'undefined' && currentUser && (currentUser.role.toLowerCase() === 'admin' || currentUser.role.toLowerCase() === 'mentor' || currentUser.has_subordinates)) {
+            priorityBtn.style.display = 'inline-block';
+        } else {
+            priorityBtn.style.display = 'none';
+        }
+    }
+
     openModal('taskMentorModal');
     hideLoading();
 }
@@ -2551,7 +2644,7 @@ async function refreshTasks() {
     try {
         // Always pass employee_id so backend can verify role (Admin vs Employee)
         const empId = typeof currentUser !== 'undefined' && currentUser ? currentUser.id : '';
-        const queryParams = `?employee_id=${empId}`;
+        const queryParams = `?employee_id=${empId}&scope=team`;
         const res = await apiCall(`tasks${queryParams}`, 'GET');
         if (res && res.success && Array.isArray(res.tasks)) {
             tasks = res.tasks;
@@ -2623,35 +2716,47 @@ async function confirmTaskExport() {
         sheet.columns = [
             { header: 'ID', key: 'id', width: 10 },
             { header: 'Title', key: 'title', width: 30 },
-            { header: 'Description', key: 'description', width: 40 },
+            { header: 'Assignee', key: 'assignee', width: 25 },
             { header: 'Status', key: 'status', width: 15 },
             { header: 'Priority', key: 'priority', width: 15 },
-            { header: 'Assignees', key: 'assignees', width: 30 },
-            { header: 'Overseers', key: 'overseers', width: 30 },
+            { header: 'Due Date', key: 'due_date', width: 15 },
+            { header: 'Created Date', key: 'created_date', width: 15 },
+            { header: 'Created Time', key: 'created_time', width: 15 },
+            { header: 'Started Date', key: 'started_date', width: 15 },
+            { header: 'Started Time', key: 'started_time', width: 15 },
+            { header: 'Completed Date', key: 'completed_date', width: 18 },
+            { header: 'Completed Time', key: 'completed_time', width: 18 },
             { header: 'Mentor', key: 'Mentor', width: 25 },
             { header: 'Created By', key: 'created_by', width: 25 },
-            { header: 'Due Date', key: 'due_date', width: 15 },
-            { header: 'In Progress At', key: 'started_at', width: 25 },
-            { header: 'Completed At', key: 'completed_at', width: 25 },
-            { header: 'Created At', key: 'created_at', width: 25 }
+            { header: 'Description', key: 'description', width: 50 },
+            { header: 'Overseers', key: 'overseers', width: 30 }
         ];
 
         // Format and add rows
         tasksToExport.forEach(task => {
-            sheet.addRow({
-                id: task.id,
-                title: task.title,
-                description: task.description || '',
-                status: task.status,
-                priority: task.priority,
-                assignees: (task.assignees || []).map(a => a.name).join(', '),
-                overseers: (task.overseers || []).map(o => o.name).join(', '),
-                Mentor: task.Mentor_name || '',
-                created_by: task.created_by_name || '',
-                due_date: task.due_date || 'N/A',
-                started_at: task.started_at ? new Date(task.started_at).toLocaleString() : 'N/A',
-                completed_at: task.completed_at ? new Date(task.completed_at).toLocaleString() : 'N/A',
-                created_at: new Date(task.created_at).toLocaleString()
+            const assignees = (task.assignees && task.assignees.length > 0) 
+                ? task.assignees 
+                : [ {id: null, name: 'Unassigned'} ];
+            
+            assignees.forEach(assignee => {
+                sheet.addRow({
+                    id: task.id,
+                    title: task.title,
+                    assignee: assignee.name,
+                    status: task.status,
+                    priority: task.priority,
+                    due_date: formatDateDMY(task.due_date),
+                    created_date: formatDateDMY(task.created_at),
+                    created_time: formatTimeOnly(task.created_at),
+                    started_date: task.started_at ? formatDateDMY(task.started_at) : 'N/A',
+                    started_time: task.started_at ? formatTimeOnly(task.started_at) : 'N/A',
+                    completed_date: task.completed_at ? formatDateDMY(task.completed_at) : 'N/A',
+                    completed_time: task.completed_at ? formatTimeOnly(task.completed_at) : 'N/A',
+                    Mentor: task.Mentor_name || '',
+                    created_by: task.created_by_name || '',
+                    description: task.description || '',
+                    overseers: (task.overseers || []).map(o => o.name).join(', ')
+                });
             });
         });
 
@@ -2710,8 +2815,19 @@ function renderTaskBoard() {
         }
 
         container.innerHTML = taskList.map((task, idx) => {
-            const priorityClass = task.priority === 'High' ? 'priority-high' :
-                (task.priority === 'Medium' ? 'priority-medium' : 'priority-low');
+            const p = (task.priority || 'Medium').toLowerCase();
+            const priorityClass = p === 'high' ? 'priority-high' :
+                (p === 'medium' ? 'priority-medium' : 
+                (p === 'urgent' ? 'priority-urgent' : 
+                (['p1','p2','p3','p4'].includes(p)) ? `priority-${p}` : 'priority-low'));
+
+            const priorityLabel = p.toUpperCase();
+
+            // Progress Bar Logic
+            const steps = task.steps || [];
+            const completedSteps = steps.filter(s => s.is_completed).length;
+            const progressPercent = steps.length > 0 ? Math.round((completedSteps / steps.length) * 100) : 0;
+            const hasSteps = steps.length > 0;
 
             // Due Date Logic
             let dueClass = '';
@@ -2756,9 +2872,14 @@ function renderTaskBoard() {
             const assigneeNames = assignees.map(a => a.name).join(', ') || 'Unassigned';
 
             return `
-                <div class="premium-task-card ${dueClass}" id="task-${task.id}" draggable="true" ondragstart="drag(event)" onclick="openTaskDetail(${task.id})" style="animation: slideInUp 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; animation-delay: ${idx * 50}ms; opacity:1; cursor:pointer;">
+                <div class="premium-task-card ${dueClass}" id="task-${task.id}" draggable="true" ondragstart="drag(event)" onclick="${window._isPriorityMode ? `togglePrioritySelection(${task.id})` : `openTaskDetail(${task.id})`}" style="animation: slideInUp 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; animation-delay: ${idx * 50}ms; opacity:1; cursor:pointer; overflow: hidden; position: relative; border: ${window._prioritySelection && window._prioritySelection.includes(task.id) ? '2px solid #f59e0b' : '1px solid #e2e8f0'}">
+                    ${window._isPriorityMode && window._prioritySelection && window._prioritySelection.includes(task.id) ? `
+                    <div style="position: absolute; top: -5px; right: -5px; background: #f59e0b; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.85rem; z-index: 10; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        P${window._prioritySelection.indexOf(task.id) + 1}
+                    </div>
+                    ` : ''}
                     <div class="premium-card-header">
-                        <span class="premium-priority-badge ${priorityClass}" style="border-radius: 6px; padding: 4px 10px;">${task.priority || 'Medium'}</span>
+                        <span class="premium-priority-badge ${priorityClass}" style="border-radius: 6px; padding: 4px 10px;">${priorityLabel}</span>
                         ${dueBadge}
                         <div style="display:flex; gap:8px;">
                             ${typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || task.Mentor_id === currentUser.id || currentUser.role === 'Mentor' || currentUser.has_subordinates) ? `
@@ -2767,6 +2888,18 @@ function renderTaskBoard() {
                             ` : ''}
                         </div>
                     </div>
+
+                    ${hasSteps ? `
+                    <div class="task-card-progress" style="margin: 8px 0;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 700;">Steps: ${completedSteps}/${steps.length}</span>
+                            <span style="font-size: 0.7rem; color: var(--primary-color); font-weight: 800;">${progressPercent}%</span>
+                        </div>
+                        <div style="height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden;">
+                            <div style="height: 100%; width: ${progressPercent}%; background: var(--primary-color); transition: width 0.3s ease;"></div>
+                        </div>
+                    </div>
+                    ` : ''}
                     
                     <h5 class="premium-task-title" style="margin: 0; font-size: 1.1rem; line-height: 1.5;">${task.title}</h5>
                     <p style="font-size:0.9rem; color:#64748b; margin: 0; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${task.description || ''}</p>
@@ -2778,14 +2911,24 @@ function renderTaskBoard() {
                         </div>
                         
                         <div style="display:flex; align-items:center; gap: 8px;">
-                            ${task.Mentor_name ? `
-                            <span style="font-size:0.75rem; color:#64748b; font-weight: 600; background:#f1f5f9; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;" title="Overseer: ${task.Mentor_name}">
-                                👁 <span style="max-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${task.Mentor_name}</span>
+                            ${(task.comments && task.comments.length > 0) ? `
+                            <span style="font-size:0.75rem; color:var(--primary-color); font-weight: 700; background:rgba(37, 99, 235, 0.1); padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;" title="${task.comments.length} comments">
+                                💬 ${task.comments.length}
                             </span>
                             ` : ''}
+
+                            ${(task.overseers && task.overseers.length > 0) ? `
+                            <span style="font-size:0.75rem; color:#64748b; font-weight: 600; background:#f1f5f9; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;" title="Overseers: ${task.overseers.map(o => o.name).join(', ')}">
+                                👁 <span style="max-width: 60px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${task.overseers.map(o => o.name).join(', ')}</span>
+                            </span>
+                            ` : (task.Mentor_name ? `
+                            <span style="font-size:0.75rem; color:#64748b; font-weight: 600; background:#f1f5f9; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;" title="Mentor: ${task.Mentor_name}">
+                                👁 <span style="max-width: 60px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${task.Mentor_name}</span>
+                            </span>
+                            ` : '')}
                             
                             <span style="font-size:0.8rem; color:#94a3b8; font-weight: 600; display: flex; align-items: center; gap: 4px;">
-                                <span style="font-size: 0.9rem;">📅</span> ${task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No date'}
+                                <span style="font-size: 0.9rem;">📅</span> ${formatDateDMY(task.due_date)}
                             </span>
                             
                             ${task.comments && task.comments.length > 0 ? `
@@ -2819,7 +2962,7 @@ async function refreshMyTasks() {
     try {
         const empId = typeof currentUser !== 'undefined' && currentUser ? currentUser.id : '';
         console.log('DEBUG: refreshing my tasks for empId:', empId, 'currentUser:', window.currentUser);
-        const res = await apiCall(`tasks?employee_id=${empId}`, 'GET');
+        const res = await apiCall(`tasks?employee_id=${empId}&scope=my`, 'GET');
         console.log('DEBUG: my tasks response:', res);
         if (res && res.success && Array.isArray(res.tasks)) {
             myTasks = res.tasks;
@@ -2912,17 +3055,23 @@ function renderMyTaskBoard() {
                             ` : ''}
                         </div>
                         ${task.comments && task.comments.length > 0 ? `
-                            <span style="font-size:0.75rem; color:#3b82f6; font-weight: 600; margin-left:8px;">💬 ${task.comments.length}</span>
+                        <span style="font-size:0.75rem; color:var(--primary-color); font-weight: 700; background:rgba(37, 99, 235, 0.1); padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;">💬 ${task.comments.length}</span>
                         ` : ''}
                     </div>
                     
                     <h5 class="premium-task-title" style="margin: 0; font-size: 1.1rem; line-height: 1.5;">${task.title}</h5>
                     <p style="font-size:0.9rem; color:#64748b; margin: 0; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${task.description || ''}</p>
                     
-                    <div class="premium-task-meta" style="margin-top: 4px; padding-top: 12px; border-top: 1px solid #f1f5f9;">
-                        <span style="font-size:0.85rem; color:#94a3b8; font-weight: 600; display: flex; align-items: center; gap: 4px;">
-                            <span style="font-size: 1rem;">📅</span> ${task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No date'}
+                    <div class="premium-task-meta" style="margin-top: 8px; padding-top: 12px; border-top: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                        <span style="font-size:0.8rem; color:#94a3b8; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                            <span style="font-size: 0.95rem;">📅</span> ${formatDateDMY(task.due_date)}
                         </span>
+                        
+                        ${(task.overseers && task.overseers.length > 0) ? `
+                        <span style="font-size:0.75rem; color:#64748b; font-weight: 600; background:#f1f5f9; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;" title="Overseers: ${task.overseers.map(o => o.name).join(', ')}">
+                            👁 <span style="max-width: 60px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${task.overseers.map(o => o.name).join(', ')}</span>
+                        </span>
+                        ` : ''}
                     </div>
 
                     <div style="margin-top: 4px; display:flex; gap:8px; justify-content:flex-end;" onclick="event.stopPropagation()">
@@ -3000,13 +3149,22 @@ function addNewTask(autoAssigneeId = null) {
     document.getElementById('taskDescription').value = '';
     document.getElementById('taskPriority').value = 'medium';
     document.getElementById('taskDueDate').value = '';
+    const startDateField = document.getElementById('taskStartDate');
+    if (startDateField) startDateField.value = '';
 
     // Multi-Select Reset
-    selectedEmployeeIds = autoAssigneeId ? [parseInt(autoAssigneeId)] : [];
-    // If current user is a mentor/admin, auto-select them as overseer
-    selectedOverseerIds = (currentUser && (currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.has_subordinates))
-        ? [currentUser.id]
-        : [];
+    selectedEmployeeIds = autoAssigneeId ? [parseInt(autoAssigneeId)] : (currentUser ? [currentUser.id] : []);
+    
+    // Auto-fill overseer with Current User's Mentors
+    selectedOverseerIds = [];
+    if (currentUser) {
+        if (currentUser.mentors && currentUser.mentors.length > 0) {
+            selectedOverseerIds = currentUser.mentors.map(m => m.id);
+        } else if (currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.has_subordinates) {
+            // If they are a mentor/admin themselves, auto-assign as overseer as fallback
+            selectedOverseerIds = [currentUser.id];
+        }
+    }
 
     // Use a small delay to ensure popcorn/dropdowns are ready if calling from notification
     const syncTags = () => {
@@ -3066,7 +3224,7 @@ async function editTask(taskId) {
     // Map priority if needed
     const priority = (task.priority || 'medium').toLowerCase();
     document.getElementById('taskPriority').value = priority;
-
+    document.getElementById('taskStartDate').value = task.start_date || '';
     document.getElementById('taskDueDate').value = task.due_date || '';
 
     // For assignee multi-select
@@ -3129,10 +3287,16 @@ async function saveNewTask() {
     const title = document.getElementById('taskTitle').value.trim();
     const description = document.getElementById('taskDescription').value.trim();
     const priority = document.getElementById('taskPriority').value;
+    const startDate = document.getElementById('taskStartDate').value;
     const dueDate = document.getElementById('taskDueDate').value;
 
     if (!title) {
         showNotification('Task title is required', 'error');
+        return;
+    }
+
+    if (!dueDate) {
+        showNotification('Completion deadline is required', 'error');
         return;
     }
 
@@ -3157,6 +3321,7 @@ async function saveNewTask() {
             title,
             description,
             priority,
+            start_date: startDate || null,
             due_date: dueDate || null,
             assignees: selectedEmployeeIds,
             overseer_ids: selectedOverseerIds,
@@ -3254,33 +3419,88 @@ async function openTaskDetail(taskId) {
     const overseers = task.overseers || [];
     const overseerNames = overseers.map(o => o.name).join(', ') || 'None';
 
-    const priorityClass = task.priority.toLowerCase() === 'high' ? 'priority-high' :
-        (task.priority.toLowerCase() === 'medium' ? 'priority-medium' : 'priority-low');
+    const p = (task.priority || 'Medium').toLowerCase();
+    const priorityClass = p === 'high' ? 'priority-high' :
+        (p === 'medium' ? 'priority-medium' : 
+        (p === 'urgent' ? 'priority-urgent' : 
+        (['p1','p2','p3','p4'].includes(p)) ? `priority-${p}` : 'priority-low'));
+
+    const canEditDate = typeof currentUser !== 'undefined' && currentUser && (
+        currentUser.role === 'admin' || 
+        overseers.some(o => o.id === currentUser.id) || 
+        assignees.some(a => a.id === currentUser.id)
+    );
 
     document.getElementById('detailTaskMeta').innerHTML = `
         <div style="display: flex; flex-direction: column; gap: 8px;">
             <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                <div style="display: flex; align-items: center; gap: 6px; background: #f8fafc; padding: 3px 10px; border-radius: 8px; border: 1px solid #f1f5f9;">
-                    <span style="font-size: 0.62rem; font-weight: 850; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Assignees</span>
-                    <span style="font-size: 0.72rem; font-weight: 700; color: #475569;">${assigneeNames}</span>
+                <div class="premium-task-meta-pill">
+                    <span class="premium-task-meta-label">Assignees</span>
+                    <span>${assigneeNames}</span>
                 </div>
                 ${overseerNames !== 'None' ? `
-                <div style="display: flex; align-items: center; gap: 6px; background: #f8fafc; padding: 3px 10px; border-radius: 8px; border: 1px solid #f1f5f9;">
-                    <span style="font-size: 0.62rem; font-weight: 850; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Overseer</span>
-                    <span style="font-size: 0.72rem; font-weight: 700; color: #475569;">${overseerNames}</span>
+                <div class="premium-task-meta-pill">
+                    <span class="premium-task-meta-label">Mentor</span>
+                    <span>${overseerNames}</span>
                 </div>
                 ` : ''}
             </div>
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                <span class="premium-priority-badge ${priorityClass}" style="font-size: 0.62rem; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; font-weight: 800; letter-spacing: 0.02em;">
-                    ${task.priority}
-                </span>
-                <span style="font-size: 0.7rem; font-weight: 700; color: #64748b; background: #f8fafc; padding: 3px 10px; border-radius: 8px; border: 1px solid #f1f5f9; display: flex; align-items: center; gap: 4px;">
-                    <span style="font-size: 0.85rem;">📅</span> ${task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No Deadline'}
-                </span>
+                <div class="premium-task-meta-pill" style="position:relative;">
+                    <span style="font-size: 0.9rem;">📅</span> Due ${formatDateDMY(task.due_date)}
+                    ${canEditDate ? `<button onclick="showDateEditor(${task.id}, '${task.due_date || ''}')" style="background:none; border:none; cursor:pointer; padding:0; color:var(--primary-color); font-size:10px; margin-left:8px; font-weight:800; text-decoration:underline;">✎ Change</button>` : ''}
+                </div>
+                <div id="dateEditorContainer" class="hidden" style="display:flex; gap:6px; align-items:center;">
+                    <input type="date" id="newDueDateInput" class="form-control" style="height:32px; font-size:0.85rem; width:140px; border-radius:8px;">
+                    <button class="btn btn-primary btn-sm" onclick="saveNewDueDate(${task.id})" style="padding:4px 10px; font-size:0.75rem; border-radius:8px;">Save</button>
+                    <button class="btn btn-secondary btn-sm" onclick="toggleDateEditor(false)" style="padding:4px 10px; font-size:0.75rem; border-radius:8px;">Cancel</button>
+                </div>
             </div>
         </div>
     `;
+
+    // Render Priority Badge on Top
+    const badgeContainer = document.getElementById('detailTaskPriorityBadge');
+    if (badgeContainer) {
+        badgeContainer.innerHTML = `<span class="premium-priority-badge ${priorityClass}" style="padding: 6px 14px; border-radius: 10px; font-size: 0.75rem; font-weight: 900; box-shadow: 0 4px 10px -2px rgba(0,0,0,0.1);">${task.priority.toUpperCase()}</span>`;
+    }
+
+    // Progress
+    const steps = task.steps || [];
+    const completedCount = steps.filter(s => s.is_completed).length;
+    const progressPercent = steps.length > 0 ? Math.round((completedCount / steps.length) * 100) : 0;
+    
+    document.getElementById('taskProgressPercent').textContent = `${progressPercent}%`;
+    document.getElementById('taskProgressBarInner').style.width = `${progressPercent}%`;
+
+    // Render Steps
+    const stepsList = document.getElementById('taskStepsList');
+    if (steps.length === 0) {
+        stepsList.innerHTML = '<p style="font-size: 0.9rem; color: #94a3b8; font-style: italic;">No steps defined for this task.</p>';
+    } else {
+        stepsList.innerHTML = steps.map(s => `
+            <div class="premium-step-item ${s.is_completed ? 'completed' : ''}">
+                <input type="checkbox" ${s.is_completed ? 'checked' : ''} onclick="toggleTaskStep(${task.id}, ${s.id}, !${s.is_completed})" class="premium-checkbox">
+                <span class="step-text">${s.text}</span>
+            </div>
+        `).join('');
+    }
+
+    // Render History
+    const historyLog = document.getElementById('taskHistoryLog');
+    const history = task.history || [];
+    if (history.length === 0) {
+        historyLog.innerHTML = '<p style="margin: 0; opacity: 0.7;">No history logs available.</p>';
+    } else {
+        historyLog.innerHTML = history.map(h => `
+            <div style="border-left: 2px solid #e2e8f0; padding-left: 12px; position: relative;">
+                <div style="position: absolute; left: -6px; top: 6px; width: 10px; height: 10px; background: #cbd5e1; border-radius: 50%;"></div>
+                <div style="font-weight: 700; color: #1e293b;">${h.field === 'due_date' ? '📅 Deadline Changed' : h.field}</div>
+                <div style="font-size: 0.8rem; margin: 2px 0;">From ${h.field === 'due_date' ? formatDateDMY(h.old) : h.old} to <strong>${h.field === 'due_date' ? formatDateDMY(h.new) : h.new}</strong></div>
+                <div style="font-size: 0.75rem; color: #94a3b8;">${h.by} • ${formatDateDMY(h.at)} ${formatTimeOnly(h.at)}</div>
+            </div>
+        `).join('');
+    }
 
     // Handle Team Progress (Static list of assignees for shared task)
     const teamSection = document.getElementById('teamOverviewSection');
@@ -3291,16 +3511,14 @@ async function openTaskDetail(taskId) {
         teamList.innerHTML = assignees.map(m => {
             const isMe = typeof currentUser !== 'undefined' && currentUser && m.id === currentUser.id;
             return `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: white; border-radius: 12px; border: 1px solid #e0f2fe;">
+                <div class="premium-team-member-card">
                     <div style="display: flex; align-items: center; gap: 10px;">
-                        <div style="width: 32px; height: 32px; background: #e0f2fe; color: #0369a1; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8rem;">
-                            ${m.name.charAt(0)}
+                        <div class="member-avatar">
+                            ${m.name.charAt(0).toUpperCase()}
                         </div>
-                        <span style="font-size: 0.95rem; font-weight: 500; color: #1e293b;">${m.name} ${isMe ? '<span style="color:#64748b; font-size:0.75rem;">(You)</span>' : ''}</span>
+                        <span class="member-name">${m.name} ${isMe ? '<span class="is-me-badge">(You)</span>' : ''}</span>
                     </div>
-                    <span style="background: #eff6ff; color: #3b82f6; font-size: 0.75rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: uppercase;">
-                        Assignee
-                    </span>
+                    <span class="member-role-badge">Assignee</span>
                 </div>
             `;
         }).join('');
@@ -3326,7 +3544,7 @@ function renderTaskComments(comments) {
         <div style="display: flex; flex-direction: column; gap: 4px; background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #f1f5f9;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <span style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">${c.author_name}</span>
-                <span style="font-size: 0.75rem; color: #94a3b8;">${new Date(c.created_at).toLocaleString()}</span>
+                <span style="font-size: 0.75rem; color: #94a3b8;">${formatDateDMY(c.created_at)} ${formatTimeOnly(c.created_at)}</span>
             </div>
             <p style="margin: 0; color: #334155; font-size: 0.95rem; line-height: 1.5;">${c.content}</p>
         </div>
@@ -3365,6 +3583,130 @@ async function submitTaskComment() {
     } catch (error) {
         console.error('Error adding comment:', error);
         showNotification('An error occurred', 'error');
+    }
+}
+
+// NEW TASK STEP FUNCTIONS
+function addNewStepUI() {
+    document.getElementById('addStepInputWrapper').classList.toggle('hidden');
+    document.getElementById('newStepText').focus();
+}
+
+async function saveNewStep() {
+    const text = document.getElementById('newStepText').value.trim();
+    if (!text || !currentSelectedTaskId) return;
+
+    try {
+        const t = [...tasks, ...myTasks].find(t => t.id === currentSelectedTaskId);
+        const currentSteps = t.steps || [];
+        const newSteps = [...currentSteps, { text: text, is_completed: false }];
+
+        const res = await apiCall(`tasks/${currentSelectedTaskId}`, 'POST', {
+            user_id: currentUser.id,
+            steps: newSteps
+        });
+
+        if (res && res.success) {
+            document.getElementById('newStepText').value = '';
+            document.getElementById('addStepInputWrapper').classList.add('hidden');
+            await Promise.all([refreshTasks(), refreshMyTasks()]);
+            await openTaskDetail(currentSelectedTaskId);
+        }
+    } catch (e) {
+        showNotification('Error adding step', 'error');
+    }
+}
+
+async function toggleTaskStep(taskId, stepId, isCompleted) {
+    try {
+        const t = [...tasks, ...myTasks].find(t => t.id === taskId);
+        const updatedSteps = (t.steps || []).map(s => {
+            if (s.id === stepId) return { ...s, is_completed: isCompleted };
+            return s;
+        });
+
+        const res = await apiCall(`tasks/${taskId}`, 'POST', {
+            user_id: currentUser.id,
+            steps: updatedSteps
+        });
+
+        if (res && res.success) {
+            await Promise.all([refreshTasks(), refreshMyTasks()]);
+            // Re-render only if modal still open
+            if (currentSelectedTaskId === taskId) {
+                await openTaskDetail(taskId);
+            }
+        }
+    } catch (e) {
+        showNotification('Error updating step', 'error');
+    }
+}
+
+// BULK PRIORITY MODE LOGIC
+window._isPriorityMode = false;
+window._prioritySelection = [];
+
+function enterPriorityMode() {
+    window._isPriorityMode = !window._isPriorityMode;
+    const btn = document.getElementById('btnEnterPriorityMode');
+    const saveBtn = document.getElementById('btnSavePriority');
+    
+    if (window._isPriorityMode) {
+        btn.textContent = '❌ Cancel Mode';
+        btn.style.background = '#64748b';
+        saveBtn.classList.remove('hidden');
+        window._prioritySelection = [];
+        showNotification('Priority Mode Active. Click tasks in order (P1, P2...)', 'info');
+    } else {
+        btn.textContent = '⭐ Prioritize';
+        btn.style.background = '#f59e0b';
+        saveBtn.classList.add('hidden');
+        window._prioritySelection = [];
+    }
+    
+    renderTaskBoard();
+}
+
+function togglePrioritySelection(taskId) {
+    const index = window._prioritySelection.indexOf(taskId);
+    if (index > -1) {
+        window._prioritySelection.splice(index, 1);
+    } else {
+        window._prioritySelection.push(taskId);
+    }
+    renderTaskBoard();
+}
+
+async function savePriorityOrder() {
+    if (window._prioritySelection.length === 0) {
+        showNotification('No tasks selected', 'warning');
+        return;
+    }
+
+    showLoading("Saving Priority Order...");
+    try {
+        const updates = window._prioritySelection.map((id, idx) => ({
+            id: id,
+            priority: `p${idx + 1}`
+        }));
+
+        const res = await apiCall('bulk-update-tasks', 'POST', {
+            user_id: currentUser.id,
+            updates: updates
+        });
+
+        if (res && res.success) {
+            showNotification('Priority order updated successfully', 'success');
+            enterPriorityMode(); // Exit mode
+            await refreshTasks();
+        } else {
+            showNotification(res.message || 'Failed to update priority', 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        showNotification('An error occurred', 'error');
+    } finally {
+        hideLoading();
     }
 }
 
@@ -8071,8 +8413,12 @@ async function uploadProfileDocuments() {
 
     try {
         const url = apiBaseUrl + '/upload-documents';
-        const response = await fetch(url, {
+        const gatedUrl = url + (window.GATED_TOKEN ? `?token=${encodeURIComponent(window.GATED_TOKEN)}` : '');
+        const response = await fetch(gatedUrl, {
             method: 'POST',
+            headers: {
+                'X-Gated-Token': window.GATED_TOKEN || ''
+            },
             body: formData
         });
 
@@ -11907,5 +12253,95 @@ async function refreshPrimaryOfficeSelects() {
         }
     } catch (error) {
         console.error('Failed to refresh office selects:', error);
+    }
+}
+
+/**
+ * Safely removes a manually created modal and restores background scroll
+ * if no other modals are active.
+ */
+function safeRemoveModal(modalEl) {
+    if (!modalEl) return;
+    modalEl.remove();
+    updateScrollLock();
+}
+
+/**
+ * Centrally manages background scroll locking and layout shift compensation.
+ */
+function updateScrollLock() {
+    const activeModals = document.querySelectorAll('.modal.active').length;
+    const loader = document.getElementById('globalLoader');
+    const isLoading = loader && loader.classList.contains('active');
+    
+    if (activeModals > 0 || isLoading) {
+        if (!document.body.classList.contains('modal-open')) {
+            const scrollWidth = window.innerWidth - document.documentElement.clientWidth;
+            document.documentElement.style.setProperty('--scrollbar-width', `${scrollWidth}px`);
+            document.body.classList.add('modal-open');
+        }
+    } else {
+        // Small delay to ensure transitions finish
+        setTimeout(() => {
+            if (document.querySelectorAll('.modal.active').length === 0 && 
+                (!document.getElementById('globalLoader') || !document.getElementById('globalLoader').classList.contains('active'))) {
+                document.body.classList.remove('modal-open');
+                document.documentElement.style.removeProperty('--scrollbar-width');
+                // Cleanup legacy inline styles
+                document.body.style.overflow = '';
+                document.documentElement.style.overflow = '';
+            }
+        }, 50);
+    }
+}
+
+/**
+ * Task Due Date Quick Edit UI
+ */
+function showDateEditor(taskId, currentDate) {
+    const editor = document.getElementById('dateEditorContainer');
+    const input = document.getElementById('newDueDateInput');
+    if (editor && input) {
+        input.value = currentDate;
+        editor.classList.remove('hidden');
+    }
+}
+
+function toggleDateEditor(show) {
+    const editor = document.getElementById('dateEditorContainer');
+    if (editor) {
+        if (show) editor.classList.remove('hidden');
+        else editor.classList.add('hidden');
+    }
+}
+
+async function saveNewDueDate(taskId) {
+    const newDate = document.getElementById('newDueDateInput').value;
+    if (!newDate) {
+        showNotification('Please select a valid date', 'warning');
+        return;
+    }
+
+    showLoading("Updating deadline...");
+    try {
+        const res = await apiCall(`tasks/${taskId}`, 'POST', {
+            due_date: newDate,
+            user_id: currentUser.id
+        });
+
+        if (res && res.success) {
+            showNotification('Deadline updated successfully');
+            toggleDateEditor(false);
+            // Refresh and re-open detail to show updated history
+            await Promise.all([refreshTasks(), refreshMyTasks()]);
+            await openTaskDetail(taskId);
+        } else {
+            showNotification(res.message || 'Failed to update date', 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        showNotification('An error occurred', 'error');
+    } finally {
+        hideLoading();
     }
 }

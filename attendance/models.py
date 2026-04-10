@@ -314,6 +314,10 @@ class Task(models.Model):
         ('medium', 'Medium'),
         ('high', 'High'),
         ('urgent', 'Urgent'),
+        ('p1', 'P1'),
+        ('p2', 'P2'),
+        ('p3', 'P3'),
+        ('p4', 'P4'),
     ]
 
     title = models.CharField(max_length=200)
@@ -323,6 +327,7 @@ class Task(models.Model):
 
     mentor = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='supervised_tasks')
     created_by = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='created_tasks')
+    start_date = models.DateField(null=True, blank=True)
     due_date = models.DateField(null=True, blank=True)
     accuracy = models.IntegerField(null=True, blank=True) # Task accuracy score (0-100)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -342,6 +347,36 @@ class Task(models.Model):
 
     def __str__(self):
         return f"{self.title} (Team Task)"
+
+
+class TaskStep(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='steps')
+    text = models.CharField(max_length=255)
+    is_completed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'task_steps'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"{self.text} ({'Done' if self.is_completed else 'Pending'})"
+
+
+class TaskHistory(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='history')
+    field_changed = models.CharField(max_length=50)  # e.g. "due_date"
+    old_value = models.CharField(max_length=255, null=True, blank=True)
+    new_value = models.CharField(max_length=255, null=True, blank=True)
+    changed_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True)
+    changed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'task_history'
+        ordering = ['-changed_at']
+
+    def __str__(self):
+        return f"{self.task.title} - {self.field_changed} changed at {self.changed_at}"
 
 
 from django.utils import timezone
@@ -426,6 +461,22 @@ class TrainingLog(models.Model):
 
     def __str__(self):
         return f"Training Log {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')} - Accuracy: {self.stability_factor}"
+
+
+class Notification(models.Model):
+    user = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='notifications')
+    type = models.CharField(max_length=50) # e.g. "task_comment", "task_assigned"
+    message = models.TextField()
+    link_id = models.CharField(max_length=100, null=True, blank=True) # e.g. taskId
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'notifications'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Notification for {self.user.username}: {self.message}"
 class AvatarAsset(models.Model):
     CATEGORY_CHOICES = [
         ('skin', 'Skin'),

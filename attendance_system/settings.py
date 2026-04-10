@@ -131,6 +131,13 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'uploads'
 
+# Custom Document Storage (e.g. SharePoint)
+DOCUMENT_STORAGE_PATH = os.getenv('DOCUMENT_STORAGE_PATH')
+if DOCUMENT_STORAGE_PATH and os.path.exists(DOCUMENT_STORAGE_PATH):
+    DOCUMENT_STORAGE_ROOT = Path(DOCUMENT_STORAGE_PATH)
+else:
+    DOCUMENT_STORAGE_ROOT = MEDIA_ROOT
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # REST Framework

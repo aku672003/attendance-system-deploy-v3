@@ -176,6 +176,7 @@ def login(request):
                 'avatar_emoji': profile.avatar_emoji if profile else "👤",
                 'avatar_url': profile.avatar_url if profile else None,
                 'theme_settings': profile.theme_settings if profile else {},
+                'mentors': [{'id': m.id, 'name': m.name} for m in employee.mentors.all()],
             }
             return Response({
                 'success': True,
@@ -1144,7 +1145,7 @@ def employee_profile(request, employee_id=None):
                 'doc_number': doc.doc_number,
                 'file_name': doc.file_name,
                 'file_path': doc.file_path,
-                'url': request.build_absolute_uri('/media/' + doc.file_path) if doc.file_path.startswith('uploads/') else request.build_absolute_uri('/' + doc.file_path),
+                'url': request.build_absolute_uri(f'/attendance/serve-document/{doc.id}'),
                 'uploaded_at': doc.uploaded_at.isoformat() if doc.uploaded_at else None,
             })
 
@@ -1656,7 +1657,14 @@ def upload_documents(request):
     MAX_PDF_SIZE = 5 * 1024 * 1024  # 5MB
 
     saved_files = []
-    upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads')
+    # Root for documents
+    storage_root = getattr(settings, 'DOCUMENT_STORAGE_ROOT', settings.MEDIA_ROOT)
+    
+    # Create employee-specific folder
+    # Use name and ID for uniqueness
+    safe_name = "".join(c if c.isalnum() or c in " _-" else "" for c in employee.name).strip().replace(" ", "_")
+    employee_folder = f"{safe_name}_{employee.id}"
+    upload_dir = os.path.join(storage_root, 'Documents', employee_folder)
     os.makedirs(upload_dir, exist_ok=True)
 
     # Handle photo and signature
@@ -1696,7 +1704,7 @@ def upload_documents(request):
                 doc_type=doc_type,
                 doc_name=doc_type.capitalize(),
                 file_name=filename,
-                file_path=f'uploads/{filename}'
+                file_path=f'Documents/{employee_folder}/{filename}'
             )
 
             saved_files.append(filename)
@@ -1737,7 +1745,7 @@ def upload_documents(request):
                 doc_name=doc_type.replace('_', ' ').title(),
                 doc_number=request.POST.get(f'doc{doc_type.capitalize()}Number', ''),
                 file_name=filename,
-                file_path=f'uploads/{filename}'
+                file_path=f'Documents/{employee_folder}/{filename}'
             )
 
             saved_files.append(filename)
@@ -1774,7 +1782,8 @@ def delete_documents(request):
 
         # Delete files from disk
         for doc in documents:
-            file_path = os.path.join(settings.MEDIA_ROOT, doc.file_path)
+            storage_root = getattr(settings, 'DOCUMENT_STORAGE_ROOT', settings.MEDIA_ROOT)
+            file_path = os.path.join(storage_root, doc.file_path)
             if os.path.exists(file_path):
                 os.remove(file_path)
 
@@ -1807,7 +1816,7 @@ def admin_user_docs_list(request, employee_id):
                 'doc_name': doc.doc_name,
                 'file_name': doc.file_name,
                 'file_path': doc.file_path,
-                'url': request.build_absolute_uri('/media/' + doc.file_path) if doc.file_path.startswith('uploads/') else request.build_absolute_uri('/' + doc.file_path),
+                'url': request.build_absolute_uri(f'/attendance/serve-document/{doc.id}'),
                 'uploaded_at': doc.uploaded_at.isoformat() if doc.uploaded_at else None,
             })
 
@@ -1842,7 +1851,8 @@ def admin_user_docs_zip(request, employee_id):
 
         with zipfile.ZipFile(temp_file.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for doc in documents:
-                file_path = os.path.join(settings.MEDIA_ROOT, doc.file_path)
+                storage_root = getattr(settings, 'DOCUMENT_STORAGE_ROOT', settings.MEDIA_ROOT)
+                file_path = os.path.join(storage_root, doc.file_path)
                 if os.path.exists(file_path):
                     zipf.write(file_path, doc.file_name)
 
@@ -1866,6 +1876,29 @@ def admin_user_docs_zip(request, employee_id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['GET'])
+@require_gated_token_api
+def serve_document(request, doc_id):
+    """Serve a document file from custom storage"""
+    try:
+        doc = EmployeeDocument.objects.get(id=doc_id)
+        storage_root = getattr(settings, 'DOCUMENT_STORAGE_ROOT', settings.MEDIA_ROOT)
+        file_path = os.path.join(storage_root, doc.file_path)
+        
+        if not os.path.exists(file_path):
+            return Response({'error': 'File not found'}, status=404)
+            
+        # Determine content type
+        import mimetypes
+        content_type, _ = mimetypes.guess_type(file_path)
+        
+        return FileResponse(open(file_path, 'rb'), content_type=content_type or 'application/octet-stream')
+    except EmployeeDocument.DoesNotExist:
+        return Response({'error': 'Document not found'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+
 # Admin Dashboard API Views
 @api_view(['GET'])
 @require_gated_token_api
@@ -1879,26 +1912,51 @@ def admin_summary(request):
     try:
         today = date.today()
 
-        employees_qs = Employee.objects.filter(is_active=True)
-        records_qs = AttendanceRecord.objects.filter(date=today)
+        # Filter out admins from the workforce counts
+        employees_qs = Employee.objects.filter(is_active=True).exclude(role='admin')
+        records_qs = AttendanceRecord.objects.filter(date=today).exclude(employee__role='admin')
         
         if is_mentor:
             employees_qs = employees_qs.filter(mentors=user)
             records_qs = records_qs.filter(employee__mentors=user)
 
-        # Total employees
+        # Total employees (excluding admins)
         total_employees = employees_qs.count()
 
-        # Present today
+        # Present today (excluding admins)
         present_today = records_qs.filter(
-            status__in=['present', 'half_day']
+            status__in=['present', 'half_day', 'wfh', 'client']
         ).count()
 
-        # Surveyors present today
-        surveyors_present = records_qs.filter(
-            status__in=['present', 'half_day'],
-            employee__department='Surveyors'
+        # Surveyors Detailed Breakdown
+        surveyors_qs = employees_qs.filter(department='Surveyors')
+        surveyors_records = records_qs.filter(employee__department='Surveyors')
+
+        surveyors_total = surveyors_qs.count()
+        
+        # Office: status is present/half_day AND type is office
+        surveyors_office = surveyors_records.filter(
+            Q(status__in=['present', 'half_day'], type='office')
         ).count()
+        
+        # Client: status is client OR (present/half_day AND type is client)
+        surveyors_client = surveyors_records.filter(
+            Q(status='client') | Q(status__in=['present', 'half_day'], type='client')
+        ).count()
+        
+        # WFH: status is wfh OR (present/half_day AND type is wfh)
+        surveyors_wfh = surveyors_records.filter(
+            Q(status='wfh') | Q(status__in=['present', 'half_day'], type='wfh')
+        ).count()
+        
+        # Leave: explicit leave status
+        surveyors_leave = surveyors_records.filter(status='leave').count()
+
+        # For backward compatibility or general "working" count
+        surveyors_present = surveyors_office + surveyors_client + surveyors_wfh
+
+        # Absent: total - present - leave
+        surveyors_absent = max(0, surveyors_total - surveyors_present - surveyors_leave)
 
         # Absentees today
         absentees_today = records_qs.filter(
@@ -1912,14 +1970,20 @@ def admin_summary(request):
 
         # WFH today
         wfh_today = records_qs.filter(
-            type='wfh'
+            status='wfh'
         ).count()
 
         return Response({
             'success': True,
             'total_employees': total_employees,
             'present_today': present_today,
+            'surveyors_total': surveyors_total,
             'surveyors_present': surveyors_present,
+            'surveyors_office': surveyors_office,
+            'surveyors_client': surveyors_client,
+            'surveyors_wfh': surveyors_wfh,
+            'surveyors_leave': surveyors_leave,
+            'surveyors_absent': surveyors_absent,
             'absent_today': absentees_today,
             'on_leave': on_leave_today,
             'wfh_today': wfh_today
@@ -1927,7 +1991,7 @@ def admin_summary(request):
     except Exception as e:
         return Response({
             'success': False,
-            'message': 'Failed to fetch admin summary'
+            'message': f'Failed to fetch admin summary: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -2512,9 +2576,74 @@ def upcoming_birthdays(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+def _send_task_notification(user, message, task_id, type="task"):
+    """Helper to create a persistent notification in the database and trigger push"""
+    from .models import Notification
+    try:
+        Notification.objects.create(
+            user=user,
+            type=type,
+            message=message,
+            link_id=str(task_id)
+        )
+        
+        # Trigger Web Push Notification
+        title = "Comment on Task" if type == "task_comment" else "Task Notification"
+        _trigger_push_notification(user, title, message, f"task_{task_id}")
+        
+        return True
+    except Exception as e:
+        print(f"Error creating notification: {e}")
+        return False
+
+def _trigger_push_notification(user, title, message, link=None):
+    """Internal helper to send browser push notifications via pywebpush"""
+    from .models import PushSubscription
+    from pywebpush import webpush, WebPushException
+    import json
+    from django.conf import settings
+
+    subscriptions = PushSubscription.objects.filter(employee=user)
+    if not subscriptions.exists():
+        return
+
+    vapid_private_key = getattr(settings, 'VAPID_PRIVATE_KEY', None)
+    vapid_claims = {"sub": getattr(settings, 'VAPID_CLAIMS_SUB', 'mailto:admin@example.com')}
+
+    if not vapid_private_key:
+        return
+
+    data = json.dumps({
+        "title": title,
+        "body": message,
+        "data": {
+            "link": link
+        }
+    })
+
+    for sub in subscriptions:
+        try:
+            webpush(
+                subscription_info={
+                    "endpoint": sub.endpoint,
+                    "keys": {
+                        "p256dh": sub.p256dh,
+                        "auth": sub.auth
+                    }
+                },
+                data=data,
+                vapid_private_key=vapid_private_key,
+                vapid_claims=vapid_claims
+            )
+        except WebPushException as ex:
+            if ex.response and ex.response.status_code == 410:
+                sub.delete()
+        except Exception:
+            pass
+
+
 @api_view(['GET'])
 @require_gated_token_api
-@parser_classes([JSONParser])
 def get_notifications(request):
     """Get notifications for the current user"""
     user_id = request.GET.get('user_id')
@@ -2543,44 +2672,9 @@ def get_notifications(request):
             'id': f'wish_{wish.id}'
         })
 
-    # 1. Birthday notifications (today's birthdays)
-    today = timezone.now().date()
-    birthdays_today = EmployeeProfile.objects.filter(
-        date_of_birth__month=today.month,
-        date_of_birth__day=today.day,
-        employee__is_active=True
-    ).select_related('employee').exclude(employee_id=user_id)
-
-    for profile in birthdays_today:
-        notifications.append({
-            'type': 'birthday',
-            'icon': '🎂',
-            'message': f"Today is {profile.employee.name}'s birthday!",
-            'time': 'Today',
-            'id': f'birthday_{profile.employee.id}'
-        })
-
-    # 2. Task assignments
-    try:
-        pending_tasks = Task.objects.filter(
-            Q(assignees=user_id),
-            status='todo'
-        ).distinct().order_by('-created_at')[:5]
-    except Exception:
-        pending_tasks = Task.objects.filter(
-            assignees=user_id,
-            status='todo'
-        ).distinct().order_by('-created_at')[:5]
-    
-
-    for task in pending_tasks:
-        notifications.append({
-            'type': 'task',
-            'icon': '📝',
-            'message': f'New task assigned: {task.title}',
-            'time': task.created_at.strftime('%I:%M %p') if task.created_at else 'Unknown',
-            'id': f'task_{task.id}'
-        })
+    # Note: Synthetic birthday and task notifications are removed here 
+    # as they kept reappearing after "Mark all as read". 
+    # Real notifications are handled by the Notification model.
 
     # 3. Pending requests (for admins/mentors)
     if user.role == 'admin':
@@ -2632,58 +2726,29 @@ def get_notifications(request):
         except Exception:
             idle_count = 0
         
-        if idle_count > 0:
-            notifications.append({
-                'type': 'idle_employees_summary',
-                'icon': '⚠️',
-                'message': f'{idle_count} subordinates have no active tasks!',
-                'time': 'Now',
-                'id': 'idle_employees_summary'
-            })
+    # Note: Synthetic/Calculated notifications are removed here to ensure "Mark all as read"
+    # functions correctly. Users only see alerts that can be dismissed (tracked in DB).
 
-    # 4. No Active Tasks Warning (for non-admins)
-    if user.role != 'admin':
-        active_task_count = Task.objects.filter(
-            assignees=user,
-            status__in=['todo', 'in_progress']
-        ).count()
+    # 4. Persistence Notifications from DB
+    from .models import Notification
+    db_notifs = Notification.objects.filter(user=user, is_read=False).order_by('-created_at')[:15]
+    for dn in db_notifs:
+        # Avoid duplicating recent comments if they are already added above
+        if dn.type == 'task_comment' and any(n.get('id') == f'comment_{dn.link_id}' for n in notifications):
+            continue
+            
+        icon = '🔔'
+        if dn.type == 'task_comment': icon = '💬'
+        elif dn.type == 'task': icon = '📝'
+        elif dn.type == 'request': icon = '📋'
         
-        if active_task_count == 0:
-            # Check if task request already sent
-            request_sent = EmployeeRequest.objects.filter(
-                employee=user,
-                request_type='task_request',
-                status='pending'
-            ).exists()
-            
-            message = '⚠️ Task list empty! Please request a new task.'
-            if request_sent:
-                message = '🕒 Task request already sent. Waiting for assignment...'
-            
-            notifications.append({
-                'type': 'task_warning',
-                'icon': '⚠️',
-                'message': message,
-                'time': 'Now',
-                'id': 'no_active_tasks'
-            })
-
-    # Task Comments
-    now = timezone.now()
-    recent_comments = TaskComment.objects.filter(
-        Q(task__assignees=user) | Q(task__mentor=user)
-    ).exclude(author=user).filter(
-        created_at__gte=now - timedelta(days=1)
-    ).order_by('-created_at')[:5]
-
-    for comment in recent_comments:
         notifications.append({
-            'id': f'comment_{comment.id}',
-            'type': 'task_comment',
-            'icon': '💬',
-            'message': f"{comment.author.name} commented on: {comment.task.title}",
-            'time': comment.created_at.strftime('%H:%M %p'),
-            'task_id': comment.task.id
+            'id': f'dn_{dn.id}',
+            'type': dn.type,
+            'icon': icon,
+            'message': dn.message,
+            'time': dn.created_at.strftime('%I:%M %p'),
+            'task_id': dn.link_id
         })
 
     return Response({
@@ -2741,13 +2806,20 @@ def mark_notifications_read(request):
     if not user_id:
         return Response({'success': False, 'message': 'User ID required'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Currently we only have BirthdayWishes that need persistence
+    # Handle BirthdayWishes persistence
     wishes = BirthdayWish.objects.filter(receiver_id=user_id, is_read=False)
-    if notification_id and notification_id.startswith('wish_'):
-        wish_id = notification_id.replace('wish_', '')
+    if notification_id and str(notification_id).startswith('wish_'):
+        wish_id = str(notification_id).replace('wish_', '')
         wishes = wishes.filter(id=wish_id)
-
     wishes.update(is_read=True)
+
+    # Handle persistent Notification model
+    from .models import Notification
+    db_notifs = Notification.objects.filter(user_id=user_id, is_read=False)
+    if notification_id and str(notification_id).startswith('dn_'):
+        notif_id = str(notification_id).replace('dn_', '')
+        db_notifs = db_notifs.filter(id=notif_id)
+    db_notifs.update(is_read=True)
 
     return Response({'success': True, 'message': 'Notifications marked as read'})
 
@@ -2936,15 +3008,15 @@ def _get_admin_task_mentor_data():
 def _get_employee_my_tasks_data(employee):
     """Helper: Get assigned tasks + overseen tasks for Employee My Tasks"""
     tasks = Task.objects.filter(
-        Q(assignees=employee) | Q(mentor=employee)
+        Q(assignees=employee) | Q(mentor=employee) | Q(overseers=employee)
     ).distinct().select_related('created_by', 'mentor').prefetch_related('assignees').order_by('-created_at')
     return _serialize_tasks(tasks)
 
 def _get_mentor_employees_tasks_data(mentor):
     """Helper: Get tasks for employees reporting to this mentor + tasks explicitly managed by them"""
-    tasks = Task.objects.filter(
-        Q(assignees__mentors=mentor) | Q(mentor=mentor)
-    ).distinct().select_related('created_by', 'mentor').prefetch_related('assignees').order_by('-created_at')
+    # Exclude tasks where the mentor themselves is an assignee to keep Team Tasks focused on management
+    query = (Q(assignees__mentors=mentor) | Q(mentor=mentor) | Q(overseers=mentor))
+    tasks = Task.objects.filter(query).exclude(assignees=mentor).distinct().select_related('created_by', 'mentor').prefetch_related('assignees').order_by('-created_at')
     return _serialize_tasks(tasks)
 
 def _serialize_tasks(tasks):
@@ -2969,6 +3041,27 @@ def _serialize_tasks(tasks):
                 'name': assignee.name
             })
 
+        # Get steps
+        steps = []
+        for step in task.steps.all():
+            steps.append({
+                'id': step.id,
+                'text': step.text,
+                'is_completed': step.is_completed
+            })
+
+        # Get history
+        history_log = []
+        for h in task.history.all().select_related('changed_by'):
+            history_log.append({
+                'id': h.id,
+                'field': h.field_changed,
+                'old': h.old_value,
+                'new': h.new_value,
+                'by': h.changed_by.name if h.changed_by else 'System',
+                'at': h.changed_at.isoformat()
+            })
+
         data.append({
             'id': task.id,
             'title': task.title,
@@ -2983,12 +3076,15 @@ def _serialize_tasks(tasks):
             'mentor_name': task.mentor.name if task.mentor else None,
             'created_by': task.created_by.id,
             'created_by_name': task.created_by.name,
+            'start_date': str(task.start_date) if task.start_date else None,
             'due_date': str(task.due_date) if task.due_date else None,
             'started_at': task.started_at.isoformat() if task.started_at else None,
             'completed_at': task.completed_at.isoformat() if task.completed_at else None,
             'created_at': task.created_at.isoformat(),
             'updated_at': task.updated_at.isoformat(),
-            'comments': comments
+            'comments': comments,
+            'steps': steps,
+            'history': history_log
         })
     return data
 
@@ -3026,6 +3122,7 @@ def _create_task_admin(data, creator):
         priority=data.get('priority', 'medium'),
         mentor=Mentor_employee,
         created_by=creator,
+        start_date=data.get('start_date'),
         due_date=data.get('due_date')
     )
     
@@ -3062,14 +3159,29 @@ def tasks_api(request):
                     # ADMIN PATH
                     tasks_data = _get_admin_task_mentor_data()
                 elif emp.role == 'mentor':
-                    # Mentor PATH - Sees their own tasks + their employees' tasks
-                    own_tasks = _get_employee_my_tasks_data(emp)
-                    subordinate_tasks = _get_mentor_employees_tasks_data(emp)
-                    # Merge and remove duplicates if any (though shouldn't be)
-                    tasks_data = own_tasks + [t for t in subordinate_tasks if t['id'] not in [ot['id'] for ot in own_tasks]]
+                    # Mentor PATH - Separated based on scope
+                    scope = request.GET.get('scope')
+                    if scope == 'my':
+                        # Strictly tasks assigned TO the mentor
+                        tasks = Task.objects.filter(assignees=emp).distinct().select_related('created_by', 'mentor').prefetch_related('assignees').order_by('-created_at')
+                        tasks_data = _serialize_tasks(tasks)
+                    elif scope == 'team':
+                        # Subordinates' tasks + tasks explicitly overseen (excluding ones where they are just assignees)
+                        tasks_data = _get_mentor_employees_tasks_data(emp)
+                    else:
+                        # Legacy merged view
+                        own_tasks = _get_employee_my_tasks_data(emp)
+                        subordinate_tasks = _get_mentor_employees_tasks_data(emp)
+                        tasks_data = own_tasks + [t for t in subordinate_tasks if t['id'] not in [ot['id'] for ot in own_tasks]]
                 else:
                     # EMPLOYEE PATH
-                    tasks_data = _get_employee_my_tasks_data(emp)
+                    scope = request.GET.get('scope')
+                    if scope == 'my':
+                        # Strictly tasks assigned TO the employee
+                        tasks = Task.objects.filter(assignees=emp).distinct().select_related('created_by', 'mentor').prefetch_related('assignees').order_by('-created_at')
+                        tasks_data = _serialize_tasks(tasks)
+                    else:
+                        tasks_data = _get_employee_my_tasks_data(emp)
 
                 return Response({
                     'success': True,
@@ -3155,8 +3267,54 @@ def _update_task_admin(task, data, user=None):
         task.title = data['title']
     if 'description' in data:
         task.description = data['description']
+    if 'start_date' in data:
+        old_start = str(task.start_date) if task.start_date else 'None'
+        new_start = str(data['start_date'])
+        if old_start != new_start:
+            from .models import TaskHistory
+            TaskHistory.objects.create(
+                task=task,
+                field_changed='start_date',
+                old_value=old_start,
+                new_value=new_start,
+                changed_by=user
+            )
+        task.start_date = data['start_date']
     if 'due_date' in data:
+        old_due = str(task.due_date) if task.due_date else 'None'
+        new_due = str(data['due_date'])
+        if old_due != new_due:
+            from .models import TaskHistory
+            TaskHistory.objects.create(
+                task=task,
+                field_changed='due_date',
+                old_value=old_due,
+                new_value=new_due,
+                changed_by=user
+            )
         task.due_date = data['due_date']
+        
+    if 'steps' in data:
+        from .models import TaskStep
+        # Expecting data['steps'] to be a list of {id?: int, text: string, is_completed: bool}
+        # Simplified: overwrite OR update. Let's do update logic.
+        incoming_steps = data['steps']
+        current_step_ids = []
+        for s_data in incoming_steps:
+            if s_data.get('id'):
+                step = TaskStep.objects.get(id=s_data['id'], task=task)
+                step.text = s_data['text']
+                step.is_completed = s_data['is_completed']
+                step.save()
+                current_step_ids.append(step.id)
+            else:
+                new_step = TaskStep.objects.create(
+                    task=task,
+                    text=s_data['text'],
+                    is_completed=s_data.get('is_completed', False)
+                )
+                current_step_ids.append(new_step.id)
+        # Remove steps not in incoming data? For now keep them simple unless requested.
         
     if 'assignees' in data or 'assigned_to' in data:
         assigned_input = data.get('assignees') or data.get('assigned_to')
@@ -3201,6 +3359,20 @@ def _update_task_employee(task, data, user=None):
         # return False - REMOVED to allow raising exception
         raise ValueError(f"Cannot modify a completed task (ReqID: {user.id if user else '?'})")
 
+    if 'due_date' in data:
+        old_due = str(task.due_date) if task.due_date else 'None'
+        new_due = str(data['due_date'])
+        if old_due != new_due:
+            from .models import TaskHistory
+            TaskHistory.objects.create(
+                task=task,
+                field_changed='due_date',
+                old_value=old_due,
+                new_value=new_due,
+                changed_by=user
+            )
+        task.due_date = data['due_date']
+
     if 'status' in data:
         new_status = data['status']
         if new_status == 'in_progress' and not task.started_at:
@@ -3209,10 +3381,24 @@ def _update_task_employee(task, data, user=None):
             task.completed_at = timezone.now()
         task.status = new_status
 
-    # Employee cannot change title, description, priority, etc. in strict mode
-    # But if original UI allowed it, we might need to support it. 
-    # User said "My Task totally different", implies restricted flow.
-    # We will restrict to Status updates for now as per best practice for "My Tasks".
+    if 'steps' in data:
+        from .models import TaskStep
+        incoming_steps = data['steps']
+        for s_data in incoming_steps:
+            if s_data.get('id'):
+                try:
+                    step = TaskStep.objects.get(id=s_data['id'], task=task)
+                    step.text = s_data['text']
+                    step.is_completed = s_data['is_completed']
+                    step.save()
+                except TaskStep.DoesNotExist:
+                    pass
+            else:
+                TaskStep.objects.create(
+                    task=task,
+                    text=s_data['text'],
+                    is_completed=s_data.get('is_completed', False)
+                )
 
     task.save()
     return True
@@ -3293,6 +3479,34 @@ def task_detail_api(request, task_id):
 @api_view(['POST'])
 @require_gated_token_api
 @parser_classes([JSONParser])
+def bulk_update_tasks(request):
+    """Update multiple tasks at once (primarily for priority ranking)"""
+    data = request.data
+    updates = data.get('updates', [])
+    user_id = data.get('user_id')
+
+    if not user_id:
+        return Response({'success': False, 'message': 'User ID required'}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        user = Employee.objects.get(id=user_id)
+        if user.role != 'admin' and user.role != 'Mentor':
+            return Response({'success': False, 'message': 'Admin or Mentor access required'}, status=status.HTTP_403_FORBIDDEN)
+
+        for item in updates:
+            task_id = item.get('id')
+            priority = item.get('priority')
+            if task_id and priority:
+                Task.objects.filter(id=task_id).update(priority=priority)
+        
+        return Response({'success': True, 'message': f'Updated {len(updates)} tasks'})
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@require_gated_token_api
+@parser_classes([JSONParser])
 def task_comment_api(request):
     """Add a comment to a task"""
     data = request.data
@@ -3337,6 +3551,24 @@ def task_comment_api(request):
             content=content
         )
 
+        # Trigger notifications for mentor and assignees
+        try:
+            # Notify assignees (if comment is not by them)
+            for assignee in task.assignees.all():
+                if assignee.id != author.id:
+                    _send_task_notification(assignee, f"New comment by {author.name} on: {task.title}", task.id, "task_comment")
+            
+            # Notify overseers
+            for overseer in task.overseers.all():
+                if overseer.id != author.id:
+                    _send_task_notification(overseer, f"New comment on task: {task.title}", task.id, "task_comment")
+            
+            if task.mentor and task.mentor.id != author.id and not task.overseers.filter(id=task.mentor.id).exists():
+                _send_task_notification(task.mentor, f"New comment on task: {task.title}", task.id, "task_comment")
+
+        except Exception as e:
+            print(f"Notification error: {e}")
+
         return Response({
             'success': True,
             'message': 'Comment added successfully',
@@ -3374,7 +3606,8 @@ def wfh_request_reject(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        wfh_request = WFHRequest.objects.get(id=request_id)
+        from .models import EmployeeRequest
+        wfh_request = EmployeeRequest.objects.get(id=request_id)
         wfh_request.status = 'rejected'
         wfh_request.admin_response = reason
         wfh_request.reviewed_at = timezone.now()
@@ -3388,7 +3621,7 @@ def wfh_request_reject(request):
             'success': True,
             'message': 'WFH request rejected'
         })
-    except WFHRequest.DoesNotExist:
+    except EmployeeRequest.DoesNotExist:
         return Response({
             'success': False,
             'message': 'WFH request not found'

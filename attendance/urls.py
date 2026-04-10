@@ -49,6 +49,7 @@ urlpatterns = [
     path('delete-documents', views.delete_documents, name='delete_documents'),
     path('admin-user-docs-list/<int:employee_id>', views.admin_user_docs_list, name='admin_user_docs_list'),
     path('admin-user-docs/<int:employee_id>', views.admin_user_docs_zip, name='admin_user_docs_zip'),
+    path('serve-document/<int:doc_id>', views.serve_document, name='serve_document'),
 
     # Admin Dashboard
     path('admin-summary', views.admin_summary, name='admin_summary'),
@@ -61,6 +62,7 @@ urlpatterns = [
     path('tasks', views.tasks_api, name='tasks_api'),
     path('tasks/create', views.create_task, name='create_task'), # Explicit create route
     path('tasks/<int:task_id>', views.task_detail_api, name='task_detail_api'),
+    path('bulk-update-tasks', views.bulk_update_tasks, name='bulk_update_tasks'),
     path('task-comment', views.task_comment_api, name='task_comment_api'),
     
     # Team Management

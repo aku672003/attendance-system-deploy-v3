@@ -13,7 +13,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Orbitron:wght@400;700;900&family=Dancing+Script:wght@700&family=Pacifico&family=Tilt+Prism&family=Bungee+Spice&family=Nabla&display=swap"
         rel="stylesheet">
-    <!-- Google Maps API -->
+    <!-- Maps API -->
     <script src="https://maps.googleapis.com/maps/api/js?key={{ maps_api_key }}&libraries=places"></script>
     <script>
         window.MAPS_API_KEY = "{{ maps_api_key }}";
@@ -2167,7 +2167,9 @@
                     <p style="margin: 4px 0 0; color: var(--gray-500); font-size: 0.9rem; font-weight: 500;">Oversee and
                         allocate team tasks</p>
                 </div>
-                <div class="modal-actions">
+                <div class="modal-actions" id="taskMentorActions">
+                    <button class="btn btn-warning" id="btnEnterPriorityMode" onclick="enterPriorityMode()" style="background: #f59e0b; color: white; border: none; font-weight: 700; display: none;">⭐ Prioritize</button>
+                    <button class="btn btn-success hidden" id="btnSavePriority" onclick="savePriorityOrder()" style="background: #10b981; color: white; border: none; font-weight: 700;">💾 Save Priority</button>
                     <button class="btn btn-primary" onclick="addNewTask()">➕ Add Task</button>
                     <button class="btn btn-secondary" onclick="exportTasksToExcel()">📤 Export</button>
                     <button class="btn btn-secondary" onclick="refreshTasks()">🔄 Refresh</button>
@@ -2325,32 +2327,70 @@
     <!-- Task Detail Modal (with Comments) -->
     <div id="taskDetailModal" class="modal">
         <div class="modal-content" style="max-width: 600px; padding: 0; border-radius: 24px; display: flex; flex-direction: column; max-height: 90vh; overflow: hidden;">
-            <div class="modal-header" style="padding: 20px 24px; background: #ffffff; border-bottom: 1px solid #f1f5f9; flex-shrink: 0; display: flex; justify-content: space-between; align-items: flex-start;">
+            <div class="modal-header premium-detail-header">
                 <div style="display: flex; flex-direction: column; gap: 12px; flex: 1;">
-                    <h3 id="detailTaskTitle" style="margin: 0; font-size: 1.25rem; font-weight: 800; color: #0f172a; line-height: 1.3;">-</h3>
-                    <div id="detailTaskMeta" style="display: flex; flex-direction: column; gap: 8px;">
+                    <h3 id="detailTaskTitle" class="premium-task-title">-</h3>
+                    <div id="detailTaskMeta" class="premium-task-meta-container">
                         <!-- Populate via JS -->
                     </div>
                 </div>
-                <button onclick="closeModal('taskDetailModal')" 
-                        style="background: #f8fafc; border: none; font-size: 18px; width: 34px; height: 34px; border-radius: 10px; cursor: pointer; color: #94a3b8; display: flex; align-items: center; justify-content: center; transition: all 0.2s; margin-top: -4px; margin-right: -4px;" 
-                        onmouseover="this.style.background='#f1f5f9'; this.style.color='#64748b';" 
-                        onmouseout="this.style.background='#f8fafc'; this.style.color='#94a3b8';">✕</button>
+                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+                    <button onclick="closeModal('taskDetailModal')" 
+                            style="background: #f8fafc; border: none; font-size: 18px; width: 34px; height: 34px; border-radius: 10px; cursor: pointer; color: #94a3b8; display: flex; align-items: center; justify-content: center; transition: all 0.2s; margin-top: -4px; margin-right: -4px;" 
+                            onmouseover="this.style.background='#f1f5f9'; this.style.color='#64748b';" 
+                            onmouseout="this.style.background='#f8fafc'; this.style.color='#94a3b8';">✕</button>
+                    <div id="detailTaskPriorityBadge"></div>
+                </div>
+
+                <!-- Integrated Progress row (absolute positioned at the bottom border) -->
+                <div id="taskProgressSection" style="position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: #e2e8f0; overflow: hidden;">
+                    <div id="taskProgressBarInner" style="height: 100%; width: 0%; background: linear-gradient(90deg, #3b82f6, #60a5fa); transition: width 0.3s ease;"></div>
+                </div>
+            </div>
+
+            <!-- Optional Progress Percent Label above body -->
+            <div style="background: #f8fafc; padding: 8px 24px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 0.65rem; font-weight: 850; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Completion Status</span>
+                <span id="taskProgressPercent" style="font-size: 0.72rem; font-weight: 800; color: var(--primary-color);">0%</span>
             </div>
 
             <div class="modal-body" style="padding: 24px; overflow-y: auto; flex: 1; scrollbar-width: thin;">
-                <div id="detailTaskDescription"
-                    style="margin-bottom: 24px; color: #334155; line-height: 1.6; font-size: 1rem;">
+                <div id="detailTaskDescription" class="premium-description-box">
                     <!-- Populate via JS -->
                 </div>
 
+                <!-- STEPS SECTION -->
+                <div style="margin-bottom: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <h4 style="margin: 0; font-size: 1rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                            <span>✅</span> Steps to Completion
+                        </h4>
+                        <button class="btn btn-sm btn-secondary" onclick="addNewStepUI()" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px;">+ Add Step</button>
+                    </div>
+                    <div id="taskStepsList" style="display: flex; flex-direction: column; gap: 10px;">
+                        <!-- Populate via JS -->
+                    </div>
+                    <div id="addStepInputWrapper" class="hidden" style="margin-top: 10px; display: flex; gap: 8px;">
+                        <input type="text" id="newStepText" class="form-control" placeholder="Describe this step..." style="height: 36px; font-size: 0.9rem;">
+                        <button class="btn btn-primary btn-sm" onclick="saveNewStep()">Add</button>
+                    </div>
+                </div>
+
+                <!-- HISTORY SECTION -->
+                <div style="margin-bottom: 24px;">
+                    <h4 style="margin: 0 0 12px; font-size: 1rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                        <span>📜</span> History Log
+                    </h4>
+                    <div id="taskHistoryLog" style="display: flex; flex-direction: column; gap: 8px; font-size: 0.85rem; color: var(--gray-600); background: #fcfcfc; padding: 12px; border-radius: 12px; border: 1px dashed #e2e8f0;">
+                        <!-- Populate via JS -->
+                    </div>
+                </div>
+
                 <!-- Team Overview Section (New) -->
-                <div id="teamOverviewSection" class="hidden"
-                    style="margin-bottom: 24px; background: #f0f9ff; padding: 20px; border-radius: 20px; border: 1px solid #bae6fd;">
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                <div id="teamOverviewSection" class="hidden premium-team-section">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
                         <span style="font-size: 1.2rem;">👥</span>
-                        <h4 style="margin: 0; font-size: 1.1rem; color: #0369a1; font-weight: 700;">Team
-                            Progress</h4>
+                        <h4 style="margin: 0; font-size: 1.1rem; color: var(--primary-color); font-weight: 700;">Team Progress</h4>
                     </div>
                     <div id="teamMembersList" style="display: flex; flex-direction: column; gap: 12px;">
                         <!-- Populate via JS -->
@@ -2386,24 +2426,34 @@
 
             <div class="premium-modal-body">
                 <div class="premium-field-group">
-                    <label class="premium-label">Task Title</label>
-                    <input type="text" id="taskTitle" class="form-control" placeholder="What needs to be done?"
+                    <label class="premium-label">Task Title <span style="color: var(--error-color);">*</span></label>
+                    <input type="text" id="taskTitle" class="form-control" placeholder="What needs to be done?" required
                         style="height: 48px; font-size: 1rem; border-radius: 12px; border: 1px solid #e2e8f0;">
+                </div>
+
+                <div class="premium-field-group">
+                    <label class="premium-label">Priority Level</label>
+                    <select id="taskPriority" class="form-control" style="height: 48px; border-radius: 12px;">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                        <option value="urgent">Urgent</option>
+                        <option value="p1">P1 (Highest)</option>
+                        <option value="p2">P2</option>
+                        <option value="p3">P3</option>
+                        <option value="p4">P4</option>
+                    </select>
                 </div>
 
                 <div class="premium-grid">
                     <div class="premium-field-group">
-                        <label class="premium-label">Priority Level</label>
-                        <select id="taskPriority" class="form-control" style="height: 48px; border-radius: 12px;">
-                            <option value="low">Low</option>
-                            <option value="medium" selected>Medium</option>
-                            <option value="high">High</option>
-                            <option value="urgent">Urgent</option>
-                        </select>
+                        <label class="premium-label">Start Date</label>
+                        <input type="date" id="taskStartDate" class="form-control"
+                            style="height: 48px; border-radius: 12px;">
                     </div>
                     <div class="premium-field-group">
-                        <label class="premium-label">Completion Deadline</label>
-                        <input type="date" id="taskDueDate" class="form-control"
+                        <label class="premium-label">Completion Deadline <span style="color: var(--error-color);">*</span></label>
+                        <input type="date" id="taskDueDate" class="form-control" required
                             style="height: 48px; border-radius: 12px;">
                     </div>
                 </div>
@@ -2449,7 +2499,7 @@
                     </div>
 
                     <div id="teamInfoBox"
-                        style="display:none; margin-bottom: 12px; padding: 12px; background: #ffffff; border-radius: 10px; border: 1px solid #e2e8f0;">
+                        style="display:none; margin-bottom: 12px; padding: 12px; border-radius: 10px; border: 1px solid #e2e8f0;">
                         <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
                             <span class="badge badge-success" style="font-size:0.65rem; text-transform:uppercase;">Team
                                 Task</span>
@@ -3043,7 +3093,7 @@
 
     <!-- Request Action Modal (Calendar Click) -->
     <div id="requestActionModal" class="modal">
-        <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-content" style="max-width: 500px; padding: 40px !important;">
             <h3>Request Time Off</h3>
             <p id="requestActionDateDisplay" style="color: #64748b; margin-bottom: 20px;"></p>
 

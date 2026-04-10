@@ -490,7 +490,7 @@ function openPredictiveAnalysisModal(data, predictDays = 3) {
     }
 
     modal.innerHTML = `
-        <div class="predictive-modal modal-content" style="width: 680px; max-width: 95vw; max-height: 96vh; padding: 0 !important; overflow: hidden; background: white; border: none; display: flex; flex-direction: column; border-radius: 32px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+        <div class="predictive-modal modal-content" style="width: 680px; max-width: 95vw; max-height: 96vh; padding: 40px !important; overflow: hidden; background: white; border: none; display: flex; flex-direction: column; border-radius: 32px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
             <div style="padding: 28px; overflow-y: auto; flex: 1; position: relative; background: #ffffff;">
 
                 <!-- Header — clean single-row like My Stats -->
@@ -637,6 +637,7 @@ function openPredictiveAnalysisModal(data, predictDays = 3) {
     `;
 
     modal.classList.add('active');
+    updateScrollLock();
 
     // Trigger modal animations
     setTimeout(() => {
@@ -661,9 +662,7 @@ function closePredictiveModal() {
     const modal = document.getElementById('predictiveModal');
     if (modal) {
         modal.classList.remove('active');
-        // Restore scrollability
-        document.body.style.overflow = 'auto';
-        document.documentElement.style.overflow = 'auto';
+        updateScrollLock();
     }
 }
 
@@ -684,6 +683,7 @@ async function searchPersonnel() {
         document.body.appendChild(modal);
     }
     modal.classList.add('active');
+    updateScrollLock();
     await performPersonnelSearch();
     hideLoading();
 }
@@ -745,26 +745,26 @@ function renderPersonnelResults(results) {
         <table style="width: 100%; border-collapse: collapse;">
             <thead>
                 <tr style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">
-                    <th style="padding: 14px 16px; text-align: left; color: white; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Employee</th>
-                    <th style="padding: 14px 16px; text-align: left; color: white; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Department</th>
-                    <th style="padding: 14px 16px; text-align: center; color: white; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Attendance Rate</th>
-                    <th style="padding: 14px 16px; text-align: center; color: white; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Actions</th>
+                    <th style="padding: 24px 16px; text-align: left; color: white; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Employee</th>
+                    <th style="padding: 24px 16px; text-align: left; color: white; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Department</th>
+                    <th style="padding: 24px 16px; text-align: center; color: white; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Attendance Rate</th>
+                    <th style="padding: 24px 16px; text-align: center; color: white; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 ${results.map((p, idx) => `
                     <tr style="border-bottom: 1px solid #f1f5f9; background: ${idx % 2 === 0 ? '#ffffff' : '#fafbff'}; transition: background 0.15s;" onmouseover="this.style.background='#f5f3ff'" onmouseout="this.style.background='${idx % 2 === 0 ? '#ffffff' : '#fafbff'}'">
-                        <td style="padding: 14px 16px;">
+                        <td style="padding: 24px 16px;">
                             <div style="font-weight: 700; color: #0f172a; font-size: 14px;">${p.name}</div>
                             <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">ID: ${p.id}</div>
                         </td>
-                        <td style="padding: 14px 16px;">
+                        <td style="padding: 24px 16px;">
                             <span style="display: inline-block; background: rgba(99,102,241,0.1); color: #4f46e5; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;">${p.department}</span>
                         </td>
-                        <td style="padding: 14px 16px; text-align: center;">
+                        <td style="padding: 24px 16px; text-align: center;">
                             <span style="font-size: 16px; font-weight: 900; color: ${p.attendance_rate >= 80 ? '#10b981' : p.attendance_rate >= 60 ? '#f59e0b' : '#ef4444'};">${p.attendance_rate}%</span>
                         </td>
-                        <td style="padding: 14px 16px; text-align: center;">
+                        <td style="padding: 24px 16px; text-align: center;">
                             <div style="display: flex; gap: 8px; justify-content: center; align-items: center;">
                                 <button onclick="event.stopPropagation(); showEmployeePerformanceAnalysis(${p.id})" style="padding: 7px 14px; border-radius: 8px; border: 1px solid #e2e8f0; background: white; color: #475569; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; white-space: nowrap;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='white'">View Analysis</button>
                                 <button onclick="event.stopPropagation(); showHRReportDatePicker(${p.id}, '${p.name.replace(/'/g, "\\'")}'  , '${(p.department||'').replace(/'/g, "\\'")}'  )" style="padding: 7px 14px; border-radius: 8px; border: none; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; white-space: nowrap; box-shadow: 0 2px 8px rgba(99,102,241,0.3);" id="reportBtn${p.id}">📋 Generate Report</button>
@@ -782,9 +782,7 @@ function closePersonnelSearchModal() {
     const modal = document.getElementById('personnelSearchModal');
     if (modal) {
         modal.classList.remove('active');
-        // Restore scrollability
-        document.body.style.overflow = 'auto';
-        document.documentElement.style.overflow = 'auto';
+        updateScrollLock();
     }
 }
 
@@ -914,6 +912,7 @@ function renderEmployeePerformanceModal(data, employeeId, predictDays = 3) {
     modal.id = 'employeePerformanceModal';
     modal.className = 'modal active';
     modal.style.zIndex = '999999';
+    updateScrollLock();
 
     modal.innerHTML = `
         <div class="predictive-modal modal-content" style="width: 680px; max-width: 95vw; max-height: 96vh; padding: 0 !important; overflow: hidden; background: white; border: none; display: flex; flex-direction: column; border-radius: 32px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
@@ -927,7 +926,7 @@ function renderEmployeePerformanceModal(data, employeeId, predictDays = 3) {
                             <div style="font-size: 11px; font-weight: 700; color: #94a3b8; margin-top: 2px; text-transform: uppercase; letter-spacing: 1px;">${data.department} • Personnel Analysis</div>
                         </div>
                     </div>
-                    <button onclick="document.body.style.overflow='auto';document.documentElement.style.overflow='auto';document.getElementById('employeePerformanceModal').remove()" style="background: #f1f5f9; border: none; font-size: 20px; width: 40px; height: 40px; border-radius: 12px; cursor: pointer; color: #64748b; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">&times;</button>
+                    <button onclick="closeEmployeePerformanceModal()" style="background: #f1f5f9; border: none; font-size: 20px; width: 40px; height: 40px; border-radius: 12px; cursor: pointer; color: #64748b; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">&times;</button>
                 </div>
 
                 <div style="display: flex; justify-content: center; margin-bottom: 24px;">
@@ -1071,7 +1070,7 @@ function renderEmployeePerformanceModal(data, employeeId, predictDays = 3) {
             </div>
 
             <div style="padding: 24px 32px; background: #ffffff; border-top: 1px solid #f1f5f9; display: flex; justify-content: center;">
-                <button onclick="document.body.style.overflow='auto';document.documentElement.style.overflow='auto';document.getElementById('employeePerformanceModal').remove()" 
+                <button onclick="closeEmployeePerformanceModal()" 
                    style="width: 100%; padding: 18px; font-size: 14px; font-weight: 900; background: #0f172a; color: white; border: none; border-radius: 20px; cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 1px;">
                    Acknowledge Analysis
                 </button>
@@ -1117,6 +1116,7 @@ function showHRReportDatePicker(employeeId, employeeName, department) {
     modal.id = 'hrReportDatePickerModal';
     modal.className = 'modal active';
     modal.style.zIndex = '9999999';
+    updateScrollLock();
     modal.innerHTML = `
         <div style="background: white; border-radius: 28px; padding: 0; width: 480px; max-width: 95vw; box-shadow: 0 32px 80px rgba(0,0,0,0.2); overflow: hidden; display: flex; flex-direction: column;">
             <!-- Header -->
@@ -1234,7 +1234,18 @@ function setHRReportCurrentMonth() {
 
 function closeHRReportDatePicker() {
     const modal = document.getElementById('hrReportDatePickerModal');
-    if (modal) modal.remove();
+    if (modal) {
+        modal.remove();
+        updateScrollLock();
+    }
+}
+
+function closeEmployeePerformanceModal() {
+    const modal = document.getElementById('employeePerformanceModal');
+    if (modal) {
+        modal.remove();
+        updateScrollLock();
+    }
 }
 
 async function fetchAndDownloadHRReport(employeeId, employeeName) {
