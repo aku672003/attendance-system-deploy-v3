@@ -539,3 +539,20 @@ class PushSubscription(models.Model):
 
     def __str__(self):
         return f"{self.employee.username} – {self.endpoint[:60]}"
+
+class Meeting(models.Model):
+    title = models.CharField(max_length=200)
+    description = models.TextField(null=True, blank=True)
+    date = models.DateField()
+    start_time = models.TimeField(null=True, blank=True)
+    created_by = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='created_meetings')
+    participants = models.ManyToManyField(Employee, related_name='meetings')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'meetings'
+        ordering = ['-date', '-start_time']
+
+    def __str__(self):
+        return f"{self.title} ({self.date})"

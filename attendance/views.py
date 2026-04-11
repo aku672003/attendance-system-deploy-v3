@@ -27,7 +27,7 @@ from datetime import datetime, date, time, timedelta
 from .models import (
     Employee, EmployeeProfile, OfficeLocation, DepartmentOfficeAccess,
     AttendanceRecord, EmployeeRequest, EmployeeDocument, Task, BirthdayWish, TaskComment, Team,
-    TemporaryTag, TrainingLog, AvatarAsset, Memoji
+    TemporaryTag, TrainingLog, AvatarAsset, Memoji, Notification
 )
 from .serializers import AvatarAssetSerializer, MemojiSerializer
 from django.contrib.auth.hashers import make_password, check_password
@@ -465,38 +465,7 @@ def get_server_time(request):
     })
 
 
-@api_view(['POST'])
-def create_task(request):
-    try:
-        data = request.data
-        employee_id = data.get('employee_id')
-        
-        # Check role
-        creator = Employee.objects.filter(id=employee_id).first()
-        if not creator:
-             return Response({'success': False, 'message': 'Creator not found'})
 
-        assigned_ids = data.get('assignees') or data.get('assigned_to') # Support both for safety
-        
-        # Normalize to list
-        if not isinstance(assigned_ids, list):
-            assigned_ids = [assigned_ids] if assigned_ids else []
-            
-        task = Task.objects.create(
-            title=data.get('title'),
-            description=data.get('description'),
-            priority=data.get('priority', 'Medium'),
-            due_date=data.get('due_date'),
-            mentor=creator, # Assuming creator is mentor
-            created_by=creator
-        )
-        
-        # Set ManyToMany assignees
-        task.assignees.set(Employee.objects.filter(id__in=assigned_ids))
-        
-        return Response({'success': True, 'message': 'Task created successfully', 'task_id': task.id})
-    except Exception as e:
-        return Response({'success': False, 'message': str(e)})
 
 
 @api_view(['POST'])
@@ -2588,7 +2557,12 @@ def _send_task_notification(user, message, task_id, type="task"):
         )
         
         # Trigger Web Push Notification
-        title = "Comment on Task" if type == "task_comment" else "Task Notification"
+        title = "Task Notification"
+        if type == "task_comment":
+            title = "Comment on Task"
+        elif type == "meeting":
+            title = "Meeting / MoM"
+            
         _trigger_push_notification(user, title, message, f"task_{task_id}")
         
         return True
@@ -2740,6 +2714,7 @@ def get_notifications(request):
         icon = '🔔'
         if dn.type == 'task_comment': icon = '💬'
         elif dn.type == 'task': icon = '📝'
+        elif dn.type == 'meeting': icon = '🤝'
         elif dn.type == 'request': icon = '📋'
         
         notifications.append({
@@ -3130,12 +3105,31 @@ def _create_task_admin(data, creator):
     if overseer_ids:
         task.overseers.set(Employee.objects.filter(id__in=overseer_ids))
 
-    # Resolve any pending task_requests for these assignees
     EmployeeRequest.objects.filter(
         employee_id__in=assigned_ids,
         request_type='task_request',
         status='pending'
     ).update(status='approved', admin_response=f'Task "{task.title}" assigned.')
+
+    # Notification Logic (Consolidated)
+    task_title = str(task.title or "Untitled Task")
+    is_mom = any(kw in task_title.upper() for kw in ["MOM", "MEETING"]) or task_title.startswith("MoM Tasks")
+
+    assignee_objs = Employee.objects.filter(id__in=assigned_ids)
+    for assignee in assignee_objs:
+        msg = f"New Minutes/Task: {task_title}" if is_mom else f"New task assigned: {task_title}"
+        notif_type = "meeting" if is_mom else "task"
+        try:
+            Notification.objects.create(
+                user_id=assignee.id,
+                type=notif_type,
+                message=msg,
+                link_id=str(task.id)
+            )
+            # Sync Global Utility (Defined in this file)
+            _trigger_push_notification(assignee, "Meeting MoM" if is_mom else "Task Assignment", msg, f"task_{task.id}")
+        except Exception as e:
+            print(f"Failed notif for {assignee.id}: {e}")
 
     return task
 
@@ -3402,6 +3396,98 @@ def _update_task_employee(task, data, user=None):
 
     task.save()
     return True
+
+@api_view(['GET', 'POST'])
+@require_gated_token_api
+def meetings_api(request):
+    """List or create meetings"""
+    if request.method == 'GET':
+        try:
+            employee_id = request.GET.get('employee_id')
+            if not employee_id:
+                return Response({'success': False, 'message': 'Employee ID required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            from .models import Meeting
+            # Get meetings where user is participant OR creator
+            meetings = Meeting.objects.filter(
+                Q(participants__id=employee_id) | Q(created_by_id=employee_id)
+            ).distinct().prefetch_related('participants', 'created_by').order_by('-date', '-start_time')[:20]
+            
+            data = []
+            for m in meetings:
+                data.append({
+                    'id': m.id,
+                    'title': m.title,
+                    'description': m.description,
+                    'date': m.date.strftime('%Y-%m-%d'), 
+                    'display_date': m.date.strftime('%d-%m-%Y'),
+                    'start_time': m.start_time.strftime('%H:%M') if m.start_time else '', 
+                    'display_time': m.start_time.strftime('%I:%M %p') if m.start_time else '',
+                    'created_by_name': m.created_by.name,
+                    'created_by_id': m.created_by.id,
+                    'participants': [{'id': p.id, 'name': p.name} for p in m.participants.all()]
+                })
+            
+            return Response({'success': True, 'meetings': data})
+        except Exception as e:
+            return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    elif request.method == 'POST':
+        try:
+            from .models import Meeting, Employee
+            data = request.data
+            creator_id = data.get('created_by')
+            if not creator_id:
+                return Response({'success': False, 'message': 'Creator ID required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            creator = Employee.objects.get(id=creator_id)
+            meeting = Meeting.objects.create(
+                title=data.get('title'),
+                description=data.get('description'),
+                date=data.get('date'),
+                start_time=data.get('start_time') if data.get('start_time') else None,
+                created_by=creator
+            )
+            
+            participant_ids = data.get('participants', [])
+            if participant_ids:
+                meeting.participants.set(Employee.objects.filter(id__in=participant_ids))
+            
+            return Response({'success': True, 'meeting_id': meeting.id})
+        except Exception as e:
+            return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['PATCH', 'DELETE'])
+@require_gated_token_api
+def meeting_detail_api(request, meeting_id):
+    """Update or delete a meeting"""
+    try:
+        from .models import Meeting, Employee
+        meeting = Meeting.objects.get(id=meeting_id)
+        
+        if request.method == 'DELETE':
+            meeting.delete()
+            return Response({'success': True, 'message': 'Meeting deleted'})
+            
+        elif request.method == 'PATCH':
+            data = request.data
+            if 'title' in data: meeting.title = data['title']
+            if 'description' in data: meeting.description = data['description']
+            if 'date' in data: meeting.date = data['date']
+            if 'start_time' in data: 
+                meeting.start_time = data['start_time'] if data['start_time'] else None
+            
+            if 'participants' in data:
+                meeting.participants.set(Employee.objects.filter(id__in=data['participants']))
+            
+            meeting.save()
+            return Response({'success': True, 'message': 'Meeting updated'})
+            
+    except Meeting.DoesNotExist:
+        return Response({'success': False, 'message': 'Meeting not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 @api_view(['GET', 'POST'])
 @require_gated_token_api

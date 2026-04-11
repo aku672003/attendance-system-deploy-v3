@@ -108,4 +108,8 @@ urlpatterns = [
     path('memoji/<int:user_id>', views.user_memoji_api, name='user_memoji_api_detail'),
     path('upload-avatar', views.upload_avatar, name='upload_avatar'),
     path('request-new-task', views.request_new_task, name='request_new_task'),
+    
+    # Meeting Management
+    path('meetings', views.meetings_api, name='meetings_api'),
+    path('meetings/<int:meeting_id>', views.meeting_detail_api, name='meeting_detail_api'),
 ]

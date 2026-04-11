@@ -1064,6 +1064,17 @@
                         <button class="resize-btn" onclick="resizeWidget('taskMentorCard', 'xl')">XL</button>
                     </div>
                 </div>
+                <div class="action-card hidden" onclick="openMeetingMomModal()" id="meetingMomCard" draggable="false">
+                    <span class="action-card-icon">🤝</span>
+                    <div class="action-card-title">Meeting / MoM</div>
+                    <div class="action-card-description">Conduct meetings and update tasks</div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('meetingMomCard', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('meetingMomCard', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('meetingMomCard', 'lg')">L</button>
+                        <button class="resize-btn" onclick="resizeWidget('meetingMomCard', 'xl')">XL</button>
+                    </div>
+                </div>
                 <div class="action-card hidden" onclick="openProfile()" id="profileCard" draggable="false">
                     <span class="action-card-icon">🧑‍💻</span>
                     <div class="action-card-title">Edit Your Details</div>
@@ -2543,6 +2554,68 @@
                     style="padding: 12px 32px; border-radius: 12px; font-weight: 600;">
                     <span id="saveTaskText">Create Task</span>
                     <span id="saveTaskSpinner" class="loading-spinner hidden"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Meeting / MoM Modal -->
+    <div id="meetingMomModal" class="premium-modal-container">
+        <div class="premium-modal-backdrop" onclick="closeModal('meetingMomModal')"></div>
+        <div class="premium-modal-content">
+            <div class="premium-modal-header">
+                <h3>Meeting / MoM</h3>
+                <button class="btn-icon-sm" onclick="closeModal('meetingMomModal')"
+                    style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">×</button>
+            </div>
+
+            <div class="premium-modal-body">
+                <div class="premium-field-group">
+                    <label class="premium-label">Meeting Purpose (Title) <span style="color: var(--error-color);">*</span></label>
+                    <input type="text" id="momTargetTitle" class="form-control" placeholder="What is the meeting about?" required
+                        style="height: 48px; font-size: 1rem; border-radius: 12px; border: 1px solid #e2e8f0;">
+                </div>
+
+                <div class="form-row" style="margin-top: 16px;">
+                    <div class="premium-field-group">
+                        <label class="premium-label">Meeting Date</label>
+                        <input type="date" id="momTargetDate" class="form-control"
+                            style="height: 48px; font-size: 0.95rem; border-radius: 12px; border: 1px solid #e2e8f0; background: #fff;">
+                    </div>
+                    <div class="premium-field-group">
+                        <label class="premium-label">Start Time</label>
+                        <input type="time" id="momStartTime" class="form-control"
+                            style="height: 48px; font-size: 1rem; border-radius: 12px; border: 1px solid #e2e8f0; background: #fff;">
+                    </div>
+                </div>
+                
+                <div class="premium-field-group" style="margin-top: 16px;">
+                    <label class="premium-label">Assign Task To Users</label>
+                    <div style="margin-bottom: 8px;">
+                        <input type="text" id="momEmployeeSearch" class="form-control" placeholder="Search users by name or role..." onkeyup="filterMomUsers()"
+                            style="height: 40px; font-size: 0.9rem; border-radius: 8px; border: 1px solid #e2e8f0;">
+                    </div>
+                    <div style="max-height: 200px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px;" id="momAssigneesContainer">
+                        <!-- Checkboxes populated via JS -->
+                    </div>
+                </div>
+
+                <div class="meeting-history-section" style="margin-top: 24px; border-top: 1px solid #f1f5f9; padding-top: 20px;">
+                    <h4 style="font-size: 1.1rem; color: #1e293b; margin-bottom: 12px;">Recent Meetings History</h4>
+                    <div id="recentMeetingsList" style="display: flex; flex-direction: column; gap: 10px;">
+                        <!-- Meetings populated via JS -->
+                        <div style="text-align: center; color: #64748b; padding: 20px;">Loading meetings...</div>
+                    </div>
+                </div>
+            </div>
+
+             <div class="premium-modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('meetingMomModal')"
+                    style="padding: 12px 24px; border-radius: 12px; font-weight: 500;">Cancel</button>
+                <button class="btn btn-primary" onclick="saveMeetingMom()" id="saveMomBtn"
+                    style="padding: 12px 32px; border-radius: 12px; font-weight: 600;">
+                    <span id="saveMomText">Complete & Assign</span>
+                    <span id="saveMomSpinner" class="loading-spinner hidden"></span>
                 </button>
             </div>
         </div>

@@ -1141,11 +1141,16 @@ async function handleNotificationClick(notif) {
 
     if (type === 'birthday') {
         openBirthdayCalendar();
-    } else if (type === 'task' || type === 'task_warning') {
-        if (currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.role === 'mentor' || currentUser.has_subordinates) {
-            openTaskMentor();
+    } else if (type === 'task' || type === 'task_warning' || type === 'meeting') {
+        // If it's a specific task assignment, try to open that task directly
+        if (notif.task_id) {
+            openTaskDetail(parseInt(notif.task_id));
         } else {
-            openMyTasks();
+            if (currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.role === 'mentor' || currentUser.has_subordinates) {
+                openTaskMentor();
+            } else {
+                openMyTasks();
+            }
         }
     } else if (type === 'task_comment') {
         // Open the specific task detail
@@ -3093,6 +3098,7 @@ function updateDashboardVisibility() {
     if (!currentUser) return;
 
     const taskMentorCard = document.getElementById('taskMentorCard');
+    const meetingMomCard = document.getElementById('meetingMomCard');
     const myTasksCard = document.getElementById('myTasksCard');
     const intelligenceHubCard = document.getElementById('intelligenceHubCard');
     const intelligenceHubCardEmployee = document.getElementById('intelligenceHubCardEmployee');
@@ -3103,6 +3109,7 @@ function updateDashboardVisibility() {
     if (currentUser.role === 'admin') {
         // Admin sees Admin Stats Grid and intelligenceHubCard
         if (taskMentorCard) taskMentorCard.classList.remove('hidden');
+        if (meetingMomCard) meetingMomCard.classList.remove('hidden');
         if (myTasksCard) myTasksCard.classList.add('hidden');
 
         if (intelligenceHubCard) intelligenceHubCard.classList.remove('hidden');
@@ -3114,6 +3121,7 @@ function updateDashboardVisibility() {
     } else if (currentUser.role === 'Mentor' || currentUser.role === 'mentor' || currentUser.has_subordinates) {
         // Mentor sees Employee Stats Grid but retains Task Mentor access
         if (taskMentorCard) taskMentorCard.classList.remove('hidden');
+        if (meetingMomCard) meetingMomCard.classList.remove('hidden');
         if (myTasksCard) myTasksCard.classList.remove('hidden');
 
         if (intelligenceHubCard) intelligenceHubCard.classList.add('hidden');
@@ -3125,6 +3133,7 @@ function updateDashboardVisibility() {
     } else {
         // Regular Employee logic
         if (taskMentorCard) taskMentorCard.classList.add('hidden');
+        if (meetingMomCard) meetingMomCard.classList.add('hidden');
         if (myTasksCard) myTasksCard.classList.remove('hidden');
 
         if (intelligenceHubCard) intelligenceHubCard.classList.add('hidden');
@@ -3142,6 +3151,243 @@ function updateDashboardVisibility() {
 }
 
 // Legacy function removed as it is merged into renderTaskBoard logic above
+
+async function openMeetingMomModal() {
+    document.getElementById('momTargetTitle').value = '';
+    const now = new Date();
+    
+    document.getElementById('momTargetDate').value = now.toISOString().split('T')[0];
+    document.getElementById('momStartTime').value = now.toTimeString().slice(0,5);
+    document.getElementById('momEmployeeSearch').value = '';
+    
+    // Fetch employees if not already fetched
+    try {
+        const res = await apiCall('employees-simple', 'GET');
+        if (res && res.success && Array.isArray(res.employees)) {
+            window.allEmployeesSimple = res.employees;
+            const container = document.getElementById('momAssigneesContainer');
+            container.innerHTML = res.employees.map(emp => `
+                <div class="mom-employee-row" data-search="${(emp.name + ' ' + emp.role).toLowerCase()}" style="display:flex; align-items:center; margin-bottom: 8px; padding: 6px; border-radius: 8px; transition: background 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">
+                    <input type="checkbox" id="momEmp_${emp.id}" value="${emp.id}" style="margin-right:12px; width:18px; height:18px; cursor:pointer;" class="mom-emp-checkbox">
+                    <label for="momEmp_${emp.id}" style="margin:0; font-size:0.95rem; cursor:pointer; flex: 1; color: #1e293b; font-weight: 500;">
+                        ${emp.name} <span style="font-size:0.8rem; color:#64748b;">(${emp.role})</span>
+                    </label>
+                </div>
+            `).join('');
+        }
+    } catch (e) {
+        console.error('Error loading employees for MoM:', e);
+    }
+    
+    // Reset editing state
+    window.currentEditingMeetingId = null;
+    const btnText = document.getElementById('saveMomText');
+    if (btnText) btnText.textContent = 'Complete & Assign';
+    
+    // Fetch recent meetings history
+    fetchRecentMeetings();
+    
+    openModal('meetingMomModal');
+}
+
+function filterMomUsers() {
+    const q = document.getElementById('momEmployeeSearch').value.toLowerCase();
+    const rows = document.querySelectorAll('.mom-employee-row');
+    rows.forEach(row => {
+        if(row.getAttribute('data-search').includes(q)) {
+            row.style.display = 'flex';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+async function saveMeetingMom() {
+    const title = document.getElementById('momTargetTitle').value.trim();
+    if(!title) {
+        showNotification('Meeting purpose is required', 'error');
+        return;
+    }
+
+    const meetingDate = document.getElementById('momTargetDate').value;
+    const meetingTime = document.getElementById('momStartTime').value;
+
+    const checkboxes = document.querySelectorAll('.mom-emp-checkbox:checked');
+    const assignees = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    
+    if(assignees.length === 0) {
+        showNotification('Please assign at least one user', 'warning');
+        return;
+    }
+    
+    const btnBtn = document.getElementById('saveMomBtn');
+    const btnText = document.getElementById('saveMomText');
+    const spinner = document.getElementById('saveMomSpinner');
+    
+    if(btnBtn) btnBtn.disabled = true;
+    if(btnText) btnText.classList.add('hidden');
+    if(spinner) spinner.classList.remove('hidden');
+    
+    let fmtStart = new Date().toISOString().split('T')[0];
+    let fmtDue = new Date();
+    fmtDue.setDate(fmtDue.getDate() + 1); // 24 hr default deadline
+    fmtDue = fmtDue.toISOString().split('T')[0];
+    
+    if (meetingDate) {
+        fmtStart = meetingDate;
+        let d = new Date(meetingDate);
+        d.setDate(d.getDate() + 1);
+        fmtDue = d.toISOString().split('T')[0];
+    }
+    
+    const scheduledDateTimeStr = (meetingDate && meetingTime) ? `${meetingDate} at ${meetingTime}` : 'Scheduled instantly';
+    
+    try {
+        // 1. Create/Update Meeting Record
+        const meetingPayload = {
+            title: title,
+            description: `Meeting held on ${meetingDate} at ${meetingTime}`,
+            date: meetingDate,
+            start_time: meetingTime,
+            participants: assignees,
+            created_by: currentUser ? currentUser.id : null
+        };
+        
+        if (window.currentEditingMeetingId) {
+            await apiCall(`meetings/${window.currentEditingMeetingId}`, 'PATCH', meetingPayload);
+        } else {
+            await apiCall('meetings', 'POST', meetingPayload);
+        }
+
+        // 2. Create Tasks for participants
+        const payload = {
+            title: title + " (MoM Task)",
+            description: `Task derived from Meeting/MoM: ${title}\nMeeting Time: ${scheduledDateTimeStr}`,
+            priority: "high",
+            start_date: fmtStart,
+            due_date: fmtDue,
+            assignees: assignees,
+            overseer_ids: currentUser ? [currentUser.id] : [],
+            user_id: currentUser ? currentUser.id : null,
+            employee_id: currentUser ? currentUser.id : null,
+            created_by: currentUser ? currentUser.id : null
+        };
+        const res = await apiCall('tasks/create', 'POST', payload);
+        if(res && res.success) {
+            showNotification(window.currentEditingMeetingId ? 'Meeting updated and tasks reassigned' : 'Meeting ended and tasks assigned successfully', 'success');
+            closeModal('meetingMomModal');
+            if(typeof refreshTasks === 'function') await refreshTasks();
+        } else {
+            showNotification(res?.message || 'Failed to assign tasks', 'error');
+        }
+    } catch(e) {
+        console.error(e);
+        showNotification('Error completing MoM', 'error');
+    } finally {
+        if(btnBtn) btnBtn.disabled = false;
+        if(btnText) btnText.classList.remove('hidden');
+        if(spinner) spinner.classList.add('hidden');
+    }
+}
+
+async function fetchRecentMeetings() {
+    const listContainer = document.getElementById('recentMeetingsList');
+    if (!listContainer) return;
+
+    try {
+        const res = await apiCall('meetings', 'GET', { employee_id: currentUser ? currentUser.id : null });
+        if (res && res.success) {
+            renderRecentMeetings(res.meetings);
+        } else {
+            listContainer.innerHTML = '<div style="text-align: center; color: #ef4444; padding: 20px;">Failed to load meetings</div>';
+        }
+    } catch (e) {
+        console.error(e);
+        listContainer.innerHTML = '<div style="text-align: center; color: #ef4444; padding: 20px;">Error fetching meetings</div>';
+    }
+}
+
+function renderRecentMeetings(meetings) {
+    const container = document.getElementById('recentMeetingsList');
+    if (!container) return;
+    
+    if (meetings.length === 0) {
+        container.innerHTML = '<div style="text-align: center; color: #64748b; padding: 20px;">No recent meetings found</div>';
+        return;
+    }
+
+    container.innerHTML = meetings.map(m => {
+        const canManage = currentUser && (
+            currentUser.role === 'admin' || 
+            currentUser.role === 'Mentor' || 
+            currentUser.role === 'mentor' ||
+            m.created_by_id === currentUser.id
+        );
+
+        return `
+        <div class="meeting-item" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s; cursor: default; margin-bottom: 8px;">
+            <div style="flex: 1;">
+                <div style="font-weight: 600; color: #1e293b; font-size: 0.95rem;">${m.title}</div>
+                <div style="font-size: 0.8rem; color: #64748b; margin-top: 2px;">
+                    📅 ${m.display_date} | 🕒 ${m.display_time}
+                </div>
+                <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 4px;">
+                    By ${m.created_by_name} • ${m.participants.length} participants
+                </div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                ${canManage ? `
+                <button onclick='editMeeting(${JSON.stringify(m).replace(/'/g, "&apos;")})' class="btn-icon-sm" style="background: #f1f5f9; color: #475569; width: 32px; height: 32px; border-radius: 8px; border:none; cursor:pointer;" title="Edit Meeting">✏️</button>
+                <button onclick="deleteMeeting(${m.id})" class="btn-icon-sm" style="background: #fef2f2; color: #ef4444; width: 32px; height: 32px; border-radius: 8px; border:none; cursor:pointer;" title="Delete Meeting">🗑️</button>
+                ` : ''}
+            </div>
+        </div>
+        `;
+    }).join('');
+}
+
+async function deleteMeeting(id) {
+    if (!confirm('Are you sure you want to delete this meeting record? Tasks related to it will remain.')) return;
+    try {
+        const res = await apiCall(`meetings/${id}`, 'DELETE');
+        if (res && res.success) {
+            showNotification('Meeting record deleted', 'success');
+            fetchRecentMeetings();
+        } else {
+            showNotification('Failed to delete meeting', 'error');
+        }
+    } catch (e) {
+        showNotification('Error deleting meeting', 'error');
+    }
+}
+
+function editMeeting(m) {
+    // Populate form with meeting data
+    document.getElementById('momTargetTitle').value = m.title;
+    document.getElementById('momTargetDate').value = m.date;
+    document.getElementById('momStartTime').value = m.start_time;
+    
+    // Clear checkboxes first
+    document.querySelectorAll('.mom-emp-checkbox').forEach(cb => cb.checked = false);
+    
+    // Check participants
+    m.participants.forEach(p => {
+        const cb = document.getElementById(`momEmp_${p.id}`);
+        if (cb) cb.checked = true;
+    });
+    
+    // Change button text
+    const btnText = document.getElementById('saveMomText');
+    if (btnText) btnText.textContent = 'Update Meeting & Assign';
+    
+    // Store current editing ID
+    window.currentEditingMeetingId = m.id;
+    
+    // Scroll to top of modal for visibility
+    const modalBody = document.querySelector('#meetingMomModal .premium-modal-body');
+    if (modalBody) modalBody.scrollTop = 0;
+}
+
 
 function addNewTask(autoAssigneeId = null) {
     // Reset form
