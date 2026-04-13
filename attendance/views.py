@@ -611,17 +611,33 @@ def check_out(request):
     now_local = timezone.localtime(timezone.now())
     
     try:
-        # Find the latest record that has a check-in but no check-out
-        record = AttendanceRecord.objects.filter(
-            employee_id=employee_id, 
-            check_in_time__isnull=False,
-            check_out_time__isnull=True
-        ).exclude(status__in=['absent', 'leave']).latest('date')
+        # 1. Try to find the specific record for the date provided by the frontend
+        target_date = data.get('date')
+        if target_date:
+            record = AttendanceRecord.objects.filter(
+                employee_id=employee_id,
+                date=target_date,
+                check_in_time__isnull=False,
+                check_out_time__isnull=True
+            ).first()
+        else:
+            record = None
+
+        # 2. Fallback to the latest unclosed record if not found for specific date
+        if not record:
+            record = AttendanceRecord.objects.filter(
+                employee_id=employee_id, 
+                check_in_time__isnull=False,
+                check_out_time__isnull=True
+            ).exclude(status__in=['absent', 'leave']).latest('date')
 
         check_in_t = datetime.strptime(str(record.check_in_time), '%H:%M:%S').time()
         check_in_dt = timezone.make_aware(datetime.combine(record.date, check_in_t))
         
-        worked_hours = round((now_local - check_in_dt).total_seconds() / 3600, 2)
+        # Calculate hours and cap at 99.99 for Decimal(5, 2) safety if needed
+        # (Though we increased it to 5,2 in models, 4,2 is likely still in DB)
+        raw_hours = (now_local - check_in_dt).total_seconds() / 3600
+        worked_hours = round(min(max(0, raw_hours), 99.90), 2)
         
         if worked_hours < 4.5:
             return Response({'success': False, 'message': f'Worked only {worked_hours}h. Min 4.5h required.'}, status=400)

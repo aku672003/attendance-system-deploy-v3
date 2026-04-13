@@ -208,7 +208,7 @@ class AttendanceRecord(models.Model):
     check_out_location = models.JSONField(null=True, blank=True)
     check_in_photo = models.TextField(null=True, blank=True)  # Base64 or file path
     check_out_photo = models.TextField(null=True, blank=True)  # Base64 or file path
-    total_hours = models.DecimalField(max_digits=4, decimal_places=2, default=0.00)
+    total_hours = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
     is_half_day = models.BooleanField(default=False)
     notes = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
