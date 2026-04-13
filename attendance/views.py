@@ -2626,17 +2626,23 @@ def _trigger_push_notification(user, title, message, link=None):
     vapid_private_key = getattr(settings, 'VAPID_PRIVATE_KEY', None)
     vapid_claims = {"sub": getattr(settings, 'VAPID_CLAIMS_SUB', 'mailto:admin@example.com')}
 
+    # Fix VAPID private key if it has literal \n or extra quotes (common in .env)
+    if isinstance(vapid_private_key, str):
+        if "\\n" in vapid_private_key:
+            vapid_private_key = vapid_private_key.replace("\\n", "\n")
+        vapid_private_key = vapid_private_key.strip('"\'')
+
     if not vapid_private_key:
+        print("[Push] VAPID private key is missing — skipping.")
         return
 
     data = json.dumps({
         "title": title,
         "body": message,
-        "data": {
-            "link": link
-        }
+        "url": link  # Changed from "data": {"link": link} to match sw.js expectation
     })
 
+    success_count = 0
     for sub in subscriptions:
         try:
             webpush(
@@ -2651,11 +2657,16 @@ def _trigger_push_notification(user, title, message, link=None):
                 vapid_private_key=vapid_private_key,
                 vapid_claims=vapid_claims
             )
+            success_count += 1
         except WebPushException as ex:
+            print(f"[Push] WebPushException for {user.username}: {ex}")
             if ex.response and ex.response.status_code == 410:
                 sub.delete()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[Push] Unexpected error for {user.username}: {e}")
+    
+    if success_count > 0:
+        print(f"[Push] Successfully sent {success_count} notifications to {user.username}")
 
 
 @api_view(['GET'])
@@ -3316,8 +3327,6 @@ def _update_task_admin(task, data, user=None):
         new_priority = str(data['priority']).lower()
         if old_priority != new_priority:
             from .models import TaskHistory
-            from django.utils import timezone
-            from datetime import timedelta
             
             last_24h = timezone.now() - timedelta(hours=24)
             recent_change = TaskHistory.objects.filter(
@@ -3453,8 +3462,6 @@ def _update_task_employee(task, data, user=None):
         new_priority = str(data['priority']).lower()
         if old_priority != new_priority:
             from .models import TaskHistory
-            from django.utils import timezone
-            from datetime import timedelta
             
             last_24h = timezone.now() - timedelta(hours=24)
             recent_change = TaskHistory.objects.filter(
@@ -4715,7 +4722,6 @@ def verify_token(request):
 
     # 1. Try HMAC verification (The legacy way)
     secret = getattr(settings, "ATTENDANCE_SECRET_KEY", "hanuai-attendance-secret-shared-key").encode()
-    from django.utils import timezone
     message = timezone.localtime(timezone.now()).strftime("%Y-%m-%d").encode()
     expected_hmac = hmac.new(secret, message, hashlib.sha256).hexdigest()
     

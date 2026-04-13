@@ -20,7 +20,10 @@ self.addEventListener('push', (event) => {
 
   if (event.data) {
     try {
-      data = JSON.parse(event.data.text());
+      const payload = JSON.parse(event.data.text());
+      data.title = payload.title || data.title;
+      data.body = payload.body || data.body;
+      data.url = payload.url || payload.link || '/'; // Handle both url and link
     } catch (e) {
       data.body = event.data.text();
     }
@@ -28,11 +31,11 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body || '',
-    icon: data.icon || '/static/assets/icon-192.png',
-    badge: '/static/assets/badge-72.png',
-    tag: 'attendance-reminder',          // collapses duplicate notifications
+    icon: data.icon || '/favicon.ico', // Fallback to favicon
+    badge: '/favicon.ico',            // Fallback to favicon
+    tag: 'attendance-reminder',
     renotify: true,
-    requireInteraction: true,            // stays visible until dismissed
+    requireInteraction: true,
     data: { url: data.url || '/' },
     actions: [
       { action: 'open', title: '📋 Open App' },

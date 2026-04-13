@@ -29,19 +29,21 @@ def ensure_vapid_keys():
             v.public_key.public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
         ).rstrip(b'=').decode()
 
-        # Store PEM as single line with literal \n
-        priv_pem = v.private_pem().decode().strip()
+        # Extract raw private key bytes (32 bytes for P-256) and save as base64url
+        # This format is much easier to store in .env and more reliably parsed by pywebpush
+        priv_raw = v.private_key.private_numbers().private_value.to_bytes(32, 'big')
+        priv_b64 = base64.urlsafe_b64encode(priv_raw).rstrip(b'=').decode()
 
         # Write keys to .env
         env_path = Path(settings.BASE_DIR) / '.env'
         with open(env_path, 'a') as f:
             f.write(f'\nVAPID_PUBLIC_KEY={pub}\n')
-            f.write(f'VAPID_PRIVATE_KEY={priv_pem}\n')
+            f.write(f'VAPID_PRIVATE_KEY={priv_b64}\n')
             f.write(f'VAPID_CLAIMS_SUB=mailto:{settings.DEFAULT_FROM_EMAIL}\n')
 
         # Update runtime settings immediately
         settings.VAPID_PUBLIC_KEY = pub
-        settings.VAPID_PRIVATE_KEY = priv_pem
+        settings.VAPID_PRIVATE_KEY = priv_b64
         settings.VAPID_CLAIMS_SUB = f'mailto:{settings.DEFAULT_FROM_EMAIL}'
 
         logger.info('[Push] VAPID keys generated and saved to .env')
