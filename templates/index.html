@@ -1899,15 +1899,15 @@
                 <div style="font-size: 48px; margin-bottom: 16px;">🏃</div>
                 <h3 style="margin-bottom: 16px;">Check Out Confirmation</h3>
                 <div id="checkOutDetails" style="margin-bottom: 24px; text-align: left;"></div>
-                <div id="halfDayWarning" class="hidden"
-                    style="background: #fee2e2; padding: 16px; border-radius: 12px; margin-bottom: 20px; color: #991b1b; border: 1px solid #fecaca;">
-                    <h4 style="margin: 0 0 4px; font-weight: 700;">⚠️ Half Day Warning</h4>
-                    <p style="margin: 0; font-size: 0.9rem; opacity: 0.9;">You have worked less than <strong>8.25 hours</strong>. This will be recorded as a half-day in your records.</p>
+                <div id="tooEarlyWarning" class="hidden"
+                    style="background: #fef2f2; padding: 16px; border-radius: 12px; margin-bottom: 20px; color: #b91c1c; border: 1px solid #fecaca;">
+                    <h4 style="margin: 0 0 4px; font-weight: 700;">🚫 Session Too Short</h4>
+                    <p style="margin: 0; font-size: 0.9rem; opacity: 0.9;">You have worked less than <strong>4.5 hours</strong>. Minimum 4.5 hours are required to record a half-day session. You cannot check out yet.</p>
                 </div>
-                <div id="earlyCheckoutWarning" class="hidden"
-                    style="background: #fef3c7; padding: 16px; border-radius: 12px; margin-bottom: 20px; color: #92400e; border: 1px solid #fde68a;">
-                    <h4 style="margin: 0 0 4px; font-weight: 700;">💡 Early Checkout Tip</h4>
-                    <p style="margin: 0; font-size: 0.9rem; opacity: 0.9;">You've hit the minimum 8.25h threshold, but the standard goal is <strong>9 hours</strong>. Checking out early may negatively impact your productivity momentum and attendance graphs!</p>
+                <div id="halfDayWarning" class="hidden"
+                    style="background: #fff7ed; padding: 16px; border-radius: 12px; margin-bottom: 20px; color: #9a3412; border: 1px solid #fed7aa;">
+                    <h4 style="margin: 0 0 4px; font-weight: 700;">⚠️ Half Day Warning</h4>
+                    <p style="margin: 0; font-size: 0.9rem; opacity: 0.9;">You have worked less than <strong>9 hours</strong>. This will be recorded as a <strong>half-day</strong> in your records.</p>
                 </div>
                 <div style="display: flex; gap: 12px; justify-content: center;">
                     <button onclick="closeModal('checkOutModal')" class="btn btn-secondary">Cancel</button>

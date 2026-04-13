@@ -671,8 +671,9 @@ def check_out(request):
         elif record.type == 'client':
             record.status = 'client'
         else:
-            # Full day present if worked >= 8.25 hours (standard 9h with 45m buffer)
-            record.status = 'half_day' if worked_hours < 8.25 else 'present'
+            # 9 Hours strict: Less than 9 hours is marked as half day
+            record.status = 'half_day' if worked_hours < 9.0 else 'present'
+            record.is_half_day = True if worked_hours < 9.0 else False
             
         record.save()
         
@@ -845,6 +846,19 @@ def mark_absentees_for_date(target_date):
                 ) for emp_id in absentees
             ]
             AttendanceRecord.objects.bulk_create(new_records, ignore_conflicts=True)
+
+        # 2. Mark employees who checked in but forgot to check out as 'absent'
+        # This applies if the day has ended (6 PM for today, or any past day)
+        now = timezone.localtime(timezone.now())
+        if target_date < now.date() or (target_date == now.date() and now.hour >= 18):
+            AttendanceRecord.objects.filter(
+                date=target_date,
+                check_in_time__isnull=False,
+                check_out_time__isnull=True
+            ).exclude(status__in=['absent', 'leave']).update(
+                status='absent',
+                notes="Absent marked: Forgot to check out"
+            )
     except Exception as e:
         print(f"Error marking absentees: {e}")
 
@@ -1890,18 +1904,25 @@ def serve_document(request, doc_id):
 @api_view(['GET'])
 @require_gated_token_api
 def admin_summary(request):
-    """Get admin dashboard summary"""
+    """Get admin dashboard summary for a specific date (defaults to today)"""
     user_id = request.GET.get('user_id')
+    date_param = request.GET.get('date')
     user = Employee.objects.filter(id=user_id).first() if user_id else None
     # Include de-facto Mentors (any user who has subordinates)
     is_mentor = user and (user.role == 'mentor' or (user.role != 'admin' and user.subordinates.exists()))
 
     try:
-        today = date.today()
+        # Determine the target date (default to today IST)
+        if date_param:
+            target_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+        else:
+            target_date = timezone.localtime(timezone.now()).date()
 
         # Filter out admins from the workforce counts
         employees_qs = Employee.objects.filter(is_active=True).exclude(role='admin')
-        records_qs = AttendanceRecord.objects.filter(date=today).exclude(employee__role='admin')
+        
+        # We look for records on the target date
+        records_qs = AttendanceRecord.objects.filter(date=target_date).exclude(employee__role='admin')
         
         if is_mentor:
             employees_qs = employees_qs.filter(mentors=user)
@@ -1910,7 +1931,7 @@ def admin_summary(request):
         # Total employees (excluding admins)
         total_employees = employees_qs.count()
 
-        # Present today (excluding admins)
+        # Present today (excluding admins) - includes present, half_day, wfh, client
         present_today = records_qs.filter(
             status__in=['present', 'half_day', 'wfh', 'client']
         ).count()
@@ -1940,15 +1961,10 @@ def admin_summary(request):
         surveyors_leave = surveyors_records.filter(status='leave').count()
 
         # For backward compatibility or general "working" count
-        surveyors_present = surveyors_office + surveyors_client + surveyors_wfh
+        surveyors_active = surveyors_office + surveyors_client + surveyors_wfh
 
-        # Absent: total - present - leave
-        surveyors_absent = max(0, surveyors_total - surveyors_present - surveyors_leave)
-
-        # Absentees today
-        absentees_today = records_qs.filter(
-            status='absent'
-        ).count()
+        # Absent: total - active - leave (This is the most accurate way to show "Not Marked")
+        surveyors_absent = max(0, surveyors_total - surveyors_active - surveyors_leave)
 
         # On leave today
         on_leave_today = records_qs.filter(
@@ -1960,22 +1976,30 @@ def admin_summary(request):
             status='wfh'
         ).count()
 
+        # Not Marked Today: Total - (Present/Active) - Leave
+        # We rename the key return but keep 'absent_today' for frontend compatibility if needed, 
+        # but the calculation is now dynamic.
+        not_marked_today = max(0, total_employees - present_today - on_leave_today)
+
         return Response({
             'success': True,
+            'date': str(target_date),
             'total_employees': total_employees,
             'present_today': present_today,
             'surveyors_total': surveyors_total,
-            'surveyors_present': surveyors_present,
+            'surveyors_present': surveyors_active, # Kept name for compatibility
             'surveyors_office': surveyors_office,
             'surveyors_client': surveyors_client,
             'surveyors_wfh': surveyors_wfh,
             'surveyors_leave': surveyors_leave,
             'surveyors_absent': surveyors_absent,
-            'absent_today': absentees_today,
+            'absent_today': not_marked_today, # Frontend expects 'absent_today'
             'on_leave': on_leave_today,
             'wfh_today': wfh_today
         })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return Response({
             'success': False,
             'message': f'Failed to fetch admin summary: {str(e)}'

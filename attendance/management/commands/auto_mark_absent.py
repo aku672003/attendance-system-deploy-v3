@@ -50,7 +50,17 @@ class Command(BaseCommand):
                 )
                 absent_count += 1
 
-        msg = f"Marked {absent_count} employee(s) as Absent for {target_date}"
+        # Also mark those who checked in but didn't check out as 'absent'
+        missed_checkout_count = AttendanceRecord.objects.filter(
+            date=target_date,
+            check_in_time__isnull=False,
+            check_out_time__isnull=True
+        ).exclude(status__in=['absent', 'leave']).update(
+            status='absent',
+            notes="Absent marked: Forgot to check out"
+        )
+
+        msg = f"Marked {absent_count} employee(s) as Absent (no check-in) and {missed_checkout_count} as Absent (missed check-out) for {target_date}"
         self.stdout.write(self.style.SUCCESS(msg))
         logger.info(msg)
 
@@ -82,5 +92,15 @@ def run_auto_mark_absent():
                 check_out_time=None,
             )
             absent_count += 1
+    
+    # Also mark those who checked in but didn't check out as 'absent'
+    missed_checkout_count = AttendanceRecord.objects.filter(
+        date=target_date,
+        check_in_time__isnull=False,
+        check_out_time__isnull=True
+    ).exclude(status__in=['absent', 'leave']).update(
+        status='absent',
+        notes="Absent marked: Forgot to check out"
+    )
 
-    logger.info(f"[Scheduler] Marked {absent_count} employee(s) as Absent for {target_date}")
+    logger.info(f"[Scheduler] Marked {absent_count} employee(s) as Absent (no check-in) and {missed_checkout_count} as Absent (missed check-out) for {target_date}")

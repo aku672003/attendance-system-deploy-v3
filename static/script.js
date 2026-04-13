@@ -27,6 +27,7 @@ let currentPhotoLocation = null; // Store for overlay
 let serverTimeOffset = 0; // Milliseconds between server and local time
 let isExportAllCancelled = false; // Flag for cancellation
 let dashboardLocationWatchId = null; // Background watcher for dashboard
+let currentSummaryDate = null; // Tracks date for Daily Overview modal
 
 /**
  * Returns a new Date object reflecting the current Indian Standard Time (IST),
@@ -1472,28 +1473,66 @@ async function loadActiveTasks() {
 }
 
 // Admin Card Click Handlers
-async function showEmployeeSummary() {
+async function showEmployeeSummary(targetDateStr = null) {
     if (!(currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.has_subordinates)) {
         showNotification('Access denied', 'error');
         return;
     }
-    showLoading("Generating workforce summary...");
+
+    // Handle date tracking
+    if (targetDateStr) {
+        currentSummaryDate = new Date(targetDateStr);
+    } else if (!currentSummaryDate) {
+        currentSummaryDate = getCurrentISTDate();
+    }
+
+    const formattedDateForApi = currentSummaryDate.toISOString().split('T')[0];
+    const todayStr = getCurrentISTDate().toISOString().split('T')[0];
+    const isToday = formattedDateForApi === todayStr;
+
+    showLoading(targetDateStr ? `Loading summary for ${formatDateDMY(currentSummaryDate)}...` : "Generating workforce summary...");
+    
     try {
-        const res = await apiCall('admin-summary', 'GET', { user_id: currentUser.id });
+        const res = await apiCall('admin-summary', 'GET', { 
+            user_id: currentUser.id,
+            date: formattedDateForApi 
+        });
+
         if (res && res.success) {
             const summary = res;
+
+            // Updated Minimal Date Nav
+            const dateNavHtml = `
+                <div class="summary-date-nav" style="display: flex; align-items: center; justify-content: center; gap: 12px; margin: 4px 0 10px 0; width: 100%;">
+                    <button onclick="changeSummaryDate(-1)" class="nav-btn-minimal" title="Previous Day" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 50%; width: 28px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; flex-shrink: 0;">
+                        <span style="color: #64748b; font-size: 1rem; font-weight: 400;">‹</span>
+                    </button>
+                    
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 0px; min-width: 90px;">
+                        <span style="font-weight: 800; color: #1e293b; font-size: 0.9rem; letter-spacing: -0.01em; white-space: nowrap;">${formatDateDMY(currentSummaryDate)}</span>
+                        ${!isToday ? `<a href="javascript:void(0)" onclick="resetSummaryDate()" style="color: #3b82f6; font-size: 0.65rem; font-weight: 700; text-decoration: none; text-transform: uppercase; letter-spacing: 0.02em;">Today</a>` : '<span style="color: #94a3b8; font-size: 0.6rem; font-weight: 700; text-transform: uppercase;">Current Data</span>'}
+                    </div>
+
+                    <button onclick="${isToday ? 'void(0)' : 'changeSummaryDate(1)'}" class="nav-btn-minimal" title="Next Day" style="background: ${isToday ? '#f1f5f9' : '#f8fafc'}; border: 1px solid #e2e8f0; border-radius: 50%; width: 28px; height: 28px; cursor: ${isToday ? 'not-allowed' : 'pointer'}; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; flex-shrink: 0; ${isToday ? 'opacity: 0.3;' : ''}">
+                        <span style="color: #64748b; font-size: 1rem; font-weight: 400;">›</span>
+                    </button>
+                </div>
+            `;
 
             // Create premium modal content
             const content = `
                 <div class="summary-modal-container">
                     <button class="modal-close-btn" onclick="safeRemoveModal(this.closest('.modal'))">✕</button>
                     
-                    <div class="summary-header">
-                        <h3>📊 Daily Overview</h3>
-                        <span style="font-size:0.9rem; color:var(--gray-500);">${formatDateDMY(new Date())}</span>
+                    <div class="summary-header" style="text-align: center; border-bottom: 1px solid #f1f5f9; padding: 10px 5px 5px 5px;">
+                        <h3 style="margin-bottom: 8px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <span style="background: #eff6ff; padding: 5px; border-radius: 10px; font-size: 0.9rem;">📊</span> 
+                            Daily Overview
+                        </h3>
+                        ${dateNavHtml}
                     </div>
 
-                    <div class="summary-hero">
+                    <div class="summary-hero" style="margin-top: 20px;">
                         <span class="hero-label">TOTAL WORKFORCE</span>
                         <span class="hero-value">${summary.total_employees || 0}</span>
                         <div class="hero-subtitle">Active Employees <small>(Excl. Admin)</small></div>
@@ -1512,7 +1551,7 @@ async function showEmployeeSummary() {
                             <div class="summary-icon icon-absent">🔴</div>
                             <div class="summary-data">
                                 <span class="value">${summary.absent_today || 0}</span>
-                                <span class="label">Absent</span>
+                                <span class="label">Not Marked Today</span>
                             </div>
                         </div>
 
@@ -1547,7 +1586,7 @@ async function showEmployeeSummary() {
                                     <div class="surveyor-report-count">
                                         ${summary.surveyors_present || 0}<small>/${summary.surveyors_total || 0}</small>
                                     </div>
-                                    <div class="surveyor-report-label">Present Today</div>
+                                    <div class="surveyor-report-label">Present</div>
                                 </div>
                             </div>
                             
@@ -1571,7 +1610,7 @@ async function showEmployeeSummary() {
                                 </div>
                                 <div class="surveyor-breakdown-item">
                                     <div style="font-size: 1.3rem; font-weight: 800; color: #64748b;">${summary.surveyors_absent || 0}</div>
-                                    <div style="font-size: 0.65rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-top: 4px;">Absent</div>
+                                    <div style="font-size: 0.65rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-top: 4px;">Not Marked</div>
                                 </div>
                             </div>
                         </div>
@@ -1579,13 +1618,23 @@ async function showEmployeeSummary() {
                 </div>
             `;
 
+            // If there's already a modal open, just update its content to avoid backdrop stacking
+            const existingModal = document.querySelector('.modal.summary-modal-active');
+            if (existingModal) {
+                const modalContent = existingModal.querySelector('.modal-content');
+                if (modalContent) {
+                    modalContent.innerHTML = content;
+                    return;
+                }
+            }
+
             // Create modal wrapper
             const modal = document.createElement('div');
-            modal.className = 'modal'; // 'modal' class in CSS already has position: fixed, inset: 0, etc.
+            modal.className = 'modal summary-modal-active'; 
             modal.style.display = 'flex'; 
-            modal.style.alignItems = 'flex-start'; // Start from top to allow full page scroll
-            modal.style.overflowY = 'auto'; // Enable scrolling on the backdrop
-            modal.style.padding = '40px 10px'; // Breathing room
+            modal.style.alignItems = 'flex-start'; 
+            modal.style.overflowY = 'auto'; 
+            modal.style.padding = '40px 10px'; 
             
             modal.innerHTML = `
                 <div class="modal-content" style="max-width: 600px; width: 95%; padding: 0; border-radius: 20px; border: none; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); margin: auto; overflow: visible; flex: none;">
@@ -1603,7 +1652,10 @@ async function showEmployeeSummary() {
 
             // Close on outside click
             modal.addEventListener('click', (e) => {
-                if (e.target === modal) safeRemoveModal(modal);
+                if (e.target === modal) {
+                    safeRemoveModal(modal);
+                    currentSummaryDate = null; // Reset on close
+                }
             });
 
         }
@@ -1613,6 +1665,29 @@ async function showEmployeeSummary() {
     } finally {
         hideLoading();
     }
+}
+
+async function changeSummaryDate(offset) {
+    if (!currentSummaryDate) currentSummaryDate = getCurrentISTDate();
+    
+    // Logic: check if next day is in future
+    const newDate = new Date(currentSummaryDate);
+    newDate.setDate(newDate.getDate() + offset);
+    
+    const todayStr = getCurrentISTDate().toISOString().split('T')[0];
+    const newDateStr = newDate.toISOString().split('T')[0];
+    
+    if (newDateStr > todayStr) {
+        return; // Don't allow future dates
+    }
+    
+    currentSummaryDate = newDate;
+    await showEmployeeSummary();
+}
+
+async function resetSummaryDate() {
+    currentSummaryDate = getCurrentISTDate();
+    await showEmployeeSummary();
 }
 
 
@@ -6750,15 +6825,6 @@ async function showCheckOut() {
         const now = getCurrentISTDate();
         const workHours = (now - checkInTime) / (1000 * 60 * 60);
 
-        // 1️⃣ Before 4.5 hours → do NOT allow check-out at all
-        if (workHours < 4.5) {
-            showNotification(
-                'You cannot check out before completing 4.5 hours of work.',
-                'error'
-            );
-            return;
-        }
-
         // Save context for confirmCheckOut()
         currentCheckOutContext = { record, workHours };
 
@@ -6778,19 +6844,29 @@ async function showCheckOut() {
             <div style="margin-bottom: 12px; font-size: 0.9rem;"><strong>Office:</strong> ${record.office_name || 'N/A'}</div>
         `;
 
+        const tooEarlyWarning = document.getElementById('tooEarlyWarning');
         const halfDayWarning = document.getElementById('halfDayWarning');
-        const earlyCheckoutWarning = document.getElementById('earlyCheckoutWarning');
+        const confirmBtn = document.getElementById('confirmCheckOutBtn');
 
-        // New Logic: 45 min buffer (8.25 hours)
-        if (workHours < 8.25) {
+        // Logic check for warnings and checkout ability
+        if (workHours < 4.5) {
+            tooEarlyWarning.classList.remove('hidden');
+            halfDayWarning.classList.add('hidden');
+            confirmBtn.disabled = true;
+            confirmBtn.style.opacity = '0.5';
+            confirmBtn.style.cursor = 'not-allowed';
+        } else if (workHours < 9.0) {
+            tooEarlyWarning.classList.add('hidden');
             halfDayWarning.classList.remove('hidden');
-            earlyCheckoutWarning.classList.add('hidden');
-        } else if (workHours < 9) {
-            halfDayWarning.classList.add('hidden');
-            earlyCheckoutWarning.classList.remove('hidden');
+            confirmBtn.disabled = false;
+            confirmBtn.style.opacity = '1';
+            confirmBtn.style.cursor = 'pointer';
         } else {
+            tooEarlyWarning.classList.add('hidden');
             halfDayWarning.classList.add('hidden');
-            earlyCheckoutWarning.classList.add('hidden');
+            confirmBtn.disabled = false;
+            confirmBtn.style.opacity = '1';
+            confirmBtn.style.cursor = 'pointer';
         }
 
         openModal('checkOutModal');
@@ -6836,20 +6912,20 @@ async function confirmCheckOut() {
         const { record, workHours } = currentCheckOutContext;
         const currentTime = getCurrentDateTime();
 
-        // Safety: block if somehow still < 4.5 hours
-        if (workHours < 4.5) {
+        // Safety: block if somehow still < 0.5 hours
+        if (workHours < 0.5) {
             showNotification(
-                'You cannot check out before completing 4.5 hours of work.',
+                'You cannot check out before completing 0.5 hours of work.',
                 'error'
             );
             return;
         }
 
-        // 2️⃣ Between 4.5 and 8.25 hours → warning + confirmation
-        if (workHours < 8.25) {
+        // 2️⃣ Less than 9 hours → warning + confirmation
+        if (workHours < 9.0) {
             const proceed = await showConfirm(
                 `You have worked ${workHours.toFixed(2)} hours. ` +
-                'You have worked less than 8.25 hours. This will be marked as a half day in your monthly records.',
+                'You have worked less than 9.0 hours. This will be marked as a half day in your monthly records.',
                 'Half Day Warning',
                 '⏳'
             );
