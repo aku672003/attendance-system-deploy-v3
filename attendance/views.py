@@ -3905,12 +3905,16 @@ def wfh_request_approve(request):
             req_type = request_obj.request_type
             
             if req_type == 'wfh':
-                # Mark as WFH approved
-                AttendanceRecord.objects.filter(
-                    employee=request_obj.employee,
-                    date=request_obj.start_date,
-                    type='wfh'
-                ).update(status='wfh')
+                # Mark as WFH approved for the entire range
+                current_date = request_obj.start_date
+                while current_date <= request_obj.end_date:
+                    # Update existing 'absent' records to 'wfh'
+                    AttendanceRecord.objects.filter(
+                        employee=request_obj.employee,
+                        date=current_date,
+                        status='absent'
+                    ).update(status='wfh', type='wfh')
+                    current_date += timedelta(days=1)
             else:
                 # For leaves (full/half day), we generally DO want to auto-mark 
                 # because the employee isn't working.
