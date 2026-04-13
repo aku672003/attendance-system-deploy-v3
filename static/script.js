@@ -6849,24 +6849,26 @@ async function showCheckOut() {
         const confirmBtn = document.getElementById('confirmCheckOutBtn');
 
         // Logic check for warnings and checkout ability
-        if (workHours < 4.5) {
-            tooEarlyWarning.classList.remove('hidden');
-            halfDayWarning.classList.add('hidden');
-            confirmBtn.disabled = true;
-            confirmBtn.style.opacity = '0.5';
-            confirmBtn.style.cursor = 'not-allowed';
-        } else if (workHours < 9.0) {
-            tooEarlyWarning.classList.add('hidden');
-            halfDayWarning.classList.remove('hidden');
-            confirmBtn.disabled = false;
-            confirmBtn.style.opacity = '1';
-            confirmBtn.style.cursor = 'pointer';
-        } else {
-            tooEarlyWarning.classList.add('hidden');
-            halfDayWarning.classList.add('hidden');
-            confirmBtn.disabled = false;
-            confirmBtn.style.opacity = '1';
-            confirmBtn.style.cursor = 'pointer';
+        if (tooEarlyWarning && halfDayWarning && confirmBtn) {
+            if (workHours < 4.5) {
+                tooEarlyWarning.classList.remove('hidden');
+                halfDayWarning.classList.add('hidden');
+                confirmBtn.disabled = true;
+                confirmBtn.style.opacity = '0.5';
+                confirmBtn.style.cursor = 'not-allowed';
+            } else if (workHours < 9.0) {
+                tooEarlyWarning.classList.add('hidden');
+                halfDayWarning.classList.remove('hidden');
+                confirmBtn.disabled = false;
+                confirmBtn.style.opacity = '1';
+                confirmBtn.style.cursor = 'pointer';
+            } else {
+                tooEarlyWarning.classList.add('hidden');
+                halfDayWarning.classList.add('hidden');
+                confirmBtn.disabled = false;
+                confirmBtn.style.opacity = '1';
+                confirmBtn.style.cursor = 'pointer';
+            }
         }
 
         openModal('checkOutModal');
