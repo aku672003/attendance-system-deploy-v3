@@ -1251,8 +1251,11 @@ async function markAllAsRead() {
 
 async function loadDashboardData() {
     if (!currentUser) return;
+    showLoading();
 
     document.getElementById('userName').textContent = currentUser.name;
+    const isMentor = currentUser.role === 'Mentor' || currentUser.has_subordinates || currentUser.role === 'mentor';
+    const isAdmin = currentUser.role === 'admin';
 
     // Load custom widget layout
     initWidgetSizes();
@@ -1260,25 +1263,23 @@ async function loadDashboardData() {
     // Load notifications for all users
     loadNotifications();
 
-    if (currentUser.role === 'admin') {
+    if (isAdmin) {
         // Admin sees admin stats grid and admin-specific cards
-        document.getElementById('employeeStatsGrid').classList.add('hidden');
-        document.getElementById('adminStatsGrid').classList.remove('hidden');
-        document.getElementById('checkInCard').classList.add('hidden'); // Hide check-in for admin
-        document.getElementById('checkOutCard').classList.add('hidden'); // Hide check-out for admin
-        document.getElementById('adminCard').classList.remove('hidden');
-        document.getElementById('assignMentorDashboardCard').classList.remove('hidden');
-        document.getElementById('exportCard').classList.remove('hidden');
+        document.getElementById('employeeStatsGrid')?.classList.add('hidden');
+        document.getElementById('adminStatsGrid')?.classList.remove('hidden');
+        document.getElementById('checkInCard')?.classList.add('hidden');
+        document.getElementById('checkOutCard')?.classList.add('hidden');
+        document.getElementById('adminCard')?.classList.remove('hidden');
+        document.getElementById('assignMentorDashboardCard')?.classList.remove('hidden');
+        document.getElementById('exportCard')?.classList.remove('hidden');
         document.getElementById('trainModelCard')?.classList.remove('hidden');
-        document.getElementById('profileCard').classList.add('hidden');
+        document.getElementById('profileCard')?.classList.add('hidden');
         document.getElementById('myTasksCard')?.classList.remove('hidden');
         document.getElementById('myStatsCard')?.classList.remove('hidden');
         document.getElementById('temporaryTagsCard')?.classList.remove('hidden');
-        // Admin always uses the full Admin Panel card, not Manage Employees
         document.getElementById('manageEmployeesCard')?.classList.add('hidden');
         document.getElementById('adminExportNote')?.classList.remove('hidden');
 
-        // Load admin dashboard data
         await Promise.all([
             loadAdminSummary(),
             loadUpcomingBirthdays(),
@@ -1287,70 +1288,75 @@ async function loadDashboardData() {
             loadIntelligenceHubData()
         ]);
     } else {
-        // Employee sees employee stats grid and employee-specific cards
-        document.getElementById('adminStatsGrid').classList.add('hidden');
-        document.getElementById('employeeStatsGrid').classList.remove('hidden');
-        document.getElementById('profileCard').classList.remove('hidden');
-        document.getElementById('adminCard').classList.add('hidden');
-        document.getElementById('assignMentorDashboardCard').classList.add('hidden');
-        document.getElementById('exportCard').classList.add('hidden');
+        // Employee/Mentor section
+        document.getElementById('adminStatsGrid')?.classList.add('hidden');
+        document.getElementById('employeeStatsGrid')?.classList.remove('hidden');
+        document.getElementById('profileCard')?.classList.remove('hidden');
+        document.getElementById('adminCard')?.classList.add('hidden');
+        document.getElementById('assignMentorDashboardCard')?.classList.add('hidden');
+        document.getElementById('exportCard')?.classList.add('hidden');
         document.getElementById('trainModelCard')?.classList.add('hidden');
         document.getElementById('adminExportNote')?.classList.add('hidden');
         document.getElementById('myStatsCard')?.classList.remove('hidden');
 
-        if (currentUser.role === 'Mentor' || currentUser.has_subordinates) {
+        if (isMentor) {
+            // Mentor specific tweaks: Show the relevant stats from admin grid
+            document.getElementById('adminStatsGrid')?.classList.remove('hidden');
             document.getElementById('manageEmployeesCard')?.classList.remove('hidden');
+            document.getElementById('taskMentorCard')?.classList.remove('hidden');
+            document.getElementById('meetingMomCard')?.classList.remove('hidden');
+            
+            // Customize labels for Mentor context
+            const summaryTitle = document.querySelector('#widget-admin-summary .stat-card-title');
+            if (summaryTitle) summaryTitle.textContent = '👥 Team Summary';
+            
+            const requestsTitle = document.querySelector('#widget-admin-requests .stat-card-title');
+            if (requestsTitle) requestsTitle.textContent = '📋 Team Requests';
+
+            // Hide cards that mentors shouldn't see if necessary
+            document.getElementById('widget-admin-birthdays')?.classList.add('hidden');
         } else {
             document.getElementById('manageEmployeesCard')?.classList.add('hidden');
+            document.getElementById('taskMentorCard')?.classList.add('hidden');
+            document.getElementById('meetingMomCard')?.classList.add('hidden');
         }
 
         // Initialize Intelligence Hub Visibility
         const intelligenceHubCard = document.getElementById('intelligenceHubCard');
         if (intelligenceHubCard) {
             intelligenceHubCard.classList.remove('hidden');
-
-            // Explicitly show all buttons for admin
             document.getElementById('btnViewAnalysis') && (document.getElementById('btnViewAnalysis').style.display = '');
             document.getElementById('btnSearchPersonnel') && (document.getElementById('btnSearchPersonnel').style.display = '');
             document.getElementById('btnMyStats') && (document.getElementById('btnMyStats').style.display = '');
         }
 
-        // 1. Kick off location check in the background (non-blocking)
-        let isUserInRange = false;
-        const locationPromise = updateLocationStatus(false).then(status => {
-            isUserInRange = status ? status.inRange : false;
-            // Re-trigger attendance load if location actually mattered
-            loadTodayAttendance(isUserInRange);
-            return isUserInRange;
-        }).catch(e => {
-            console.error("Error updating location status:", e);
-            return false;
-        });
-
-        // Check location permission and gate the Check In card
         checkLocationPermission();
 
-        // Parallelized Loading for secondary dashboard cards
-        await Promise.all([
-            (async () => { try { await loadTodayAttendance(isUserInRange); } catch (e) { console.error(e); } })(),
+        // Load data
+        const promises = [
+            (async () => { try { await loadTodayAttendance(); } catch (e) { console.error(e); } })(),
             (async () => { try { await loadMonthlyStats(); } catch (e) { console.error(e); } })(),
             (async () => { try { await loadWFHEligibility(); } catch (e) { console.error(e); } })(),
             (async () => { try { await refreshMyTasks(); } catch (e) { console.error(e); } })(),
             (async () => { try { await loadIntelligenceHubData(); } catch (e) { console.error(e); } })(),
             (async () => { try { await loadMentorStatus(); } catch (e) { console.error(e); } })()
-        ]);
+        ];
 
-        // Check profile completeness for non-admin users
-        if (currentUser.role !== 'admin') {
-            try { await checkProfileCompleteness(); } catch (e) { console.error(e); }
+        if (isMentor) {
+            promises.push(loadAdminSummary());
+            promises.push(loadPendingRequests());
+            promises.push(loadActiveTasks());
         }
+
+        await Promise.all(promises);
+        await checkProfileCompleteness();
     }
-    // Check if it is the user's Birthday!
+
     try {
         await checkBirthday();
-    } catch (e) {
-        console.error("Critical error in birthday check:", e);
-    }
+    } catch (e) {}
+    
+    hideLoading();
 }
 
 async function checkProfileCompleteness() {
@@ -1411,7 +1417,13 @@ async function loadAdminSummary() {
             const summaryCard = document.getElementById('widget-admin-summary');
             if (summaryCard) {
                 const titleEl = summaryCard.querySelector('.stat-card-title');
-                if (titleEl) titleEl.innerHTML = '📊 Daily Workforce <small style="font-size:0.7rem; opacity:0.6;">(Excl. Admin)</small>';
+                if (titleEl) {
+                    if (currentUser.role === 'admin') {
+                        titleEl.innerHTML = '📊 Daily Workforce <small style="font-size:0.7rem; opacity:0.6;">(Excl. Admin)</small>';
+                    } else {
+                        titleEl.innerHTML = '👥 Team Summary';
+                    }
+                }
             }
 
             const totalEl = document.getElementById('totalEmployees');
@@ -2462,6 +2474,11 @@ function renderRequestCards(requests) {
                                 <span style="font-size:0.85rem; color: #64748b; font-weight:600; display: flex; align-items: center; gap: 4px;">
                                     <span style="font-size: 1rem;">📅</span> ${req.date}
                                 </span>
+                                ${req.task_info ? `
+                                    <span class="req-badge" style="background: ${req.task_info.percent === 100 ? '#d1fae5' : '#fef3c7'}; color: ${req.task_info.percent === 100 ? '#059669' : '#d97706'}; padding: 6px 12px; border-radius: 8px; font-weight:700; display: flex; align-items: center; gap: 4px;">
+                                        <span style="font-size: 1rem;">📋</span> ${req.task_info.summary}
+                                    </span>
+                                ` : ''}
                             </div>
                         </div>
                         <div class="req-actions-tech">
@@ -2609,11 +2626,7 @@ async function openTaskMentor(autoAssigneeId = null) {
 
     const priorityBtn = document.getElementById('btnEnterPriorityMode');
     if (priorityBtn) {
-        if (typeof currentUser !== 'undefined' && currentUser && (currentUser.role.toLowerCase() === 'admin' || currentUser.role.toLowerCase() === 'mentor' || currentUser.has_subordinates)) {
-            priorityBtn.style.display = 'inline-block';
-        } else {
-            priorityBtn.style.display = 'none';
-        }
+        priorityBtn.style.display = 'inline-block';
     }
 
     openModal('taskMentorModal');
@@ -2805,9 +2818,15 @@ function renderTaskBoard() {
     const inProgressList = document.getElementById('inProgressList');
     const completedList = document.getElementById('completedList');
 
-    const todoTasks = tasks.filter(t => t.status === 'todo');
-    const inProgressTasks = tasks.filter(t => t.status === 'in_progress');
-    const completedTasks = tasks.filter(t => t.status === 'completed');
+    const getPriorityWeight = (p) => {
+        if (!p) return 99;
+        p = p.toLowerCase();
+        const w = { 'p1':1, 'p2':2, 'p3':3, 'p4':4, 'urgent':5, 'high':6, 'medium':7, 'low':8 };
+        return w[p] || 99;
+    };
+    const todoTasks = tasks.filter(t => t.status === 'todo').sort((a,b) => getPriorityWeight(a.priority) - getPriorityWeight(b.priority));
+    const inProgressTasks = tasks.filter(t => t.status === 'in_progress').sort((a,b) => getPriorityWeight(a.priority) - getPriorityWeight(b.priority));
+    const completedTasks = tasks.filter(t => t.status === 'completed').sort((a,b) => getPriorityWeight(a.priority) - getPriorityWeight(b.priority));
 
     document.getElementById('todoCount').textContent = todoTasks.length;
     document.getElementById('inProgressCount').textContent = inProgressTasks.length;
@@ -2877,16 +2896,25 @@ function renderTaskBoard() {
             const assigneeNames = assignees.map(a => a.name).join(', ') || 'Unassigned';
 
             return `
-                <div class="premium-task-card ${dueClass}" id="task-${task.id}" draggable="true" ondragstart="drag(event)" onclick="${window._isPriorityMode ? `togglePrioritySelection(${task.id})` : `openTaskDetail(${task.id})`}" style="animation: slideInUp 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; animation-delay: ${idx * 50}ms; opacity:1; cursor:pointer; overflow: hidden; position: relative; border: ${window._prioritySelection && window._prioritySelection.includes(task.id) ? '2px solid #f59e0b' : '1px solid #e2e8f0'}">
-                    ${window._isPriorityMode && window._prioritySelection && window._prioritySelection.includes(task.id) ? `
+                <div class="premium-task-card ${dueClass}" id="task-${task.id}" draggable="true" ondragstart="drag(event)" onclick="${window._isPriorityMode ? (task.status !== 'completed' ? `togglePrioritySelection(${task.id})` : '') : `openTaskDetail(${task.id})`}" style="animation: slideInUp 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; animation-delay: ${idx * 50}ms; opacity:1; cursor:pointer; overflow: hidden; position: relative; border: ${window._prioritySelection && window._prioritySelection.includes(task.id) ? '2px solid #f59e0b' : '1px solid #e2e8f0'}">
+                    ${task.status !== 'completed' && window._isPriorityMode && window._prioritySelection && window._prioritySelection.includes(task.id) ? `
                     <div style="position: absolute; top: -5px; right: -5px; background: #f59e0b; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.85rem; z-index: 10; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                         P${window._prioritySelection.indexOf(task.id) + 1}
                     </div>
                     ` : ''}
-                    <div class="premium-card-header">
-                        <span class="premium-priority-badge ${priorityClass}" style="border-radius: 6px; padding: 4px 10px;">${priorityLabel}</span>
+                    <div class="premium-card-header" style="flex-wrap: wrap; margin-bottom: 6px;">
+                        ${task.status !== 'completed' ? `
+                        <div style="display: flex; gap: 4px; align-items: center; max-width: 60%; flex-wrap: wrap;">
+                            ${(task.history || []).filter(h => h.field === 'priority' && h.old && h.old !== task.priority).reverse().map(h => {
+                                const hp = h.old.toLowerCase();
+                                const hpClass = hp === 'high' ? 'priority-high' : (hp === 'medium' ? 'priority-medium' : (hp === 'urgent' ? 'priority-urgent' : (['p1','p2','p3','p4'].includes(hp)) ? `priority-${hp}` : 'priority-low'));
+                                return `<span class="premium-priority-badge ${hpClass}" style="border-radius: 6px; padding: 4px 10px; opacity: 0.4; text-decoration: line-through; transform: scale(0.9);" title="Old Priority">${hp.toUpperCase()}</span>`;
+                            }).join('')}
+                            <span class="premium-priority-badge ${priorityClass}" style="border-radius: 6px; padding: 4px 10px;">${priorityLabel}</span>
+                        </div>
+                        ` : '<div style="display: flex; max-width: 60%;"></div>'}
                         ${dueBadge}
-                        <div style="display:flex; gap:8px;">
+                        <div style="display:flex; gap:8px; margin-left: auto;">
                             ${typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || task.Mentor_id === currentUser.id || currentUser.role === 'Mentor' || currentUser.has_subordinates) ? `
                             <button class="btn-icon-sm" onclick="event.stopPropagation(); editTask(${task.id})" style="background:#f1f5f9; border:none; color:#64748b; cursor:pointer; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; transition:all 0.2s;" title="Edit">✎</button>
                             <button class="btn-icon-sm" onclick="event.stopPropagation(); deleteTask(${task.id})" style="background:#fef2f2; border:none; color:#ef4444; cursor:pointer; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; transition:all 0.2s;" title="Delete">🗑</button>
@@ -2996,9 +3024,15 @@ function renderMyTaskBoard() {
     const inProgressList = document.getElementById('myInProgressList');
     const completedList = document.getElementById('myCompletedList');
 
-    const todoTasks = myTasks.filter(t => t.status === 'todo');
-    const inProgressTasks = myTasks.filter(t => t.status === 'in_progress');
-    const completedTasks = myTasks.filter(t => t.status === 'completed');
+    const getPriorityWeight = (p) => {
+        if (!p) return 99;
+        p = p.toLowerCase();
+        const w = { 'p1':1, 'p2':2, 'p3':3, 'p4':4, 'urgent':5, 'high':6, 'medium':7, 'low':8 };
+        return w[p] || 99;
+    };
+    const todoTasks = myTasks.filter(t => t.status === 'todo').sort((a,b) => getPriorityWeight(a.priority) - getPriorityWeight(b.priority));
+    const inProgressTasks = myTasks.filter(t => t.status === 'in_progress').sort((a,b) => getPriorityWeight(a.priority) - getPriorityWeight(b.priority));
+    const completedTasks = myTasks.filter(t => t.status === 'completed').sort((a,b) => getPriorityWeight(a.priority) - getPriorityWeight(b.priority));
 
     document.getElementById('myTodoCount').textContent = todoTasks.length;
     document.getElementById('myInProgressCount').textContent = inProgressTasks.length;
@@ -3050,12 +3084,21 @@ function renderMyTaskBoard() {
 
             return `
                 <div class="premium-task-card ${dueClass}" id="mytask-${task.id}" onclick="openTaskDetail(${task.id})" style="animation: slideInUp 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; animation-delay: ${idx * 50}ms; opacity:1; cursor:pointer;">
-                    <div class="premium-card-header" style="margin-bottom: 0;">
-                        <span class="premium-priority-badge ${priorityClass}" style="border-radius: 6px; padding: 4px 10px;">${task.priority || 'Medium'}</span>
+                    <div class="premium-card-header" style="flex-wrap: wrap; margin-bottom: 6px;">
+                        ${task.status !== 'completed' ? `
+                        <div style="display: flex; gap: 4px; align-items: center; max-width: 60%; flex-wrap: wrap;">
+                            ${(task.history || []).filter(h => h.field === 'priority' && h.old && h.old !== task.priority).reverse().map(h => {
+                                const hp = h.old.toLowerCase();
+                                const hpClass = hp === 'high' ? 'priority-high' : (hp === 'medium' ? 'priority-medium' : (hp === 'urgent' ? 'priority-urgent' : (['p1','p2','p3','p4'].includes(hp)) ? `priority-${hp}` : 'priority-low'));
+                                return `<span class="premium-priority-badge ${hpClass}" style="border-radius: 6px; padding: 4px 10px; opacity: 0.4; text-decoration: line-through; transform: scale(0.9);" title="Old Priority">${hp.toUpperCase()}</span>`;
+                            }).join('')}
+                            <span class="premium-priority-badge ${priorityClass}" style="border-radius: 6px; padding: 4px 10px;">${(task.priority || 'Medium').toUpperCase()}</span>
+                        </div>
+                        ` : '<div style="display: flex; max-width: 60%;"></div>'}
                         ${dueBadge}
                         <div style="display:flex; gap:8px; margin-left: auto;">
-                            ${typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || task.Mentor_id === currentUser.id) ? `
                             <button class="btn-icon-sm" onclick="event.stopPropagation(); editTask(${task.id})" style="background:#f1f5f9; border:none; color:#64748b; cursor:pointer; width:28px; height:28px; border-radius:6px; display:flex; align-items:center; justify-content:center; transition:all 0.2s; font-size: 10px;" title="Edit">✎</button>
+                            ${typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || task.Mentor_id === currentUser.id) ? `
                             <button class="btn-icon-sm" onclick="event.stopPropagation(); deleteTask(${task.id})" style="background:#fef2f2; border:none; color:#ef4444; cursor:pointer; width:28px; height:28px; border-radius:6px; display:flex; align-items:center; justify-content:center; transition:all 0.2s; font-size: 10px;" title="Delete">🗑</button>
                             ` : ''}
                         </div>
@@ -3443,6 +3486,24 @@ function addNewTask(autoAssigneeId = null) {
     // Populate teams
     loadTeams();
 
+    const prioritySelect = document.getElementById('taskPriority');
+    if (prioritySelect) {
+        ['p1', 'p2', 'p3', 'p4'].forEach(pVal => {
+            const pOption = prioritySelect.querySelector(`option[value="${pVal}"]`);
+            if (pOption) {
+                if (currentUser && currentUser.role !== 'admin' && currentUser.role !== 'Mentor') {
+                    const hasP = myTasks.some(t => t.status !== 'completed' && String(t.priority).toLowerCase() === pVal);
+                    pOption.disabled = hasP;
+                    if (hasP) pOption.title = `You already have an active ${pVal.toUpperCase()}`;
+                    else pOption.title = "";
+                } else {
+                    pOption.disabled = false;
+                    pOption.title = "";
+                }
+            }
+        });
+    }
+
     openModal('addTaskModal');
 }
 
@@ -3484,6 +3545,24 @@ async function editTask(taskId) {
         selectedOverseerIds = [task.Mentor_id];
     }
     updateSelectedTags('overseerDisplay', selectedOverseerIds, window.allEmployeesSimple || [], 'taskOverseerIds');
+
+    const prioritySelect = document.getElementById('taskPriority');
+    if (prioritySelect) {
+        ['p1', 'p2', 'p3', 'p4'].forEach(pVal => {
+            const pOption = prioritySelect.querySelector(`option[value="${pVal}"]`);
+            if (pOption) {
+                if (currentUser && currentUser.role !== 'admin' && currentUser.role !== 'Mentor') {
+                    const hasOtherP = myTasks.some(t => t.id !== taskId && t.status !== 'completed' && String(t.priority).toLowerCase() === pVal);
+                    pOption.disabled = hasOtherP;
+                    if (hasOtherP) pOption.title = `You already have an active ${pVal.toUpperCase()}`;
+                    else pOption.title = "";
+                } else {
+                    pOption.disabled = false;
+                    pOption.title = "";
+                }
+            }
+        });
+    }
 
     openModal('addTaskModal');
 }
@@ -3608,6 +3687,7 @@ async function requestNewTaskFromMentor() {
     // Close the warning modal immediately (User: "Board Empty card did not close")
     closeModal('noTasksModal');
 
+    showLoading("Requesting new task from mentor...");
     try {
         const res = await apiCall('request-new-task', 'POST', {
             user_id: currentUser.id
@@ -3628,6 +3708,7 @@ async function requestNewTaskFromMentor() {
         if (btn) btn.disabled = false;
     } finally {
         if (btn) btn.textContent = '🚀 Request New Task';
+        hideLoading();
     }
 }
 
@@ -3741,8 +3822,8 @@ async function openTaskDetail(taskId) {
         historyLog.innerHTML = history.map(h => `
             <div style="border-left: 2px solid #e2e8f0; padding-left: 12px; position: relative;">
                 <div style="position: absolute; left: -6px; top: 6px; width: 10px; height: 10px; background: #cbd5e1; border-radius: 50%;"></div>
-                <div style="font-weight: 700; color: #1e293b;">${h.field === 'due_date' ? '📅 Deadline Changed' : h.field}</div>
-                <div style="font-size: 0.8rem; margin: 2px 0;">From ${h.field === 'due_date' ? formatDateDMY(h.old) : h.old} to <strong>${h.field === 'due_date' ? formatDateDMY(h.new) : h.new}</strong></div>
+                <div style="font-weight: 700; color: #1e293b;">${h.field === 'due_date' ? '📅 Deadline Changed' : (h.field === 'priority' ? '⭐ Priority Changed' : h.field)}</div>
+                <div style="font-size: 0.8rem; margin: 2px 0;">From ${h.field === 'due_date' ? formatDateDMY(h.old) : (h.field === 'priority' ? (h.old||'').toUpperCase() : h.old)} to <strong>${h.field === 'due_date' ? formatDateDMY(h.new) : (h.field === 'priority' ? (h.new||'').toUpperCase() : h.new)}</strong></div>
                 <div style="font-size: 0.75rem; color: #94a3b8;">${h.by} • ${formatDateDMY(h.at)} ${formatTimeOnly(h.at)}</div>
             </div>
         `).join('');
@@ -3842,6 +3923,7 @@ async function saveNewStep() {
     const text = document.getElementById('newStepText').value.trim();
     if (!text || !currentSelectedTaskId) return;
 
+    showLoading("Adding step...");
     try {
         const t = [...tasks, ...myTasks].find(t => t.id === currentSelectedTaskId);
         const currentSteps = t.steps || [];
@@ -3860,10 +3942,13 @@ async function saveNewStep() {
         }
     } catch (e) {
         showNotification('Error adding step', 'error');
+    } finally {
+        hideLoading();
     }
 }
 
 async function toggleTaskStep(taskId, stepId, isCompleted) {
+    showLoading(isCompleted ? "Completing step..." : "Undoing step...");
     try {
         const t = [...tasks, ...myTasks].find(t => t.id === taskId);
         const updatedSteps = (t.steps || []).map(s => {
@@ -3885,6 +3970,8 @@ async function toggleTaskStep(taskId, stepId, isCompleted) {
         }
     } catch (e) {
         showNotification('Error updating step', 'error');
+    } finally {
+        hideLoading();
     }
 }
 
@@ -4003,6 +4090,7 @@ async function deleteTask(taskId) {
 }
 
 async function approveRequest(requestId, type) {
+    showLoading(`Approving ${type.toUpperCase()} request...`);
     try {
         const endpoint = type === 'wfh' ? 'wfh-request-approve' : 'leave-request-approve';
         const res = await apiCall(endpoint, 'POST', {
@@ -4020,6 +4108,8 @@ async function approveRequest(requestId, type) {
     } catch (error) {
         console.error('Error approving request:', error);
         showNotification('Error approving request', 'error');
+    } finally {
+        hideLoading();
     }
 }
 
@@ -4027,6 +4117,7 @@ async function rejectRequest(requestId, type) {
     const reason = await openRejectionModal(requestId);
     if (reason === null) return; // User cancelled
 
+    showLoading(`Rejecting ${type.toUpperCase()} request...`);
     try {
         const endpoint = type === 'wfh' ? 'wfh-request-approve' : 'leave-request-approve';
         // For rejection, we use the approve endpoint but with status='rejected'
@@ -4047,6 +4138,8 @@ async function rejectRequest(requestId, type) {
     } catch (error) {
         console.error('Error rejecting request:', error);
         showNotification('Error rejecting request', 'error');
+    } finally {
+        hideLoading();
     }
 }
 
@@ -5560,6 +5653,7 @@ async function requestWFHExtension(ev) {
     const note = prompt('Add a short note for Admin/HR (optional):', '');
     if (note === null) return;
 
+    showLoading("Sending WFH request...");
     try {
         const res = await apiCall('wfh-request', 'POST', {
             employee_id: currentUser.id,
@@ -5568,9 +5662,11 @@ async function requestWFHExtension(ev) {
         });
         if (res && res.success) {
             showNotification('WFH request sent to Admin/HR', 'success');
+            hideLoading();
             return;
         }
     } catch { }
+    hideLoading();
 
     // No API? Fall back to email:
     const mailto = `mailto:HR@hanu.ai.com?subject= WFH Request &body=${encodeURIComponent(
@@ -9649,6 +9745,7 @@ async function submitRequest() {
         return;
     }
 
+    showLoading("Submitting request...");
     try {
         if (btn) {
             btn.disabled = true;
@@ -9701,6 +9798,7 @@ async function submitRequest() {
             btn.disabled = false;
             btn.textContent = 'Submit Request';
         }
+        hideLoading();
     }
 }
 
@@ -9858,6 +9956,20 @@ function selectRequest(requestId) {
                         <span style="font-size:1.2rem;">📅</span> ${req.date}
                     </div>
                 </div>
+
+                ${req.task_info ? `
+                    <div style="background: #f0fdf4; padding: 16px; border-radius: 16px; border: 1px solid #bbf7d0;">
+                        <span style="font-size: 0.75rem; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 8px;">Task Verification</span>
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px;">
+                            <span style="font-size: 0.9rem; font-weight: 700; color: #1e293b;">${req.task_info.summary}</span>
+                            <span style="font-size: 0.9rem; font-weight: 800; color: ${req.task_info.percent === 100 ? '#10b981' : '#f59e0b'};">${req.task_info.percent}%</span>
+                        </div>
+                        <div style="height: 8px; background: #dcfce7; border-radius: 10px; overflow: hidden;">
+                            <div style="height: 100%; width: ${req.task_info.percent}%; background: ${req.task_info.percent === 100 ? '#10b981' : '#f59e0b'}; transition: width 0.3s ease;"></div>
+                        </div>
+                        <p style="font-size: 0.75rem; color: #166534; margin-top: 8px; font-weight: 500;">Review task completion before approval</p>
+                    </div>
+                ` : ''}
 
                 ${req.reason ? `
                     <div style="background: #f8fafc; padding: 16px; border-radius: 16px;">

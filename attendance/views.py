@@ -638,24 +638,36 @@ def check_out(request):
             completed_tasks = today_tasks.filter(status='completed').count()
             
             task_status_msg = f'Tasks: {completed_tasks}/{total_tasks} completed.'
-            if total_tasks > 0 and completed_tasks == total_tasks:
-                task_status_msg += ' (All clear!)'
-            elif total_tasks > 0:
-                task_status_msg += ' (Pending!)'
+            if total_tasks > 0:
+                percent = round((completed_tasks / total_tasks * 100), 1)
+                task_status_msg += f' ({percent}% completion)'
+                if completed_tasks == total_tasks:
+                    task_status_msg += ' - ALL TASKS CLEAR!'
+                else:
+                    task_status_msg += ' - PENDING TASKS!'
             else:
-                task_status_msg += ' (No tasks due today)'
+                task_status_msg = 'Tasks: No tasks assigned/due for today.'
                 
             # Automate an approval request for Mentor/Admin to verify tasks at the end of the day
-            EmployeeRequest.objects.get_or_create(
+            # If a manual request already exists, update its reason to include task status
+            wfh_req, created = EmployeeRequest.objects.get_or_create(
                 employee_id=employee_id,
                 request_type='wfh',
                 start_date=record.date,
                 end_date=record.date,
                 defaults={
                     'status': 'pending', 
-                    'reason': f'WFH log: {worked_hours} hours worked. {task_status_msg}'
+                    'reason': f'WFH Session Log ({worked_hours}h worked). {task_status_msg}'
                 }
             )
+            if not created and wfh_req.status == 'pending':
+                wfh_req.reason = f'WFH Session Log ({worked_hours}h worked). {task_status_msg}'
+                wfh_req.save()
+            
+            # Notify mentors if a request was created or task status was updated
+            notification_msg = f"{record.employee.name}: WFH Log ({worked_hours}h). {task_status_msg}"
+            for mentor in record.employee.mentors.all():
+                _send_task_notification(mentor, notification_msg, wfh_req.id, type="request")
         elif record.type == 'client':
             record.status = 'client'
         else:
@@ -949,7 +961,7 @@ def wfh_request(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        EmployeeRequest.objects.create(
+        req = EmployeeRequest.objects.create(
             employee_id=employee_id,
             request_type='wfh',
             start_date=requested_date,
@@ -957,6 +969,12 @@ def wfh_request(request):
             reason=reason,
             status='pending'
         )
+        
+        # Notify mentors
+        emp = Employee.objects.get(id=employee_id)
+        for mentor in emp.mentors.all():
+            _send_task_notification(mentor, f"{emp.name} requested WFH for {requested_date}", req.id, type="request")
+
         return Response({
             'success': True,
             'message': 'Request submitted'
@@ -2865,7 +2883,20 @@ def pending_requests(request):
             requests_obj = requests_obj.filter(employee__mentors=user)
 
         requests_data = []
+        from .models import Task
         for req in requests_obj:
+            task_info = None
+            if req.request_type == 'wfh':
+                today_tasks = Task.objects.filter(assignees=req.employee, due_date=req.start_date)
+                total = today_tasks.count()
+                completed = today_tasks.filter(status='completed').count()
+                task_info = {
+                    'total': total,
+                    'completed': completed,
+                    'percent': round((completed / total * 100), 1) if total > 0 else 0,
+                    'summary': f"{completed}/{total} tasks completed" if total > 0 else "No tasks due"
+                }
+
             requests_data.append({
                 'id': req.id,
                 'employee_id': req.employee.id,
@@ -2877,6 +2908,7 @@ def pending_requests(request):
                 'end_date': str(req.end_date),
                 'reason': req.reason,
                 'status': req.status,
+                'task_info': task_info,
                 'reviewed_by_name': req.reviewed_by.name if req.reviewed_by else None,
                 'is_mentor': req.reviewed_by in req.employee.mentors.all() if req.reviewed_by else False,
                 'created_at': req.created_at.isoformat()
@@ -3256,7 +3288,32 @@ def _update_task_admin(task, data, user=None):
             task.completed_at = timezone.now()
         task.status = new_status
     if 'priority' in data:
-        task.priority = data['priority']
+        old_priority = str(task.priority).lower() if task.priority else 'medium'
+        new_priority = str(data['priority']).lower()
+        if old_priority != new_priority:
+            from .models import TaskHistory
+            from django.utils import timezone
+            from datetime import timedelta
+            
+            last_24h = timezone.now() - timedelta(hours=24)
+            recent_change = TaskHistory.objects.filter(
+                task=task, field_changed='priority', changed_at__gte=last_24h
+            ).order_by('-changed_at').first()
+            
+            if recent_change:
+                recent_change.new_value = new_priority
+                recent_change.changed_by = user
+                recent_change.changed_at = timezone.now()
+                recent_change.save()
+            else:
+                TaskHistory.objects.create(
+                    task=task,
+                    field_changed='priority',
+                    old_value=old_priority,
+                    new_value=new_priority,
+                    changed_by=user
+                )
+        task.priority = new_priority
     if 'title' in data:
         task.title = data['title']
     if 'description' in data:
@@ -3366,6 +3423,34 @@ def _update_task_employee(task, data, user=None):
                 changed_by=user
             )
         task.due_date = data['due_date']
+        
+    if 'priority' in data:
+        old_priority = str(task.priority).lower() if task.priority else 'medium'
+        new_priority = str(data['priority']).lower()
+        if old_priority != new_priority:
+            from .models import TaskHistory
+            from django.utils import timezone
+            from datetime import timedelta
+            
+            last_24h = timezone.now() - timedelta(hours=24)
+            recent_change = TaskHistory.objects.filter(
+                task=task, field_changed='priority', changed_at__gte=last_24h
+            ).order_by('-changed_at').first()
+            
+            if recent_change:
+                recent_change.new_value = new_priority
+                recent_change.changed_by = user
+                recent_change.changed_at = timezone.now()
+                recent_change.save()
+            else:
+                TaskHistory.objects.create(
+                    task=task,
+                    field_changed='priority',
+                    old_value=old_priority,
+                    new_value=new_priority,
+                    changed_by=user
+                )
+        task.priority = new_priority
 
     if 'status' in data:
         new_status = data['status']
@@ -3703,6 +3788,13 @@ def wfh_request_reject(request):
             wfh_request.reviewed_by = admin_user
         wfh_request.save()
 
+        # Notify Employee of rejection
+        reviewer_name = wfh_request.reviewed_by.name if wfh_request.reviewed_by else "Admin"
+        notif_msg = f"Your WFH request for {wfh_request.start_date} has been rejected by {reviewer_name}."
+        if reason:
+            notif_msg += f" Note: {reason}"
+        _send_task_notification(wfh_request.employee, notif_msg, wfh_request.id, type="request")
+
         return Response({
             'success': True,
             'message': 'WFH request rejected'
@@ -3775,6 +3867,13 @@ def wfh_request_approve(request):
                 request_obj.reviewed_by = admin_user
 
         request_obj.save()
+
+        # Notify Employee of the decision
+        reviewer_name = request_obj.reviewed_by.name if request_obj.reviewed_by else "Admin"
+        notif_msg = f"Your {request_obj.request_type.upper()} request for {request_obj.start_date} has been {status_val} by {reviewer_name}."
+        if admin_response:
+            notif_msg += f" Note: {admin_response}"
+        _send_task_notification(request_obj.employee, notif_msg, request_obj.id, type="request")
 
         # If approved, handle based on request type
         if status_val == 'approved':
@@ -3871,7 +3970,7 @@ def unblock_attendance(request):
             return Response({'success': False, 'message': 'Attendance is already unblocked for today.'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Create request using today's date for start and end date as placeholders
-        EmployeeRequest.objects.create(
+        req = EmployeeRequest.objects.create(
             employee=employee,
             request_type='unblock_attendance',
             start_date=now_local,
@@ -3879,6 +3978,11 @@ def unblock_attendance(request):
             reason='Automated request: 3 consecutive missed check-outs.',
             status='pending'
         )
+
+        # Notify admins
+        admins = Employee.objects.filter(role='admin')
+        for admin in admins:
+            _send_task_notification(admin, f"Unblock request for {employee.name} (Missed Check-outs)", req.id, type="request")
 
         return Response({'success': True, 'message': 'Unblock request submitted to Admin successfully.'})
     except Exception as e:
@@ -3928,7 +4032,7 @@ def leave_request(request):
                     skipped_count += 1
                     continue
 
-                EmployeeRequest.objects.create(
+                req = EmployeeRequest.objects.create(
                     employee=employee,
                     request_type=r_type,
                     start_date=req_date,
@@ -3937,6 +4041,10 @@ def leave_request(request):
                     status='pending',
                     half_day_period=period if r_type == 'half_day' else None
                 )
+                
+                # Notify mentors
+                for mentor in employee.mentors.all():
+                    _send_task_notification(mentor, f"{employee.name} requested {r_type.replace('_', ' ')} for {req_date}", req.id, type="request")
                 created_count += 1
             except Exception:
                 skipped_count += 1
@@ -3987,6 +4095,13 @@ def leave_request_approve(request):
                 req.reviewed_by = admin_user
 
         req.save()
+
+        # Notify Employee of the decision
+        reviewer_name = req.reviewed_by.name if req.reviewed_by else "Admin"
+        notif_msg = f"Your {req.request_type.upper()} request for {req.start_date} has been {status_val} by {reviewer_name}."
+        if admin_response:
+            notif_msg += f" Note: {admin_response}"
+        _send_task_notification(req.employee, notif_msg, req.id, type="request")
 
         # If approved, create or update AttendanceRecord to reflect in calendar
         if status_val == 'approved':
