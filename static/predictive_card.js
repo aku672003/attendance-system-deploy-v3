@@ -497,7 +497,7 @@ function openPredictiveAnalysisModal(data, predictDays = 3) {
                 <div class="predictive-header" style="margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start;">
                     <div>
                         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
-                            <span style="font-size: 20px; font-weight: 900; background: linear-gradient(135deg, #6366f1, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -0.5px;">Intelligence Hub</span>
+                            <span style="font-size: 20px; font-weight: 900; background: linear-gradient(135deg, #6366f1, #8b5cf6); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -0.5px;">Intelligence Hub</span>
                             <span style="font-size: 9px; font-weight: 800; color: #6366f1; background: rgba(99,102,241,0.1); padding: 3px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: 1px; white-space: nowrap;">Admin Executive</span>
                         </div>
                         <div style="font-size: 11px; font-weight: 700; color: #94a3b8; display: flex; align-items: center; gap: 5px;">
