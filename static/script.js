@@ -2434,7 +2434,7 @@ async function openRequestsModal() {
                         <div class="header-title">
                             <span style="font-size: 1.8rem;">📥</span>
                             <div style="display:flex; flex-direction:column;">
-                                <span style="font-size: 1.4rem; font-weight: 800; color: #1e293b;">Pending Requests</span>
+                                <span style="font-size: 1.4rem; font-weight: 800; color: #1e293b;">Active Requests</span>
                                 <span style="font-size: 0.85rem; font-weight: 500; color: #64748b;">Review and manage employee submissions</span>
                             </div>
                         </div>
@@ -2600,7 +2600,7 @@ async function switchRequestMode(mode) {
     // Update title
     const titleEl = document.querySelector('.premium-header .header-title span[style*="font-weight: 800"]');
     if (titleEl) {
-        titleEl.textContent = mode === 'history' ? 'Request History' : 'Pending Requests';
+        titleEl.textContent = mode === 'history' ? 'Request History' : 'Active Requests';
     }
 
     // Update button visual state

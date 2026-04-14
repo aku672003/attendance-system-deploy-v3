@@ -2919,16 +2919,33 @@ def pending_requests(request):
     try:
         status_param = request.GET.get('status', 'pending')
         
+        # Buffer logic for WFH requests
+        today = timezone.now().date()
+        buffer_date = today - timedelta(days=2)
+        
         if status_param == 'history':
-            # Get approved and rejected requests
+            # Get approved and rejected requests, plus expired WFH requests
             requests_obj = EmployeeRequest.objects.filter(
-                status__in=['approved', 'rejected']
+                Q(status__in=['approved', 'rejected']) |
+                Q(request_type='wfh', end_date__lt=buffer_date)
             ).select_related('employee').order_by('-start_date')
+            
+            # If we are specifically in history, we should exclude Approved WFH that are still within buffer
+            # (since they are shown in Active)
+            requests_obj = requests_obj.exclude(
+                status='approved', request_type='wfh', end_date__gte=buffer_date
+            )
         else:
-            # Get pending requests
+            # Get pending requests, plus recently approved WFH requests
             requests_obj = EmployeeRequest.objects.filter(
-                status='pending'
+                Q(status='pending') |
+                Q(status='approved', request_type='wfh', end_date__gte=buffer_date)
             ).select_related('employee').order_by('start_date')
+            
+            # Exclude WFH requests that have expired (even if pending)
+            requests_obj = requests_obj.exclude(
+                request_type='wfh', end_date__lt=buffer_date
+            )
 
         if is_mentor:
             requests_obj = requests_obj.filter(employee__mentors=user)
