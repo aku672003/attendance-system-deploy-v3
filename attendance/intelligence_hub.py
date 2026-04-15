@@ -82,7 +82,7 @@ def calculate_daily_attendance_rates(days=30):
     # Collect N working days (excluding weekends)
     while len(daily_data) < days:
         # 5 is Saturday, 6 is Sunday
-        is_working_day = current_date.weekday() < 5
+        is_working_day = current_date.weekday() < 6
         
         present_count = counts_map.get(current_date, 0)
         attendance_score = scores_map.get(current_date, 0.0)
@@ -91,7 +91,7 @@ def calculate_daily_attendance_rates(days=30):
         if is_working_day:
             daily_data.insert(0, {
                 'date': current_date,
-                'rate': round(rate, 1),
+                'rate': min(100.0, round(rate, 1)),
                 'present_count': present_count,
                 'attendance_score': attendance_score
             })
@@ -203,7 +203,7 @@ def calculate_hybrid_forecast(predict_days=3, history_days=3):
             date=d,
             status__in=['present', 'wfh', 'client']
         ).count()
-        rate = round((count / total_employees * 100), 1)
+        rate = min(100.0, round((count / total_employees * 100), 1))
 
         if d == today:
             day_name = 'Today'
@@ -695,12 +695,12 @@ def train_forecast_model():
 
     # 2. Legacy Pattern Analysis (for model_state.json metadata)
     add_log("Step 3/3: Updating organizational performance metrics...")
-    dow_groups = {i: [] for i in range(5)}
+    dow_groups = {i: [] for i in range(6)}
     all_valid_rates = []
     
     for day in daily_counts:
         wd = day['date'].weekday()
-        if wd < 5:
+        if wd < 6:
             rate = (day['score'] / all_employees_count) * 100
             if rate > 5:
                 dow_groups[wd].append(rate)
@@ -868,7 +868,7 @@ def search_personnel(query=None, department=None, min_attendance=None, max_atten
 
     for emp in employees:
         present_days = map_30d.get(emp.id, 0)
-        attendance_rate = (present_days / 30) * 100
+        attendance_rate = min(100.0, (present_days / 30) * 100)
         
         # Apply attendance filter
         if min_attendance is not None and attendance_rate < min_attendance:
@@ -951,7 +951,7 @@ def get_company_overview(days=30, predict_days=3):
     total_leave = attendance_stats['total_leave'] or 0
     total_half_day = attendance_stats['total_half_day'] or 0
     
-    overall_attendance_rate = (total_present / total_possible_attendance * 100) if total_possible_attendance > 0 else 0
+    overall_attendance_rate = min(100.0, (total_present / total_possible_attendance * 100)) if total_possible_attendance > 0 else 0
     
     # Department-wise breakdown using bulk query
     departments = all_employees.values_list('department', flat=True).distinct()
@@ -975,7 +975,7 @@ def get_company_overview(days=30, predict_days=3):
         ).count()
         
         dept_possible = dept_count * total_working_days
-        dept_rate = (dept_present / dept_possible * 100) if dept_possible > 0 else 0
+        dept_rate = min(100.0, (dept_present / dept_possible * 100)) if dept_possible > 0 else 0
         
         department_stats.append({
             'name': dept,
@@ -1024,14 +1024,14 @@ def get_company_overview(days=30, predict_days=3):
     for emp in all_employees:
         stats = emp_stats.get(emp.id, {'present': 0, 'absent': 0, 'leave': 0, 'wfh': 0})
         
-        attendance_rate = (stats['present'] / total_working_days * 100) if total_working_days > 0 else 0
+        attendance_rate = min(100.0, (stats['present'] / total_working_days * 100)) if total_working_days > 0 else 0
         
         employee_data.append({
             'id': emp.id,
             'name': emp.name,
             'department': emp.department,
             'attendance_rate': round(attendance_rate, 1),
-            'present_days': stats['present'],
+            'present_days': min(total_working_days, stats['present']),
             'absent_days': stats['absent'],
             'leave_days': stats['leave'],
             'wfh_days': stats['wfh'],
@@ -1068,31 +1068,31 @@ def get_company_overview(days=30, predict_days=3):
     
     # NEW: Weekly Pattern (Mon-Fri Average) - FIXED: Filter out zero days to avoid skewing
     try:
-        weekly_pattern_rates = {0: [], 1: [], 2: [], 3: [], 4: []} # Mon=0 to Fri=4
-        weekly_pattern_counts = {0: [], 1: [], 2: [], 3: [], 4: []}
+        weekly_pattern_rates = {0: [], 1: [], 2: [], 3: [], 4: [], 5: []} # Mon=0 to Sat=5
+        weekly_pattern_counts = {0: [], 1: [], 2: [], 3: [], 4: [], 5: []}
         for t in trend_data:
             d = datetime.strptime(str(t['date']), '%Y-%m-%d').date()
             w = d.weekday()
             present_val = t.get('present_count', 0)
-            if w < 5 and isinstance(present_val, (int, float)) and present_val > 0: # Only count active workdays
+            if w < 6 and isinstance(present_val, (int, float)) and present_val > 0: # Only count active workdays
                 weekly_pattern_rates[w].append(t['attendance_rate'])
                 weekly_pattern_counts[w].append(t['present_count'])
         
         weekly_stats = [
             round(sum(weekly_pattern_rates[i]) / len(weekly_pattern_rates[i]), 1) if weekly_pattern_rates[i] else 0 
-            for i in range(5)
+            for i in range(6)
         ]
         
         weekly_counts = [
             round(sum(weekly_pattern_counts[i]) / len(weekly_pattern_counts[i]), 1) if weekly_pattern_counts[i] else 0 
-            for i in range(5)
+            for i in range(6)
         ]
     except:
         weekly_stats = [0, 0, 0, 0, 0]
         weekly_counts = [0, 0, 0, 0, 0]
 
     # NEW: Peak Day Identification
-    days_of_week = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+    days_of_week = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
     peak_day_idx = weekly_stats.index(max(weekly_stats)) if any(weekly_stats) else 0
     peak_day = days_of_week[peak_day_idx]
     
@@ -1162,7 +1162,7 @@ def get_company_overview(days=30, predict_days=3):
         'total_employees': total_employees,
         'total_working_days': total_working_days,
         'overall_attendance_rate': round(overall_attendance_rate, 1),
-        'total_present': total_present,
+        'total_present': min(total_possible_attendance, total_present),
         'total_absent': total_absent,
         'total_leave': total_leave,
         'total_half_day': total_half_day,

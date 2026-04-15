@@ -9059,12 +9059,14 @@ async function confirmExport() {
         if (progressStatus) progressStatus.innerText = 'Building attendance register...';
         if (progressBar) progressBar.style.width = '30%';
 
-        /* ---------------- BUILD REGISTER ---------------- */
+        /* ---------------- BUILD REGISTER (OPTIMIZED) ---------------- */
 
         const dateRange = getDateRange(fromDate, toDate);
         const employeeMap = {};
 
         records.forEach(r => {
+            if (r.role === 'admin') return; // Skip Admin accounts
+
             if (!employeeMap[r.employee_id]) {
                 employeeMap[r.employee_id] = {
                     employee: r.employee_name || r.name || `#${r.employee_id}`,
@@ -9085,7 +9087,14 @@ async function confirmExport() {
             else if (status === 'leave') code = 'Leave';
             else if (status === 'absent') code = 'A';
 
-            employeeMap[r.employee_id].attendance[r.date] = code;
+            // Detect missing checkout
+            const forgotCheckOut = (r.check_in_time && !r.check_out_time);
+
+            employeeMap[r.employee_id].attendance[r.date] = {
+                code: forgotCheckOut ? 'A' : code,
+                hours: parseFloat(r.total_hours || 0),
+                forgotCheckOut: forgotCheckOut
+            };
         });
 
         if (isExportAllCancelled) return;
@@ -9104,7 +9113,14 @@ async function confirmExport() {
             { header: 'Office', key: 'office', width: 20 }
         ];
 
+        // Pre-calculate weekend labels and header keys
+        const weekendMap = {};
         dateRange.forEach(d => {
+            const dateObj = new Date(d);
+            const day = dateObj.getDay();
+            if (day === 0) weekendMap[d] = 'Sunday';
+            else if (day === 6) weekendMap[d] = 'Saturday';
+
             headers.push({
                 header: d.split('-').reverse().slice(0, 2).join('-'),
                 key: d,
@@ -9114,14 +9130,25 @@ async function confirmExport() {
 
         ws.columns = headers;
 
-        /* ---------- ROWS ---------- */
+        /* ---------- ROWS (CHUNIKED FOR PERFORMANCE) ---------- */
 
         const defaultStatus = (selectedType && selectedType !== 'all') ? '-' : 'A';
-        const employees = Object.values(employeeMap);
-        const totalEmployees = employees.length;
+        const employeesList = Object.values(employeeMap);
+        const totalEmployees = employeesList.length;
 
-        employees.forEach((emp, idx) => {
-            if (isExportAllCancelled) return;
+        // Visual styles map to avoid recreation
+        const styles = {
+            'P': { fill: 'FFC6EFCE', font: 'FF006100' },
+            'HD': { fill: 'FFFFEB9C', font: 'FF9C6500' },
+            'A': { fill: 'FFFFC7CE', font: 'FF9C0006' },
+            'WFH': { fill: 'FFE4CCFF', font: 'FF330066' },
+            'CL': { fill: 'FFDDEEFF', font: 'FF003399' },
+            'Leave': { fill: 'FFFFD9E1', font: 'FF9C004C' }
+        };
+
+        for (let idx = 0; idx < totalEmployees; idx++) {
+            if (isExportAllCancelled) break;
+            const emp = employeesList[idx];
 
             const rowData = {
                 employee: emp.employee,
@@ -9130,34 +9157,58 @@ async function confirmExport() {
                 office: emp.office
             };
 
+            // 1. Build Row Data
             dateRange.forEach(d => {
-                let cellValue = emp.attendance[d];
-
-                if (!cellValue || cellValue === 'A') {
-                    const dateObj = new Date(d);
-                    const day = dateObj.getDay();
-                    if (day === 0) cellValue = 'Sunday';
-                    else if (day === 6) cellValue = 'Saturday';
-                    else if (!cellValue) cellValue = defaultStatus;
-                }
-
-                rowData[d] = cellValue;
+                const att = emp.attendance[d];
+                let val = att ? att.code : (weekendMap[d] || defaultStatus);
+                // Override weekday A with weekend label if applicable
+                if (val === 'A' && weekendMap[d]) val = weekendMap[d];
+                rowData[d] = val;
             });
 
             const row = ws.addRow(rowData);
+
+            // 2. Apply Styles in Single Pass
             dateRange.forEach((d, i) => {
-                const colIndex = 5 + i;
-                const cell = row.getCell(colIndex);
+                const cell = row.getCell(5 + i);
                 cell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+                const val = rowData[d];
+                const att = emp.attendance[d];
+
+                let s = styles[val];
+
+                // Performance-based override for presence
+                if (att && (val === 'P' || val === 'HD')) {
+                    if (att.hours >= 8.5) s = styles['P'];
+                    else if (att.hours >= 8) s = styles['HD'];
+                }
+
+                if (s) {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: s.fill } };
+                    cell.font = { color: { argb: s.font } };
+                }
+
+                // Forgot Check-out bold border
+                if (att && att.forgotCheckOut) {
+                    cell.border = {
+                        top: { style: 'medium' },
+                        left: { style: 'medium' },
+                        bottom: { style: 'medium' },
+                        right: { style: 'medium' }
+                    };
+                }
             });
 
-            // Update progress during row generation (after 50% mark)
-            if (idx % 5 === 0 || idx === totalEmployees - 1) {
+            // Update progress and yield thread every 10 employees
+            if (idx % 10 === 0 || idx === totalEmployees - 1) {
                 const rowProgress = 50 + Math.round((idx / totalEmployees) * 40);
                 if (progressBar) progressBar.style.width = `${rowProgress}%`;
                 if (progressCount) progressCount.innerText = `${rowProgress}% complete`;
+                // Non-blocking delay
+                await new Promise(resolve => setTimeout(resolve, 0));
             }
-        });
+        }
 
         if (isExportAllCancelled) return;
 
@@ -9224,7 +9275,7 @@ async function refreshAdminProfiles() {
         </div>`;
 
     const res = await apiCall('admin-profiles', 'GET', { user_id: currentUser.id });
-    allAdminProfiles = (res && res.success && Array.isArray(res.profiles)) ? res.profiles : [];
+    allAdminProfiles = (res && res.success && Array.isArray(res.profiles)) ? res.profiles.filter(p => p.role !== 'admin') : [];
 
     // Clear search input on refresh
     const searchInput = document.getElementById('adminProfilesSearch');
@@ -9633,6 +9684,8 @@ async function exportAllProfilesExcel() {
         // 2) for each user, fetch full profile via admin-profile/{id}
         let processed = 0;
         for (const summary of profiles) {
+            if (summary.role === 'admin') continue;
+
             if (isExportAllCancelled) {
                 console.log('Export cancelled by user.');
                 return;

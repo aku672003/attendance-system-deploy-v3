@@ -830,6 +830,7 @@ def attendance_records(request):
                 'photo_url': record.check_out_photo or record.check_in_photo or None,
                 'total_hours': float(record.total_hours),
                 'is_half_day': record.is_half_day,
+                'role': record.employee.role,
             })
 
         return Response({
@@ -920,7 +921,7 @@ def monthly_stats(request):
 
         stats_data = records.aggregate(
             total_working_days=Count(Case(When(status__in=['present', 'half_day', 'wfh', 'client'], then=1))),
-            weekday_present_days=Count(Case(When(Q(status__in=['present', 'half_day', 'wfh', 'client']) & Q(date__week_day__in=[2, 3, 4, 5, 6]), then=1))),
+            weekday_present_days=Count(Case(When(Q(status__in=['present', 'half_day', 'wfh', 'client']) & Q(date__week_day__in=[2, 3, 4, 5, 6, 7]), then=1))),
             total_hours_sum=Sum('total_hours'),
             half_day_records=Count(Case(When(is_half_day=True, then=1))),
             wfh_days=Count(Case(When(type='wfh', then=1))),
@@ -1309,6 +1310,7 @@ def admin_profiles_list(request):
                 'skill_set': profile.skill_set if profile else None,
                 'reporting_mentor': profile.reporting_mentor if profile else None,
                 'docs_count': emp.docs_count,
+                'role': emp.role,
             })
 
         return Response({
@@ -2218,35 +2220,35 @@ def employee_performance_analysis(request, employee_id):
         calc_end_date = min(end_date, today)
         if start_date <= calc_end_date:
             passed_days = (calc_end_date - start_date).days + 1
-            working_days_passed = sum(1 for d in range(passed_days) if (start_date + timedelta(days=d)).weekday() < 5)
+            working_days_passed = sum(1 for d in range(passed_days) if (start_date + timedelta(days=d)).weekday() < 6)
         else:
             working_days_passed = 0
 
         weekday_present_days = records.filter(
-            date__week_day__in=[2, 3, 4, 5, 6],
+            date__week_day__in=[2, 3, 4, 5, 6, 7],
             status__in=['present', 'half_day', 'wfh', 'client']
         ).count()
 
         
         # Calculate Mon-Fri Avg
         weekday_records = records.filter(
-            date__week_day__in=[2, 3, 4, 5, 6] # Mon-Fri (1=Sun, 2=Mon... 7=Sat)
+            date__week_day__in=[2, 3, 4, 5, 6, 7] # Mon-Sat (2=Mon... 7=Sat)
         ).aggregate(
             sum_hours=Sum('total_hours')
         )
         # Fixed denominator logic as per user request: (num_weeks * 5)
         total_weekday_hours = float(weekday_records['sum_hours'] or 0)
-        weekday_avg = total_weekday_hours / (num_weeks * 5)
+        weekday_avg = total_weekday_hours / (num_weeks * 6)
 
         # Calculate Sat-Sun Avg
         weekend_records = records.filter(
-            date__week_day__in=[1, 7] # Sun (1) and Sat (7)
+            date__week_day__in=[1] # Sun (1) only
         ).aggregate(
             sum_hours=Sum('total_hours')
         )
-        # Fixed denominator logic as per user request: (num_weeks * 2)
+        # Fixed denominator logic: (num_weeks * 1)
         total_weekend_hours = float(weekend_records['sum_hours'] or 0)
-        saturday_avg = total_weekend_hours / (num_weeks * 2)
+        saturday_avg = total_weekend_hours / (num_weeks * 1)
 
 
 
@@ -2481,13 +2483,13 @@ def employee_performance_analysis(request, employee_id):
         profile = employee.profile if hasattr(employee, 'profile') else None
 
         # Calculate Peak Day (Best Day) based on history (Mon-Fri only)
-        dow_counts = {0:0, 1:0, 2:0, 3:0, 4:0}
+        dow_counts = {0:0, 1:0, 2:0, 3:0, 4:0, 5:0} # Mon-Sat
         for r in records:
-            if r.status in ['present', 'half_day', 'wfh', 'client'] and r.date.weekday() < 5:
+            if r.status in ['present', 'half_day', 'wfh', 'client'] and r.date.weekday() < 6:
                 dow_counts[r.date.weekday()] += 1
         
         best_dow = max(dow_counts, key=dow_counts.get) if any(dow_counts.values()) else 0
-        day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+        day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
         peak_day_individual = day_names[best_dow]
 
         return Response({
@@ -4289,10 +4291,10 @@ def intelligence_hub_forecast(request):
                 )
                 
                 passed_days = (today - start_date).days + 1
-                working_days_passed = sum(1 for d in range(passed_days) if (start_date + timedelta(days=d)).weekday() < 5)
+                working_days_passed = sum(1 for d in range(passed_days) if (start_date + timedelta(days=d)).weekday() < 6)
                 
                 weekday_present_days = records.filter(
-                    date__week_day__in=[2, 3, 4, 5, 6],
+                    date__week_day__in=[2, 3, 4, 5, 6, 7],
                     status__in=['present', 'half_day', 'wfh', 'client']
                 ).count()
                 
@@ -4492,11 +4494,12 @@ def employee_hr_report(request, employee_id):
         total_days  = (end_date - start_date).days + 1
         working_days = sum(
             1 for i in range(total_days)
-            if (start_date + timedelta(days=i)).weekday() < 5
+            if (start_date + timedelta(days=i)).weekday() < 6
         )
 
-        attended_days = status_counts['present'] + status_counts['wfh'] + status_counts['half_day']
-        attendance_rate = round((attended_days / working_days * 100), 1) if working_days else 0
+        raw_attended = status_counts['present'] + status_counts['wfh'] + status_counts['half_day']
+        attended_days = min(working_days, raw_attended)
+        attendance_rate = min(100.0, round((raw_attended / working_days * 100), 1)) if working_days else 0
 
         avg_check_in  = None
         avg_check_out = None
