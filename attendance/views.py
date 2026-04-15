@@ -2259,15 +2259,28 @@ def employee_performance_analysis(request, employee_id):
             office_count=Count('id', filter=Q(type='office', status__in=['present', 'half_day', 'wfh', 'client']))
         )
 
+        # Sanitize: cap each present record's hours at 14h before computing any
+        # hour-based metric.  This prevents corrupted checkout records (where the
+        # fallback logic picked up an unclosed record from a previous day and
+        # computed hours spanning multiple calendar days, capped at 99.90h in the
+        # DB) from inflating weekly/daily averages into the hundreds.
+        MAX_HOURS_PER_DAY = 14.0
+        capped_hours_sum = sum(
+            min(float(r.total_hours or 0), MAX_HOURS_PER_DAY)
+            for r in records
+            if r.status in ['present', 'half_day', 'wfh', 'client']
+        )
+        # Keep the raw DB sum available for other uses (regular/OT split below)
         total_hours_sum = float(summary_stats['sum_hours'] or 0)
-        
-        # Handle weekly average calculation
+
+        # Weekly average uses the sanitized sum and the actual number of weeks
+        # in the filtered period (never hardcoded 4).
         if is_monthly_view:
-            weekly_avg_hours = total_hours_sum / 4.33
+            weekly_avg_hours = capped_hours_sum / 4.33
         elif is_weekly_view:
-            weekly_avg_hours = total_hours_sum # Total for the week is the weekly average
+            weekly_avg_hours = capped_hours_sum  # Single week: total IS the average
         else:
-            weekly_avg_hours = total_hours_sum / 4   
+            weekly_avg_hours = capped_hours_sum / num_weeks
 
         # Forecast for tomorrow (always uses global patterns)
         tomorrow = date.today() + timedelta(days=1)
@@ -2509,7 +2522,7 @@ def employee_performance_analysis(request, employee_id):
             },
             'metrics': {
                 'total_present': summary_stats['total_present'] or 0,
-                'avg_hours_present': round(total_hours_sum / (summary_stats['total_present'] or 1), 1),
+                'avg_hours_present': round(capped_hours_sum / (summary_stats['total_present'] or 1), 1),
                 'weekday_avg': round(weekday_avg, 1),
                 'saturday_avg': round(saturday_avg, 1),
 
