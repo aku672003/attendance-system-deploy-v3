@@ -1099,7 +1099,7 @@ def employee_profile(request, employee_id=None):
             if 'current_address' in data:
                 profile.current_address = data.get('current_address')
             if 'date_of_joining' in data:
-                profile.date_of_joining = data.get('date_of_joining')
+                profile.date_of_joining = data.get('date_of_joining') or None
             if 'skill_set' in data:
                 profile.skill_set = data.get('skill_set')
             if 'reporting_mentor' in data:
@@ -1115,7 +1115,7 @@ def employee_profile(request, employee_id=None):
             if 'gender' in data:
                 profile.gender = data.get('gender')
             if 'date_of_birth' in data:
-                profile.date_of_birth = data.get('date_of_birth')
+                profile.date_of_birth = data.get('date_of_birth') or None
             
             # Personalization fields
             if 'avatar_emoji' in data:

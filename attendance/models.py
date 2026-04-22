@@ -83,23 +83,6 @@ class Employee(models.Model):
             'is_temporary': False
         }
 
-    def save(self, *args, **kwargs):
-        # Normalize name: rename 'Mandatory' to 'Holiday'
-        if self.name:
-            import re
-            self.name = re.sub(r'Mandatory', 'Holiday', self.name, flags=re.IGNORECASE)
-            # Remove double "Holiday Holiday"
-            self.name = re.sub(r'Holiday\s+Holiday', 'Holiday', self.name, flags=re.IGNORECASE)
-            self.name = self.name.strip()
-
-        if self.date and not self.day:
-            import calendar as cal_mod
-            self.day = cal_mod.day_name[self.date.weekday()]
-        if self.date and not self.year:
-            self.year = self.date.year
-        super().save(*args, **kwargs)
-
-
 class EmployeeProfile(models.Model):
     MARITAL_STATUS_CHOICES = [
         ('single', 'Single'),

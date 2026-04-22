@@ -8697,7 +8697,7 @@ async function saveProfile() {
             home_address: getFieldValue('profileHomeAddress'),
             current_address: getFieldValue('profileCurrentAddress'),
             date_of_joining: getFieldValue('profileDoj'),
-            reporting_Mentor: getFieldValue('profileReportingMgr'),
+            reporting_mentor: getFieldValue('profileReportingMgr'),
             skill_set: getFieldValue('profileSkillSet'),
             bank_account_number: getFieldValue('profileBankAccount'),
             bank_name: getFieldValue('profileBankName'),
