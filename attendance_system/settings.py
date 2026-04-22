@@ -138,6 +138,14 @@ if DOCUMENT_STORAGE_PATH and os.path.exists(DOCUMENT_STORAGE_PATH):
 else:
     DOCUMENT_STORAGE_ROOT = MEDIA_ROOT
 
+# AWS S3 Settings
+AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+AWS_DEFAULT_REGION = os.getenv('AWS_DEFAULT_REGION', 'ap-south-1')
+# S3_BUCKET_NAME should be the Access Point alias (used directly as bucket in boto3)
+S3_BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'attendance-g37k8w69fo65xagoo39ek3g58hc14aps3a-s3alias')
+S3_ACCESS_POINT_ARN = os.getenv('S3_ACCESS_POINT_ARN', 'arn:aws:s3:ap-south-1:593333832687:accesspoint/attendance')
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # REST Framework

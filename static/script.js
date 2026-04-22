@@ -1176,7 +1176,11 @@ async function handleNotificationClick(notif) {
             openTaskMentor(notif.employee_id);
         }
     } else if (type === 'request') {
-        openRequestsModal();
+        if (currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.has_subordinates) {
+            openRequestsModal();
+        } else {
+            openMyRequests('history');
+        }
     }
 
     // Auto-close notification dropdown
@@ -1780,6 +1784,17 @@ async function openBirthdayCalendar() {
                                 <button class="btn-premium-toggle active" onclick="jumpToToday()" style="padding:0 16px; border-radius:8px; font-weight:700; font-size:0.85rem;">Today</button>
                                 <button class="btn-premium-toggle" onclick="changeBirthdayMonth(1)" style="width:36px; height:36px; display:flex; align-items:center; justify-content:center; border-radius:8px; font-weight:800;" title="Next Month">→</button>
                             </div>
+                            <!-- Holiday Features -->
+                            <button onclick="openHolidayCalendarModal()" title="View Holiday Calendar" 
+                                style="background: linear-gradient(135deg, #10b981, #059669); border: none; border-radius: 12px; padding: 0 16px; height: 40px; color: white; font-size: 0.85rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2); transition: all 0.2s;">
+                                🗓️ Holidays
+                            </button>
+                            ${currentUser.role === 'admin' ? `
+                            <button onclick="openHolidayUploadModal()" title="Upload Holiday File" 
+                                style="background: linear-gradient(135deg, #6366f1, #4f46e5); border: none; border-radius: 12px; padding: 0 16px; height: 40px; color: white; font-size: 0.85rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 6px rgba(99, 102, 241, 0.2); transition: all 0.2s;">
+                                📂 Upload
+                            </button>` : ''}
+                            
                             <button onclick="closeModal('birthdayCalendarModal')" style="background: white; border: 1px solid #fee2e2; color: #ef4444; width:40px; height:40px; border-radius:12px; font-size:1.5rem; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.05);">×</button>
                         </div>
                     </div>
@@ -4222,10 +4237,21 @@ async function rejectRequest(requestId, type) {
 
 /* ==================== MY REQUESTS POPUP (STATUS OVERVIEW) ==================== */
 
-function openMyRequests() {
+function openMyRequests(initialView = 'overview') {
     showLoading("Opening your requests...");
     openModal('myRequestsModal');
     loadStatusOverview();
+    if (initialView === 'history') {
+        // We can't call toggleHistoryView directly because it toggles.
+        // We ensure it's in history view.
+        const ovContainer = document.querySelector('.overview-container');
+        const histView = document.getElementById('historyView');
+        if (ovContainer && histView) {
+            ovContainer.classList.add('hidden');
+            histView.classList.remove('hidden');
+            loadMyRequests();
+        }
+    }
     hideLoading();
 }
 
@@ -4270,10 +4296,12 @@ async function loadStatusOverview() {
             const wfhEl = document.getElementById('ovWFH');
             const halfDayEl = document.getElementById('ovHalfDay');
             const leavesEl = document.getElementById('ovLeaves');
+            const optionalEl = document.getElementById('ovOptional');
 
             if (officeEl) officeEl.textContent = officeCount;
             if (wfhEl) wfhEl.textContent = wfhCount;
             if (halfDayEl) halfDayEl.textContent = halfCount;
+            if (optionalEl) optionalEl.textContent = stats.optional_holidays || 0;
 
             // Leaves are fetched from profile separately, but if present in stats use them, else ignored here (handle in profile fetch if needed)
             if (leavesEl) leavesEl.textContent = stats.leave_days || 0;
@@ -4519,14 +4547,16 @@ async function buildAttendanceCalendar(year, month) {
         grid.appendChild(el);
     });
 
-    // Fetch attendance records and requests in parallel
-    const [attendanceRes, requestsRes] = await Promise.all([
+    // Fetch attendance records, requests, and holidays in parallel
+    const [attendanceRes, requestsRes, holidaysRes] = await Promise.all([
         apiCall('attendance-records', 'GET', { employee_id: currentUser.id }),
-        apiCall('my-requests', 'GET', { employee_id: currentUser.id })
+        apiCall('my-requests', 'GET', { employee_id: currentUser.id }),
+        apiCall('holidays', 'GET', { year: year, user_id: currentUser.id })
     ]);
 
     const allRecords = (attendanceRes && attendanceRes.success && Array.isArray(attendanceRes.records)) ? attendanceRes.records : [];
     const allRequests = (requestsRes && requestsRes.success && Array.isArray(requestsRes.requests)) ? requestsRes.requests : [];
+    const allHolidays = (holidaysRes && holidaysRes.success && Array.isArray(holidaysRes.holidays)) ? holidaysRes.holidays : [];
 
     console.log('DEBUG Calendar Records:', allRecords.length);
     console.log('DEBUG Calendar Requests:', allRequests);
@@ -4587,6 +4617,57 @@ async function buildAttendanceCalendar(year, month) {
             curr.setDate(curr.getDate() + 1);
         }
     });
+    
+    // 3. Map Holidays - they should override 'absent' but NOT 'present'/'wfh'
+    allHolidays.forEach(h => {
+        if (!h.date) return;
+        const d = new Date(h.date + 'T00:00:00');
+        if (d.getFullYear() === year && d.getMonth() === month) {
+            const dayNum = d.getDate();
+            // Show all holidays. Regular ones or selected ones should have 'holiday' status.
+            // Unselected optional ones should have 'optional' status.
+            const isUserSelected = !!h.user_selected;
+            const isRegular = !h.is_optional;
+
+            if (isRegular || isUserSelected) {
+                // If there's no attendance record, or if it's 'absent', mark as holiday
+                if (!byDay[dayNum] || byDay[dayNum].status === 'absent') {
+                    byDay[dayNum] = {
+                        ...h,
+                        status: 'holiday',
+                        source: 'holiday',
+                        isHoliday: true,
+                        holidayName: h.name,
+                        isOptional: h.is_optional,
+                        isSelected: isUserSelected
+                    };
+                } else if (byDay[dayNum]) {
+                    byDay[dayNum].isHoliday = true;
+                    byDay[dayNum].holidayName = h.name;
+                    byDay[dayNum].isOptional = h.is_optional;
+                    byDay[dayNum].isSelected = isUserSelected;
+                }
+            } else if (h.is_optional && !isUserSelected) {
+                // Highlight as optional but unselected
+                if (!byDay[dayNum] || byDay[dayNum].status === 'absent') {
+                    byDay[dayNum] = {
+                        ...h,
+                        status: 'optional_holiday',
+                        source: 'holiday',
+                        isHoliday: true,
+                        holidayName: h.name,
+                        isOptional: true,
+                        isSelected: false
+                    };
+                } else if (byDay[dayNum]) {
+                    byDay[dayNum].isHoliday = true;
+                    byDay[dayNum].holidayName = h.name;
+                    byDay[dayNum].isOptional = true;
+                    byDay[dayNum].isSelected = false;
+                }
+            }
+        }
+    });
 
     const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
     const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -4615,6 +4696,8 @@ async function buildAttendanceCalendar(year, month) {
         else if (status === 'wfh') cls += ' cal-wfh';
         else if (status === 'half_day') cls += ' cal-half';
         else if (status === 'leave') cls += ' cal-leave';
+        else if (status === 'holiday') cls += ' cal-holiday';
+        else if (status === 'optional_holiday') cls += ' cal-optional';
 
         // Add structure
         cell.innerHTML = `
@@ -4633,8 +4716,22 @@ async function buildAttendanceCalendar(year, month) {
                 if (record.reviewed_by_name) {
                     tooltipLines.push(`${record.is_Mentor ? 'Mentor: ' : 'Admin: '}${record.reviewed_by_name}`);
                 }
+                if (record.isHoliday) {
+                    tooltipLines.push(`Holiday: ${record.holidayName}`);
+                    tooltipLines.push(`Type: ${record.isOptional ? 'Optional' : 'Holiday'}`);
+                }
+            } else if (record.source === 'holiday') {
+                tooltipLines.push(`Holiday: ${record.name}`);
+                tooltipLines.push(`Type: ${record.is_optional ? 'Optional' : 'Holiday'}`);
+                if (record.is_optional) {
+                    tooltipLines.push(`Status: ${record.user_selected ? 'Selected' : 'Not Selected'}`);
+                }
             } else {
                 // Regular attendance record
+                if (record.isHoliday) {
+                    tooltipLines.push(`Holiday: ${record.holidayName}`);
+                    tooltipLines.push(`Type: ${record.isOptional ? 'Optional' : 'Holiday'}`);
+                }
                 if (record.check_in_time) tooltipLines.push(`In: ${record.check_in_time}`);
                 if (record.check_out_time) tooltipLines.push(`Out: ${record.check_out_time}`);
                 if (record.total_hours) {
@@ -4654,6 +4751,7 @@ async function buildAttendanceCalendar(year, month) {
             }
         }
 
+
         // Interactive check for future dates
         if (currentDate >= todayDate) { // Allow same day or future requests
             cell.onclick = () => {
@@ -4665,7 +4763,10 @@ async function buildAttendanceCalendar(year, month) {
                 }
             };
             cell.style.cursor = 'pointer';
-            cell.title = "Click to Request Leave/WFH";
+            if (!record) {
+                cell.title = "Click to Request Leave/WFH";
+            }
+
 
             // Restore selection state if re-rendering (e.g. month change)
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -5005,15 +5106,23 @@ async function loadWFHEligibility() {
 
             const maxLeaveLimit = 1; // Monthly leave limit
 
+            // Fetch optional stats
+            const optionalStatsRes = await apiCall('monthly-stats', 'GET', {
+                employee_id: currentUser.id,
+                year: year
+            });
+            let optionalCount = optionalStatsRes && optionalStatsRes.stats ? optionalStatsRes.stats.optional_holidays || 0 : 0;
+            const maxOptional = 2;
+
             // Update WFH
             if (statWFH) {
                 statWFH.textContent = `${currentCount}/${maxWfhLimit}`;
                 statWFH.style.color = currentCount >= maxWfhLimit ? '#ef4444' : '#10b981';
 
-                // Animate Ring (Circumference ~ 164)
+                // Animate Ring (Circumference ~ 150 for r=24)
                 if (wfhRing) {
                     const wfhPercent = Math.min((currentCount / maxWfhLimit), 1);
-                    const wfhOffset = 164 - (wfhPercent * 164);
+                    const wfhOffset = 150 - (wfhPercent * 150);
                     wfhRing.style.strokeDashoffset = wfhOffset;
                 }
             }
@@ -5023,14 +5132,28 @@ async function loadWFHEligibility() {
                 statLeaves.textContent = `${leavesUsed}/${maxLeaveLimit}`;
                 statLeaves.style.color = leavesUsed >= maxLeaveLimit ? '#ef4444' : '#10b981';
 
-                // Animate Ring (Circumference ~ 164)
                 if (leavesRing) {
                     const leavesPercent = Math.min((leavesUsed / maxLeaveLimit), 1);
-                    const leavesOffset = 164 - (leavesPercent * 164);
+                    const leavesOffset = 150 - (leavesPercent * 150);
                     leavesRing.style.strokeDashoffset = leavesOffset;
                 }
             }
+
+            // Update Optional Holidays
+            const statOptional = document.getElementById('statOptional');
+            const holidayRing = document.getElementById('holidayRing');
+            if (statOptional) {
+                statOptional.textContent = `${optionalCount}/${maxOptional}`;
+                statOptional.style.color = optionalCount >= maxOptional ? '#10b981' : '#f59e0b';
+
+                if (holidayRing) {
+                    const holidayPercent = Math.min((optionalCount / maxOptional), 1);
+                    const holidayOffset = 150 - (holidayPercent * 150);
+                    holidayRing.style.strokeDashoffset = holidayOffset;
+                }
+            }
         }
+
     } catch (error) {
         console.error('Error loading WFH eligibility:', error);
     }
@@ -8901,13 +9024,17 @@ function renderUserDocuments(docs) {
         const card = document.createElement('div');
         card.className = 'my-doc-card';
 
+        // Secure URL with gated token
+        const token = window.GATED_TOKEN || "";
+        const secureUrl = doc.url + (token ? (doc.url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token) : '');
+
         card.innerHTML = `
             <input type="checkbox" class="my-doc-checkbox" value="${doc.id}">
             ${preview}
             <div class="my-doc-name">${label}</div>
             <div class="my-doc-actions">
-                <a href="${doc.url}" target="_blank">View</a>
-                <a href="${doc.url}" download>Download</a>
+                <a href="${secureUrl}" target="_blank">View</a>
+                <a href="${secureUrl}" download>Download</a>
             </div>
         `;
 
@@ -9397,13 +9524,16 @@ function renderDocsModal(username, docs) {
         const row = document.createElement('div');
         row.className = 'doc-row';
 
+        const token = window.GATED_TOKEN || "";
+        const secureUrl = doc.url + (token ? (doc.url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token) : '');
+
         row.innerHTML = `
             <label class="doc-item">
                 <input type="checkbox" class="doc-check" value="${doc.id}">
                 <span class="doc-name">${doc.doc_name}</span>
                 <span class="doc-file">(${doc.file_name})</span>
             </label>
-            <a class="doc-view" href="${doc.file_path}" target="_blank">View</a>
+            <a class="doc-view" href="${secureUrl}" target="_blank">View</a>
         `;
 
         list.appendChild(row);
@@ -9430,7 +9560,7 @@ async function downloadUserDocs(userId) {
         return;
     }
 
-    renderDocsPopup(res.documents);
+    renderDocsModal(userId, res.documents); // userId used as fallback for username in this case
 }
 
 function downloadSelectedDocs() {
@@ -9446,8 +9576,8 @@ function downloadSelectedDocs() {
     }
 
     // Download ZIP (all docs for user)
-    window.location.href =
-        apiBaseUrl + '/admin-user-docs/' + currentDocsUserId;
+    const token = window.GATED_TOKEN || "";
+    window.location.href = apiBaseUrl + '/admin-user-docs/' + currentDocsUserId + (token ? '?token=' + encodeURIComponent(token) : '');
 
     closeDocsModal();
 }
@@ -9853,8 +9983,42 @@ function openRequestModal(dateStr) {
     const typeSelect = document.getElementById('requestType');
     if (typeSelect) {
         typeSelect.value = 'wfh';
+        toggleRequestPeriod(); // Ensure correct state
+
+        // Async check to hide Optional Holiday if user reached limit for the year (Jan-Dec)
+        (async () => {
+            try {
+                if (!currentUser) return;
+                const curYear = new Date().getFullYear();
+                const statsRes = await apiCall('monthly-stats', 'GET', { 
+                    employee_id: currentUser.id,
+                    year: curYear,
+                    month: new Date().getMonth() + 1
+                });
+
+                let optionalCount = 0;
+                if (statsRes && statsRes.success && statsRes.stats) {
+                    optionalCount = statsRes.stats.optional_holidays || 0;
+                }
+
+                const existingOpt = Array.from(typeSelect.options).find(opt => opt.value === 'optional_holiday');
+                if (optionalCount >= 2) {
+                    if (existingOpt) {
+                        existingOpt.remove();
+                    }
+                } else {
+                    if (!existingOpt) {
+                        const opt = document.createElement('option');
+                        opt.value = 'optional_holiday';
+                        opt.textContent = 'Optional Holiday';
+                        typeSelect.appendChild(opt);
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to check optional holidays for dropdown:", e);
+            }
+        })();
     }
-    toggleRequestPeriod(); // Ensure correct state
 
     const reasonInput = document.getElementById('requestReason');
     if (reasonInput) {
@@ -9943,30 +10107,46 @@ async function generateMiniCalendar() {
     const year = now.getFullYear();
     const month = now.getMonth();
 
-    // Fetch attendance data for this month
+    // Fetch attendance data and holidays for this month
     let statusMap = {};
+    let holidayMap = {};
     if (currentUser) {
         try {
             // Format dates for API: YYYY-MM-DD
             const startDate = new Date(year, month, 1);
             const endDate = new Date(year, month + 1, 0);
 
-            const records = await apiCall("attendance-records", "GET", {
-                employee_id: currentUser.id,
-                start_date: formatDate(startDate),
-                end_date: formatDate(endDate)
-            });
+            const [recordsRes, holidaysRes] = await Promise.all([
+                apiCall("attendance-records", "GET", {
+                    employee_id: currentUser.id,
+                    start_date: formatDate(startDate),
+                    end_date: formatDate(endDate)
+                }),
+                apiCall("holidays", "GET", {
+                    year: year,
+                    user_id: currentUser.id
+                })
+            ]);
 
-            if (records && records.success && Array.isArray(records.data)) {
-                records.data.forEach(record => {
-                    // record.date is YYYY-MM-DD. record.status is "present", "absent", "wfh", etc.
+            if (recordsRes && recordsRes.success && Array.isArray(recordsRes.data)) {
+                recordsRes.data.forEach(record => {
                     statusMap[record.date] = record.status;
+                });
+            }
+
+            if (holidaysRes && holidaysRes.success && Array.isArray(holidaysRes.holidays)) {
+                holidaysRes.holidays.forEach(h => {
+                    // Only show mandatory or user-selected optional holidays
+                    if (!h.is_optional || h.user_selected) {
+                        holidayMap[h.date] = h.name;
+                    }
                 });
             }
         } catch (e) {
             console.error("MiniCalendar data fetch error", e);
         }
     }
+
 
     const monthNames = ["January", "February", "March", "April", "May", "June",
         "July", "August", "September", "October", "November", "December"
@@ -10008,9 +10188,21 @@ async function generateMiniCalendar() {
         const dateKey = `${year}-${monthStr}-${dayStr}`;
 
         const status = statusMap[dateKey];
+        const holidayName = holidayMap[dateKey];
         let statusClass = "";
+        let titleText = holidayName ? `Holiday: ${holidayName}` : (status || "");
 
-        if (status) {
+        if (holidayName) {
+            // Holiday priority: if they worked, show status, but maybe different color?
+            // User requested: renaming mandatory to holiday and showing on calendar.
+            if (!status || status === "absent") statusClass = "status-holiday";
+            else if (status) {
+                if (status === "present") statusClass = "status-present";
+                else if (status === "wfh") statusClass = "status-wfh";
+                else if (status === "leave") statusClass = "status-leave";
+                else if (status === "half_day") statusClass = "status-half-day";
+            }
+        } else if (status) {
             if (status === "present") statusClass = "status-present";
             else if (status === "wfh") statusClass = "status-wfh";
             else if (status === "absent") statusClass = "status-absent";
@@ -10018,7 +10210,8 @@ async function generateMiniCalendar() {
             else if (status === "half_day") statusClass = "status-half-day";
         }
 
-        gridHtml += `<div class="mini-cal-day ${isToday ? "today" : ""} ${statusClass}" title="${status || ""}">${i}</div>`;
+        gridHtml += `<div class="mini-cal-day ${isToday ? "today" : ""} ${statusClass}" title="${titleText}">${i}</div>`;
+
     }
 
     gridHtml += "</div>";

@@ -1299,6 +1299,35 @@ body.modal-open .modal {
     box-shadow: 0 0 8px #f59e0b, 0 0 16px #f59e0b;
 }
 
+/* Holiday - Neon Rose */
+.cal-holiday,
+.calendar-day.cal-holiday {
+    background: rgba(244, 63, 94, 0.1);
+    color: #f43f5e;
+    border: 1px solid rgba(244, 63, 94, 0.3);
+    box-shadow: 0 0 15px rgba(244, 63, 94, 0.15), inset 0 0 10px rgba(244, 63, 94, 0.05);
+}
+
+.cal-holiday .calendar-dot {
+    background: #f43f5e;
+    box-shadow: 0 0 8px #f43f5e, 0 0 16px #f43f5e;
+}
+
+/* Optional Holiday (Unselected) - Amber/Orange */
+.cal-optional,
+.calendar-day.cal-optional {
+    background: rgba(245, 158, 11, 0.1) !important;
+    color: #f59e0b !important;
+    border: 1px solid rgba(245, 158, 11, 0.3) !important;
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.15), inset 0 0 10px rgba(245, 158, 11, 0.05);
+}
+
+.cal-optional .calendar-dot {
+    background: #f59e0b !important;
+    box-shadow: 0 0 8px #f59e0b, 0 0 16px #f59e0b;
+}
+
+
 /* Absent - Neon Red */
 .cal-absent,
 .calendar-day.cal-absent {
@@ -5294,8 +5323,9 @@ body.dark-mode .member-role-badge {
     display: flex;
     flex-direction: column;
     /* allow flex children */
-    overflow: hidden;
-    /* hide outer scroll */
+    overflow-y: auto;
+    overflow-x: hidden;
+    /* Allow vertical scroll if inner doesn't */
 }
 
 /* Premium Scrollbar */
@@ -5325,8 +5355,9 @@ body.dark-mode .member-role-badge {
     max-height: 85vh !important;
     display: flex !important;
     flex-direction: column !important;
-    overflow: hidden !important;
-    /* Clip corners */
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    /* Clip corners horizontally but allow vertical scroll */
 }
 
 #historyView {
@@ -5439,6 +5470,13 @@ body.dark-mode .member-role-badge {
 .mini-cal-day.status-half-day {
     background: linear-gradient(135deg, #dcfce7 50%, #fef3c7 50%);
     color: #1f2937;
+}
+
+.mini-cal-day.status-holiday {
+    background-color: #fee2e2;
+    color: #b91c1c;
+    font-weight: 700;
+    border: 1px solid #fecdd3;
 }
 
 /* Today highlight overrides or blends? */
@@ -7938,6 +7976,12 @@ body.dark-mode .mini-cal-day.status-absent {
 body.dark-mode .mini-cal-day.status-leave {
     background-color: #422006 !important;
     color: #fbbf24 !important;
+}
+
+body.dark-mode .mini-cal-day.status-holiday {
+    background-color: #450a0a;
+    color: #f87171;
+    border: 1px solid #7f1d1d;
 }
 
 body.dark-mode .mini-cal-day.today {
@@ -10711,6 +10755,7 @@ body.dark-mode .legend-chip.cal-absent  { background: #ef4444 !important; color:
 body.dark-mode .legend-chip.cal-wfh     { background: #8b5cf6 !important; color: #ffffff !important; }
 body.dark-mode .legend-chip.cal-half    { background: #f59e0b !important; color: #ffffff !important; }
 body.dark-mode .legend-chip.cal-leave   { background: #ec4899 !important; color: #ffffff !important; }
+body.dark-mode .legend-chip.cal-holiday { background: #f43f5e !important; color: #ffffff !important; }
 
 /* Robust Scrolling Fix for Attendance Calendar Popup */
 body.dark-mode .calendar-modal-content {

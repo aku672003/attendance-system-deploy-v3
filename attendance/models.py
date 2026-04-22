@@ -83,6 +83,22 @@ class Employee(models.Model):
             'is_temporary': False
         }
 
+    def save(self, *args, **kwargs):
+        # Normalize name: rename 'Mandatory' to 'Holiday'
+        if self.name:
+            import re
+            self.name = re.sub(r'Mandatory', 'Holiday', self.name, flags=re.IGNORECASE)
+            # Remove double "Holiday Holiday"
+            self.name = re.sub(r'Holiday\s+Holiday', 'Holiday', self.name, flags=re.IGNORECASE)
+            self.name = self.name.strip()
+
+        if self.date and not self.day:
+            import calendar as cal_mod
+            self.day = cal_mod.day_name[self.date.weekday()]
+        if self.date and not self.year:
+            self.year = self.date.year
+        super().save(*args, **kwargs)
+
 
 class EmployeeProfile(models.Model):
     MARITAL_STATUS_CHOICES = [
@@ -556,3 +572,102 @@ class Meeting(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.date})"
+
+
+# ─── Holiday Management ───────────────────────────────────────────────────────
+
+class Holiday(models.Model):
+    """Stores individual holidays parsed from HR-uploaded documents."""
+    HOLIDAY_TYPE_CHOICES = [
+        ('mandatory', 'Holiday'),
+        ('optional', 'Optional'),
+    ]
+
+    name = models.CharField(max_length=200)
+    date = models.DateField(unique=True)
+    day = models.CharField(max_length=20, blank=True)   # e.g. "Monday"
+    is_optional = models.BooleanField(default=False)    # False = Mandatory
+    year = models.IntegerField()
+    description = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'holidays'
+        ordering = ['date']
+        indexes = [
+            models.Index(fields=['date']),
+            models.Index(fields=['year']),
+            models.Index(fields=['is_optional']),
+        ]
+
+    def __str__(self):
+        h_type = "Optional" if self.is_optional else "Holiday"
+        return f"{self.name} ({self.date}) – {h_type}"
+
+    def save(self, *args, **kwargs):
+        # Normalize name: rename 'Mandatory' to 'Holiday'
+        if self.name:
+            import re
+            self.name = re.sub(r'Mandatory', 'Holiday', self.name, flags=re.IGNORECASE)
+            # Remove double "Holiday Holiday"
+            self.name = re.sub(r'Holiday\s+Holiday', 'Holiday', self.name, flags=re.IGNORECASE)
+            self.name = self.name.strip()
+
+        if self.date and not self.day:
+            import calendar as cal_mod
+            self.day = cal_mod.day_name[self.date.weekday()]
+        if self.date and not self.year:
+            self.year = self.date.year
+        super().save(*args, **kwargs)
+
+
+
+
+class HolidayUpload(models.Model):
+    """Audit trail for every holiday file uploaded by HR/Admin."""
+    STATUS_CHOICES = [
+        ('parsed', 'Parsed'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+
+    file = models.FileField(upload_to='holiday_uploads/', null=True, blank=True)
+    file_name = models.CharField(max_length=255)
+    uploaded_by = models.ForeignKey(
+        Employee, on_delete=models.SET_NULL, null=True, related_name='holiday_uploads'
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='parsed')
+    parsed_count = models.IntegerField(default=0)       # holidays extracted
+    saved_count = models.IntegerField(default=0)        # holidays saved after approval
+    notes = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'holiday_uploads'
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        return f"{self.file_name} by {self.uploaded_by} @ {self.uploaded_at:%Y-%m-%d}"
+
+
+class UserHoliday(models.Model):
+    """Tracks which optional holidays an employee has selected (max 2/year)."""
+    user = models.ForeignKey(
+        Employee, on_delete=models.CASCADE, related_name='selected_holidays'
+    )
+    holiday = models.ForeignKey(
+        Holiday, on_delete=models.CASCADE, related_name='user_selections'
+    )
+    selected_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'user_holidays'
+        unique_together = [['user', 'holiday']]
+        indexes = [
+            models.Index(fields=['user']),
+            models.Index(fields=['holiday']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} → {self.holiday.name}"

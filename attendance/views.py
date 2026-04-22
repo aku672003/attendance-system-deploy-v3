@@ -933,6 +933,21 @@ def monthly_stats(request):
         total_leave_days = max(stats_data['leave_records'], leave_requests)
         total_half_days = max(stats_data['half_day_records'], half_day_requests)
 
+        # Count optional holidays for the year
+        optional_holidays_count = UserHoliday.objects.filter(
+            user_id=employee_id,
+            holiday__year=year
+        ).count()
+
+        # Also count approved optional_holiday requests for the year that are not yet in UserHoliday
+        # (Though selecting via calendar is the primary way, this handles the generic request)
+        optional_requests = EmployeeRequest.objects.filter(
+            employee_id=employee_id,
+            request_type='optional_holiday',
+            status='approved',
+            start_date__year=year
+        ).count()
+
         stats = {
             'total_working_days': stats_data['total_working_days'],
             'weekday_present_days': stats_data['weekday_present_days'],
@@ -942,6 +957,7 @@ def monthly_stats(request):
             'office_days': stats_data['office_days'],
             'client_days': stats_data['client_days'],
             'leave_days': total_leave_days,
+            'optional_holidays': max(optional_holidays_count, optional_requests),
         }
 
         return Response({
@@ -1163,7 +1179,7 @@ def employee_profile(request, employee_id=None):
                 'doc_number': doc.doc_number,
                 'file_name': doc.file_name,
                 'file_path': doc.file_path,
-                'url': request.build_absolute_uri(f'/attendance/serve-document/{doc.id}'),
+                'url': request.build_absolute_uri(f'/api/serve-document/{doc.id}'),
                 'uploaded_at': doc.uploaded_at.isoformat() if doc.uploaded_at else None,
             })
 
@@ -1648,138 +1664,146 @@ def attendance_record_detail(request, record_id):
             'message': 'Attendance deleted'
         })
 
-
 # Document Upload Views
+
+def _get_s3_client():
+    """Returns (s3_client, bucket, prefix, use_s3).
+    If AWS creds are configured returns a real boto3 client.
+    If not, returns (None, None, None, False) so callers fall back to local disk.
+    """
+    import boto3
+    aws_key    = getattr(settings, 'AWS_ACCESS_KEY_ID', None)
+    aws_secret = getattr(settings, 'AWS_SECRET_ACCESS_KEY', None)
+    S3_BUCKET  = getattr(settings, 'S3_BUCKET_NAME', 'attendance-g37k8w69fo65xagoo39ek3g58hc14aps3a-s3alias')
+    S3_REGION  = getattr(settings, 'AWS_DEFAULT_REGION', 'ap-south-1')
+    S3_PREFIX  = 'Employee_docs/'
+
+    boto3_kwargs = {'region_name': S3_REGION}
+    if aws_key and aws_secret:
+        boto3_kwargs['aws_access_key_id']     = aws_key
+        boto3_kwargs['aws_secret_access_key'] = aws_secret
+
+    # Only attempt S3 when at least one credential signal is present
+    use_s3 = bool(aws_key and aws_secret)
+    if not use_s3:
+        return None, S3_BUCKET, S3_PREFIX, False
+
+    try:
+        client = boto3.client('s3', **boto3_kwargs)
+        return client, S3_BUCKET, S3_PREFIX, True
+    except Exception:
+        return None, S3_BUCKET, S3_PREFIX, False
+
+
 @api_view(['POST'])
 @require_gated_token_api
 @parser_classes([MultiPartParser, FormParser])
 def upload_documents(request):
-    """Upload employee documents"""
+    """Upload employee documents — S3 when credentials are set, local disk otherwise."""
     employee_id = request.POST.get('employee_id')
-    username = request.POST.get('username')
+    username    = request.POST.get('username')
 
     if not employee_id or not username:
-        return Response({
-            'success': False,
-            'message': 'employee_id and username are required'
-        }, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'success': False, 'message': 'employee_id and username are required'},
+                        status=status.HTTP_400_BAD_REQUEST)
 
     try:
         employee = Employee.objects.get(id=employee_id)
     except Employee.DoesNotExist:
-        return Response({
-            'success': False,
-            'message': 'Employee not found'
-        }, status=status.HTTP_404_NOT_FOUND)
+        return Response({'success': False, 'message': 'Employee not found'},
+                        status=status.HTTP_404_NOT_FOUND)
 
-    MAX_PHOTO_SIZE = 2 * 1024 * 1024  # 2MB
-    MAX_PDF_SIZE = 5 * 1024 * 1024  # 5MB
+    MAX_PHOTO_SIZE = 2 * 1024 * 1024  # 2 MB
+    MAX_PDF_SIZE   = 5 * 1024 * 1024  # 5 MB
 
     saved_files = []
-    # Root for documents
-    storage_root = getattr(settings, 'DOCUMENT_STORAGE_ROOT', settings.MEDIA_ROOT)
-    
-    # Create employee-specific folder
-    # Use name and ID for uniqueness
-    safe_name = "".join(c if c.isalnum() or c in " _-" else "" for c in employee.name).strip().replace(" ", "_")
+    s3_client, S3_BUCKET, S3_PREFIX, use_s3 = _get_s3_client()
+
+    # --- local-disk fallback setup ---
+    import os
+    storage_root   = getattr(settings, 'DOCUMENT_STORAGE_ROOT', settings.MEDIA_ROOT)
+    safe_name      = "".join(c if c.isalnum() or c in ' _-' else '' for c in employee.name).strip().replace(' ', '_')
     employee_folder = f"{safe_name}_{employee.id}"
-    upload_dir = os.path.join(storage_root, 'Documents', employee_folder)
-    os.makedirs(upload_dir, exist_ok=True)
+    upload_dir     = os.path.join(storage_root, 'Documents', employee_folder)
+    if not use_s3:
+        os.makedirs(upload_dir, exist_ok=True)
 
-    # Handle photo and signature
-    image_docs = {
-        'user_photo': 'photo',
-        'user_signature': 'signature'
-    }
-
-    for input_name, doc_type in image_docs.items():
-        if input_name in request.FILES:
-            file = request.FILES[input_name]
-
-            if file.size > MAX_PHOTO_SIZE:
-                return Response({
-                    'success': False,
-                    'message': f'{doc_type.capitalize()} size exceeds 2MB limit'
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-            if file.content_type not in ['image/jpeg', 'image/png', 'image/jpg']:
-                continue
-
-            ext = os.path.splitext(file.name)[1].lower()
-            filename = f"{username}_{doc_type}{ext}"
-            file_path = os.path.join(upload_dir, filename)
-
-            # Delete old file
-            EmployeeDocument.objects.filter(employee_id=employee_id, doc_type=doc_type).delete()
-
-            # Save file
-            with open(file_path, 'wb') as f:
+    def _save_file(file, filename, doc_type, content_type):
+        """Save to S3 or local disk; return the file_path string stored in DB."""
+        if use_s3:
+            s3_key = f"{S3_PREFIX}{username}/{filename}"
+            s3_client.upload_fileobj(file, S3_BUCKET, s3_key,
+                                     ExtraArgs={'ContentType': content_type})
+            return s3_key
+        else:
+            local_path = os.path.join(upload_dir, filename)
+            with open(local_path, 'wb') as fh:
                 for chunk in file.chunks():
-                    f.write(chunk)
+                    fh.write(chunk)
+            return f'Documents/{employee_folder}/{filename}'
 
-            # Save to database
-            EmployeeDocument.objects.create(
-                employee_id=employee_id,
-                doc_type=doc_type,
-                doc_name=doc_type.capitalize(),
-                file_name=filename,
-                file_path=f'Documents/{employee_folder}/{filename}'
-            )
+    # ── Photo / Signature ──────────────────────────────────────────────────────
+    image_docs = {'user_photo': 'photo', 'user_signature': 'signature'}
+    for input_name, doc_type in image_docs.items():
+        if input_name not in request.FILES:
+            continue
+        file = request.FILES[input_name]
+        if file.size > MAX_PHOTO_SIZE:
+            return Response({'success': False,
+                             'message': f'{doc_type.capitalize()} size exceeds 2 MB limit'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if file.content_type not in ['image/jpeg', 'image/png', 'image/jpg']:
+            continue
 
-            saved_files.append(filename)
+        ext      = os.path.splitext(file.name)[1].lower()
+        filename = f"{username}_{doc_type}{ext}"
+        EmployeeDocument.objects.filter(employee_id=employee_id, doc_type=doc_type).delete()
+        try:
+            file_path = _save_file(file, filename, doc_type, file.content_type)
+        except Exception as e:
+            return Response({'success': False, 'message': f'Upload failed: {str(e)}'}, status=500)
 
-    # Handle PDF documents
-    pdf_docs = ['aadhar', 'pan', 'other_id', 'highest_qualification', 'professional_certificate', 'other_qualification']
+        EmployeeDocument.objects.create(
+            employee_id=employee_id, doc_type=doc_type,
+            doc_name=doc_type.capitalize(), file_name=filename, file_path=file_path)
+        saved_files.append(filename)
 
+    # ── PDF documents ──────────────────────────────────────────────────────────
+    pdf_docs = ['aadhar', 'pan', 'other_id', 'highest_qualification',
+                'professional_certificate', 'other_qualification']
     for doc_type in pdf_docs:
         file_key = f'file_{doc_type}'
-        if file_key in request.FILES:
-            file = request.FILES[file_key]
+        if file_key not in request.FILES:
+            continue
+        file = request.FILES[file_key]
+        if file.size > MAX_PDF_SIZE:
+            return Response({'success': False,
+                             'message': f'{doc_type.capitalize()} file exceeds 5 MB limit'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if file.content_type != 'application/pdf':
+            continue
 
-            if file.size > MAX_PDF_SIZE:
-                return Response({
-                    'success': False,
-                    'message': f'{doc_type.capitalize()} file exceeds 5MB limit'
-                }, status=status.HTTP_400_BAD_REQUEST)
+        filename = request.POST.get(f'{file_key}_filename', f"{username}_{doc_type}.pdf")
+        filename = ''.join(c if c.isalnum() or c in '._-' else '_' for c in filename)
+        EmployeeDocument.objects.filter(employee_id=employee_id, doc_type=doc_type).delete()
+        try:
+            file_path = _save_file(file, filename, doc_type, 'application/pdf')
+        except Exception as e:
+            return Response({'success': False, 'message': f'Upload failed: {str(e)}'}, status=500)
 
-            if file.content_type != 'application/pdf':
-                continue
-
-            filename = request.POST.get(f'{file_key}_filename', f"{username}_{doc_type}.pdf")
-            filename = ''.join(c if c.isalnum() or c in '._-' else '_' for c in filename)
-            file_path = os.path.join(upload_dir, filename)
-
-            # Delete old file
-            EmployeeDocument.objects.filter(employee_id=employee_id, doc_type=doc_type).delete()
-
-            # Save file
-            with open(file_path, 'wb') as f:
-                for chunk in file.chunks():
-                    f.write(chunk)
-
-            # Save to database
-            EmployeeDocument.objects.create(
-                employee_id=employee_id,
-                doc_type=doc_type,
-                doc_name=doc_type.replace('_', ' ').title(),
-                doc_number=request.POST.get(f'doc{doc_type.capitalize()}Number', ''),
-                file_name=filename,
-                file_path=f'Documents/{employee_folder}/{filename}'
-            )
-
-            saved_files.append(filename)
+        EmployeeDocument.objects.create(
+            employee_id=employee_id, doc_type=doc_type,
+            doc_name=doc_type.replace('_', ' ').title(),
+            doc_number=request.POST.get(f'doc{doc_type.capitalize()}Number', ''),
+            file_name=filename, file_path=file_path)
+        saved_files.append(filename)
 
     if not saved_files:
-        return Response({
-            'success': False,
-            'message': 'No valid documents uploaded'
-        }, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'success': False, 'message': 'No valid documents uploaded'},
+                        status=status.HTTP_400_BAD_REQUEST)
 
-    return Response({
-        'success': True,
-        'uploaded': saved_files,
-        'message': 'Documents uploaded successfully'
-    })
+    return Response({'success': True, 'uploaded': saved_files,
+                     'message': 'Documents uploaded successfully'})
 
 
 @api_view(['POST'])
@@ -1787,37 +1811,35 @@ def upload_documents(request):
 @parser_classes([JSONParser])
 def delete_documents(request):
     """Delete selected documents"""
-    data = request.data
+    data    = request.data
     doc_ids = data.get('document_ids', [])
 
     if not doc_ids:
-        return Response({
-            'success': False,
-            'message': 'No documents selected'
-        }, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'success': False, 'message': 'No documents selected'},
+                        status=status.HTTP_400_BAD_REQUEST)
 
     try:
         documents = EmployeeDocument.objects.filter(id__in=doc_ids)
+        s3_client, S3_BUCKET, S3_PREFIX, use_s3 = _get_s3_client()
 
-        # Delete files from disk
         for doc in documents:
-            storage_root = getattr(settings, 'DOCUMENT_STORAGE_ROOT', settings.MEDIA_ROOT)
-            file_path = os.path.join(storage_root, doc.file_path)
-            if os.path.exists(file_path):
-                os.remove(file_path)
+            if doc.file_path.startswith(S3_PREFIX) and use_s3:
+                try:
+                    s3_client.delete_object(Bucket=S3_BUCKET, Key=doc.file_path)
+                except Exception:
+                    pass
+            elif not doc.file_path.startswith(S3_PREFIX):
+                import os
+                storage_root = getattr(settings, 'DOCUMENT_STORAGE_ROOT', settings.MEDIA_ROOT)
+                file_path = os.path.join(storage_root, doc.file_path)
+                if os.path.exists(file_path):
+                    os.remove(file_path)
 
-        # Delete from database
         documents.delete()
-
-        return Response({
-            'success': True,
-            'message': 'Documents deleted successfully'
-        })
+        return Response({'success': True, 'message': 'Documents deleted successfully'})
     except Exception as e:
-        return Response({
-            'success': False,
-            'message': 'Failed to delete documents'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'success': False, 'message': 'Failed to delete documents'},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])
@@ -1835,7 +1857,7 @@ def admin_user_docs_list(request, employee_id):
                 'doc_name': doc.doc_name,
                 'file_name': doc.file_name,
                 'file_path': doc.file_path,
-                'url': request.build_absolute_uri(f'/attendance/serve-document/{doc.id}'),
+                'url': request.build_absolute_uri(f'/api/serve-document/{doc.id}'),
                 'uploaded_at': doc.uploaded_at.isoformat() if doc.uploaded_at else None,
             })
 
@@ -1855,63 +1877,77 @@ def admin_user_docs_list(request, employee_id):
 def admin_user_docs_zip(request, employee_id):
     """Download all documents as ZIP (admin)"""
     try:
-        employee = Employee.objects.get(id=employee_id)
+        employee  = Employee.objects.get(id=employee_id)
         documents = EmployeeDocument.objects.filter(employee_id=employee_id)
 
         if not documents.exists():
-            return Response({
-                'success': False,
-                'message': 'No documents found'
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response({'success': False, 'message': 'No documents found'},
+                            status=status.HTTP_404_NOT_FOUND)
 
-        # Create ZIP file
-        zip_name = f"{employee.username}_documents.zip"
+        import tempfile, zipfile, os
+        zip_name  = f"{employee.username}_documents.zip"
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+
+        s3_client, S3_BUCKET, S3_PREFIX, use_s3 = _get_s3_client()
 
         with zipfile.ZipFile(temp_file.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for doc in documents:
-                storage_root = getattr(settings, 'DOCUMENT_STORAGE_ROOT', settings.MEDIA_ROOT)
-                file_path = os.path.join(storage_root, doc.file_path)
-                if os.path.exists(file_path):
-                    zipf.write(file_path, doc.file_name)
+                if doc.file_path.startswith(S3_PREFIX) and use_s3:
+                    try:
+                        s3_obj = s3_client.get_object(Bucket=S3_BUCKET, Key=doc.file_path)
+                        zipf.writestr(doc.file_name, s3_obj['Body'].read())
+                    except Exception:
+                        pass
+                elif not doc.file_path.startswith(S3_PREFIX):
+                    storage_root = getattr(settings, 'DOCUMENT_STORAGE_ROOT', settings.MEDIA_ROOT)
+                    file_path = os.path.join(storage_root, doc.file_path)
+                    if os.path.exists(file_path):
+                        zipf.write(file_path, doc.file_name)
 
-        # Return ZIP file
-        response = FileResponse(
-            open(temp_file.name, 'rb'),
-            content_type='application/zip'
-        )
+        response = FileResponse(open(temp_file.name, 'rb'), content_type='application/zip')
         response['Content-Disposition'] = f'attachment; filename="{zip_name}"'
         return response
 
     except Employee.DoesNotExist:
-        return Response({
-            'success': False,
-            'message': 'User not found'
-        }, status=status.HTTP_404_NOT_FOUND)
+        return Response({'success': False, 'message': 'User not found'},
+                        status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        return Response({
-            'success': False,
-            'message': 'Failed to create ZIP'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'success': False, 'message': 'Failed to create ZIP'},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])
 @require_gated_token_api
 def serve_document(request, doc_id):
-    """Serve a document file from custom storage"""
+    """Serve a document — from S3 if configured, otherwise from local disk."""
     try:
         doc = EmployeeDocument.objects.get(id=doc_id)
-        storage_root = getattr(settings, 'DOCUMENT_STORAGE_ROOT', settings.MEDIA_ROOT)
-        file_path = os.path.join(storage_root, doc.file_path)
-        
-        if not os.path.exists(file_path):
-            return Response({'error': 'File not found'}, status=404)
-            
-        # Determine content type
-        import mimetypes
-        content_type, _ = mimetypes.guess_type(file_path)
-        
-        return FileResponse(open(file_path, 'rb'), content_type=content_type or 'application/octet-stream')
+
+        S3_PREFIX = 'Employee_docs/'
+        if doc.file_path.startswith(S3_PREFIX):
+            # Try S3 first
+            s3_client, S3_BUCKET, _, use_s3 = _get_s3_client()
+            if use_s3:
+                from urllib.parse import quote
+                try:
+                    s3_obj     = s3_client.get_object(Bucket=S3_BUCKET, Key=doc.file_path)
+                    ctype      = s3_obj.get('ContentType', 'application/octet-stream')
+                    response   = FileResponse(s3_obj['Body'], content_type=ctype)
+                    response['Content-Disposition'] = f'inline; filename="{quote(doc.file_name)}"'
+                    return response
+                except Exception:
+                    return Response({'error': 'File not found in S3'}, status=404)
+            else:
+                return Response({'error': 'S3 not configured and file is stored in S3'}, status=404)
+        else:
+            import os, mimetypes
+            storage_root = getattr(settings, 'DOCUMENT_STORAGE_ROOT', settings.MEDIA_ROOT)
+            file_path    = os.path.join(storage_root, doc.file_path)
+            if not os.path.exists(file_path):
+                return Response({'error': 'File not found'}, status=404)
+            ctype, _ = mimetypes.guess_type(file_path)
+            return FileResponse(open(file_path, 'rb'),
+                                content_type=ctype or 'application/octet-stream')
     except EmployeeDocument.DoesNotExist:
         return Response({'error': 'Document not found'}, status=404)
     except Exception as e:
@@ -4201,6 +4237,9 @@ def leave_request_approve(request):
                 elif req_type == 'half_day':
                     attendance_status = 'half_day'
                     attendance_type = 'office'
+                elif req_type == 'optional_holiday':
+                    attendance_status = 'holiday'
+                    attendance_type = 'office'
                 else:
                     attendance_status = 'leave'
                     attendance_type = 'office'
@@ -5118,3 +5157,729 @@ def service_worker_view(request):
     except Exception as e:
         return HttpResponse(f"Service Worker not found: {str(e)}", status=404)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  HOLIDAY MANAGEMENT VIEWS
+# ─────────────────────────────────────────────────────────────────────────────
+
+from .models import Holiday, HolidayUpload, UserHoliday
+
+
+def _parse_holiday_pdf(file_bytes):
+    """Parse a PDF file and extract holiday rows using pdfplumber."""
+    try:
+        import pdfplumber
+        import io
+        import re
+        rows = []
+        with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+            # Try to find year in text
+            full_text = ""
+            for page in pdf.pages:
+                full_text += (page.extract_text() or "") + "\n"
+            year_match = re.search(r'\b(20\d{2})\b', full_text)
+            doc_year = int(year_match.group(1)) if year_match else None
+
+            for page in pdf.pages:
+                tables = page.extract_tables()
+                for table in tables:
+                    if not table: continue
+                    header = [str(c).lower().strip() if c else '' for c in table[0]]
+                    for row in table[1:]:
+                        if row and any(cell for cell in row):
+                            rows.append({'raw': row, 'header': header, 'doc_year': doc_year})
+        return rows
+    except Exception as e:
+        raise ValueError(f"PDF parsing failed: {e}")
+
+
+def _parse_holiday_docx(file_bytes):
+    """Parse a DOCX file and extract holiday rows with correct paragraph context."""
+    try:
+        from docx import Document
+        from docx.table import Table
+        from docx.text.paragraph import Paragraph
+        import io, re
+        
+        doc = Document(io.BytesIO(file_bytes))
+        rows = []
+        
+        # Capture year from full text
+        full_text = "\n".join([p.text for p in doc.paragraphs])
+        year_match = re.search(r'\b(20\d{2})\b', full_text)
+        doc_year = int(year_match.group(1)) if year_match else None
+
+        # Helper to iterate elements in order
+        from docx.oxml.table import CT_Tbl
+        from docx.oxml.text.paragraph import CT_P
+
+        def iter_block_items(parent):
+            # docx.Document is a factory; the actual class is docx.document.Document
+            if hasattr(parent, 'element') and hasattr(parent.element, 'body'):
+                parent_elm = parent.element.body
+            else:
+                parent_elm = parent._element
+            
+            for child in parent_elm.iterchildren():
+                tag = child.tag.lower()
+                if tag.endswith('}p'):
+                    yield Paragraph(child, parent)
+                elif tag.endswith('}tbl'):
+                    yield Table(child, parent)
+
+        current_context = ""
+        for item in iter_block_items(doc):
+            if isinstance(item, Paragraph):
+                txt = item.text.strip()
+                if txt and len(txt) < 200:
+                    current_context = txt
+            elif isinstance(item, Table):
+                if not item.rows: continue
+                is_optional_table = "optional" in current_context.lower()
+                header = [cell.text.lower().strip() for cell in item.rows[0].cells]
+                for row in item.rows[1:]:
+                    cells = [cell.text.strip() for cell in row.cells]
+                    if any(cells):
+                        rows.append({
+                            'raw': cells, 
+                            'header': header, 
+                            'doc_year': doc_year,
+                            'is_optional_context': is_optional_table,
+                            'context_text': current_context
+                        })
+
+        if not rows:
+            for para in doc.paragraphs:
+                t = para.text.strip()
+                if t:
+                    rows.append({'raw': t.split(), 'header': None, 'doc_year': doc_year})
+        return rows
+    except Exception as e:
+        raise ValueError(f"DOCX parsing failed: {e}")
+
+
+def _parse_holiday_excel(file_bytes, file_ext):
+    """Parse an Excel/CSV file using pandas."""
+    try:
+        import pandas as pd
+        import io
+        import re
+        if file_ext in ['.xlsx', '.xls']:
+            df = pd.read_excel(io.BytesIO(file_bytes), dtype=str)
+        else:
+            df = pd.read_csv(io.BytesIO(file_bytes), dtype=str)
+        df.columns = [str(c).lower().strip() for c in df.columns]
+        
+        all_text = " ".join(df.astype(str).values.flatten())
+        year_match = re.search(r'\b(20\d{2})\b', all_text)
+        doc_year = int(year_match.group(1)) if year_match else None
+        
+        rows = []
+        for _, row in df.iterrows():
+            rows.append({'raw': list(row.values), 'header': list(df.columns), 'doc_year': doc_year})
+        return rows
+    except Exception as e:
+        raise ValueError(f"Excel/CSV parsing failed: {e}")
+
+
+def _parse_holiday_txt(file_bytes):
+    """Parse a plain-text file into rows."""
+    try:
+        text = file_bytes.decode('utf-8', errors='replace')
+        rows = []
+        for line in text.split('\n'):
+            line = line.strip()
+            if line and not line.startswith('#'):
+                parts = [p.strip() for p in line.replace('\t', ',').split(',')]
+                rows.append({'raw': parts, 'header': None})
+        return rows
+    except Exception as e:
+        raise ValueError(f"TXT parsing failed: {e}")
+
+
+def _normalize_rows(raw_rows):
+    """Normalise parsed rows into Holiday objects."""
+    import re
+    from datetime import datetime as dt
+    from django.utils import timezone
+
+    current_year = timezone.now().year
+
+    def clean_date_str(s):
+        if not s: return ""
+        # Remove ordinal suffixes (1st -> 1, 22nd -> 22)
+        s = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', str(s), flags=re.IGNORECASE)
+        # Remove special characters like dots or commas
+        s = re.sub(r'[,.\(\)]', ' ', s)
+        return s.strip()
+
+    def smart_parse_date(s, year=None, month_hint=None):
+        s = clean_date_str(s)
+        if not s or s.lower() in ('nan', 'none', ''):
+            return None
+        
+        # Heuristic: If it's just a bare number (1-31), it's likely a day within a month
+        is_bare_number = re.fullmatch(r'\d{1,2}', s)
+        if is_bare_number:
+            if not month_hint: return None
+            s = f"{s} {month_hint}"
+
+        has_year = re.search(r'\d{4}', s)
+        has_digits = re.search(r'\d+', s)
+        has_month_name = any(m in s.lower() for m in ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'])
+        
+        # Prefer strings that actually look like dates (have digits and month or are complex)
+        if not has_digits: return None
+
+        formats = [
+            '%d %B %Y', '%d %b %Y', '%B %d %Y', '%b %d %Y',
+            '%d-%m-%Y', '%d/%m/%Y', '%Y-%m-%d',
+            '%d %m %Y', '%Y %m %d',
+            '%d %B', '%B %d', '%b %d', '%d %b'
+        ]
+        
+        target_year = year or current_year
+        valid_date = None
+
+        for fmt in formats:
+            try:
+                if '%' not in fmt or 'Y' not in fmt:
+                    d = dt.strptime(f"{s} {target_year}", f"{fmt} %Y").date()
+                else:
+                    d = dt.strptime(s, fmt).date()
+                valid_date = d
+                break
+            except ValueError:
+                continue
+
+        if not valid_date:
+            try:
+                from dateutil import parser as dutil
+                default_dt = dt(target_year, 1, 1)
+                res = dutil.parse(s, default=default_dt, dayfirst=True).date()
+                if not has_digits: return None
+                valid_date = res
+            except Exception:
+                pass
+        
+        if valid_date and year and valid_date.year != year:
+            valid_date = valid_date.replace(year=year)
+            
+        return valid_date
+
+    holidays = []
+    seen_keys = set()
+    MONTH_NAMES = ['january','february','march','april','may','june','july','august','september','october','november','december']
+
+    for item in raw_rows:
+        raw_data = item.get('raw', [])
+        header = item.get('header') or []
+        doc_year = item.get('doc_year') or current_year
+        # Handle different item keys for is_optional
+        is_optional_context = item.get('is_optional', item.get('is_optional_context', False))
+
+        if not raw_data: continue
+        
+        # Decide if raw_data is a single row or a list of rows
+        if isinstance(raw_data, list) and len(raw_data) > 0 and not isinstance(raw_data[0], (list, tuple)):
+            rows_to_process = [raw_data]
+        elif isinstance(raw_data, list):
+            rows_to_process = raw_data
+        else:
+            continue
+
+        header_text = ' '.join(str(h).lower() for h in header)
+        context_is_optional = is_optional_context or any(w in header_text for w in ['optional', 'restricted', 'rh'])
+
+        for raw in rows_to_process:
+            if not isinstance(raw, (list, tuple)): continue
+            row_text = ' '.join(str(c).lower() for c in raw if c)
+            if not row_text: continue
+
+            month_hint = None
+            for m in MONTH_NAMES:
+                if m in row_text or m[:3] in row_text:
+                    month_hint = m
+                    break
+            
+            name = None
+            date_val = None
+            is_optional = context_is_optional or any(w in row_text for w in ['optional', 'restricted', 'rh'])
+            
+            # Step 1: Specific Column Mapping
+            col_map = {str(h).lower().strip(): i for i, h in enumerate(header)}
+            def get_col(*keys):
+                for k in keys:
+                    for hk, idx in col_map.items():
+                        if k in hk and idx < len(raw):
+                            return str(raw[idx]).strip()
+                return None
+
+            h_name = get_col('holiday', 'festival', 'occasion', 'name')
+            h_date = get_col('date', 'on_date')
+            h_month = get_col('month')
+            
+            if h_date:
+                date_val = smart_parse_date(h_date, year=doc_year, month_hint=(h_month or month_hint))
+            if h_name:
+                name = h_name
+
+            # Step 2: Advanced Row Scanning
+            potential_dates = []
+            potential_names = []
+
+            for i, cell in enumerate(raw):
+                cs = str(cell).strip()
+                if not cs or cs.lower() in ('nan', ''): continue
+                
+                # Rule out simple serial numbers (column 0, numeric, small)
+                if i == 0 and re.fullmatch(r'\d{1,2}', cs):
+                    continue
+                
+                # Try as date
+                d = smart_parse_date(cs, year=doc_year, month_hint=month_hint)
+                if d:
+                    priority = 0
+                    if any(m in cs.lower() for m in ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec']):
+                        priority += 2
+                    if not re.fullmatch(r'\d{1,2}', cs):
+                        priority += 1
+                    potential_dates.append((d, priority))
+                
+                # Try as name
+                cs_low = cs.lower()
+                is_month = cs_low in MONTH_NAMES or any(m[:3] == cs_low for m in MONTH_NAMES if len(cs_low)==3)
+                if not is_month and not any(wd in cs_low for wd in ['monday','tuesday','wednesday','thursday','friday','saturday','sunday']):
+                    if len(cs) > 2 and not re.search(r'\d', cs):
+                        potential_names.append(cs)
+                    elif len(cs) > 3 and not re.match(r'^\d+$', cs) and not smart_parse_date(cs, year=doc_year):
+                        potential_names.append(cs)
+
+            if not date_val and potential_dates:
+                potential_dates.sort(key=lambda x: x[1], reverse=True)
+                date_val = potential_dates[0][0]
+            
+            if not name and potential_names:
+                name_candidates = [n for n in potential_names if n.lower() not in MONTH_NAMES]
+                if name_candidates:
+                    name = max(name_candidates, key=len)
+
+            if not name or not date_val: continue
+
+            # Cleanup
+            name = re.sub(r'^\d+[\.\s]*-?\s*', '', name).strip()
+            if any(x in name.lower() for x in ['holiday', 'festival', 'sr no']): continue
+            if name.lower() in MONTH_NAMES: continue
+
+            import calendar as cal_mod
+            day_str = cal_mod.day_name[date_val.weekday()]
+
+            key = (name.lower(), str(date_val))
+            if key in seen_keys: continue
+            seen_keys.add(key)
+
+            holidays.append({
+                'name': name[:200],
+                'date': str(date_val),
+                'day': day_str,
+                'is_optional': is_optional,
+                'year': date_val.year,
+            })
+
+    return sorted(holidays, key=lambda h: (h['date'], h['name']))
+
+
+
+@api_view(['POST'])
+@require_gated_token_api
+@parser_classes([MultiPartParser, FormParser])
+def holiday_upload_parse(request):
+    """
+    Admin uploads a holiday document.
+    Parses it and returns a preview — no DB save yet.
+    """
+    user_id = request.data.get('user_id')
+    employee = Employee.objects.filter(id=user_id, role='admin').first()
+    if not employee:
+        return Response({'success': False, 'message': 'Admin access required.'}, status=403)
+
+    uploaded_file = request.FILES.get('file')
+    if not uploaded_file:
+        return Response({'success': False, 'message': 'No file provided.'}, status=400)
+
+    ext = os.path.splitext(uploaded_file.name)[1].lower()
+    allowed = ['.pdf', '.docx', '.xlsx', '.xls', '.csv', '.txt']
+    if ext not in allowed:
+        return Response({
+            'success': False,
+            'message': f'Unsupported format. Allowed: {", ".join(allowed)}'
+        }, status=400)
+
+    try:
+        if not uploaded_file:
+            return Response({'success': False, 'message': 'No file provided.'}, status=400)
+
+        file_bytes = uploaded_file.read()
+        raw_rows = []
+
+        if ext == '.pdf':
+            raw_rows = _parse_holiday_pdf(file_bytes)
+        elif ext == '.docx':
+            raw_rows = _parse_holiday_docx(file_bytes)
+        elif ext in ['.xlsx', '.xls', '.csv']:
+            raw_rows = _parse_holiday_excel(file_bytes, ext)
+        else:  # .txt
+            raw_rows = _parse_holiday_txt(file_bytes)
+
+        holidays = _normalize_rows(raw_rows)
+
+        # Create HolidayUpload audit record
+        upload_obj = HolidayUpload.objects.create(
+            file_name=uploaded_file.name[:255],
+            uploaded_by=employee,
+            status='parsed',
+            parsed_count=len(holidays),
+        )
+        
+        # Save file to media storage
+        try:
+            uploaded_file.seek(0)
+            upload_obj.file.save(uploaded_file.name, uploaded_file, save=True)
+        except Exception as file_err:
+            print(f"Warning: Could not save holiday file to storage: {file_err}")
+
+        return Response({
+            'success': True,
+            'upload_id': upload_obj.id,
+            'file_name': uploaded_file.name,
+            'parsed_count': len(holidays),
+            'holidays': holidays,
+        })
+
+    except Exception as e:
+        import traceback
+        error_msg = f"Holiday Parse Error: {str(e)}"
+        print(error_msg)
+        print(traceback.format_exc())
+        return Response({
+            'success': False, 
+            'message': error_msg,
+            'debug_trace': traceback.format_exc() if settings.DEBUG else None
+        }, status=500)
+
+
+@api_view(['POST'])
+@require_gated_token_api
+@parser_classes([JSONParser])
+def holiday_save(request):
+    """
+    Admin approves parsed holidays and saves them to DB.
+    Accepts { user_id, upload_id, holidays: [...] }
+    Handles duplicate-date conflicts gracefully.
+    """
+    user_id = request.data.get('user_id')
+    employee = Employee.objects.filter(id=user_id, role='admin').first()
+    if not employee:
+        return Response({'success': False, 'message': 'Admin access required.'}, status=403)
+
+    upload_id = request.data.get('upload_id')
+    holidays_data = request.data.get('holidays', [])
+
+    created = 0
+    updated = 0
+    skipped = 0
+    errors = []
+
+    from datetime import datetime as dt
+    for h in holidays_data:
+        try:
+            date_val = dt.strptime(h['date'], '%Y-%m-%d').date()
+            obj, created_flag = Holiday.objects.update_or_create(
+                date=date_val,
+                defaults={
+                    'name': h.get('name', 'Holiday')[:200],
+                    'day': h.get('day', ''),
+                    'is_optional': bool(h.get('is_optional', False)),
+                    'year': date_val.year,
+                    'description': h.get('description', ''),
+                }
+            )
+            if created_flag:
+                created += 1
+            else:
+                updated += 1
+        except Exception as e:
+            skipped += 1
+            errors.append(str(e))
+
+    # mark upload as approved
+    if upload_id:
+        HolidayUpload.objects.filter(id=upload_id).update(
+            status='approved',
+            saved_count=created + updated
+        )
+
+    # Audit log notification to admin
+    Notification.objects.create(
+        user=employee,
+        type='holiday_upload',
+        message=f'Holiday list saved: {created} added, {updated} updated, {skipped} skipped.',
+    )
+
+    return Response({
+        'success': True,
+        'created': created,
+        'updated': updated,
+        'skipped': skipped,
+        'errors': errors[:5],
+    })
+
+
+@api_view(['POST'])
+@require_gated_token_api
+@parser_classes([JSONParser])
+def update_holiday(request):
+    """
+    Update an existing holiday. Admin only.
+    """
+    user_id = request.data.get('user_id')
+    employee = Employee.objects.filter(id=user_id, role='admin').first()
+    if not employee:
+        return Response({'success': False, 'message': 'Admin access required.'}, status=403)
+
+    holiday_id = request.data.get('holiday_id')
+    name = request.data.get('name')
+    date_str = request.data.get('date')
+    day_str = request.data.get('day')
+    is_optional = request.data.get('is_optional')
+    description = request.data.get('description', '')
+
+    if not holiday_id:
+        return Response({'success': False, 'message': 'holiday_id is required.'}, status=400)
+
+    try:
+        holiday = Holiday.objects.get(id=holiday_id)
+        if name: holiday.name = name
+        if date_str:
+            new_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            if Holiday.objects.filter(date=new_date).exclude(id=holiday_id).exists():
+                return Response({'success': False, 'message': f'A holiday already exists on {date_str}'}, status=400)
+            holiday.date = new_date
+            holiday.year = new_date.year
+            
+            if day_str:
+                holiday.day = day_str
+            else:
+                # derive weekday if not provided
+                import calendar as cal_mod
+                holiday.day = cal_mod.day_name[new_date.weekday()]
+        elif day_str:
+            holiday.day = day_str
+        
+        if is_optional is not None:
+            holiday.is_optional = bool(is_optional)
+        
+        holiday.description = description
+        holiday.save()
+
+        return Response({'success': True, 'message': 'Holiday updated successfully.'})
+    except Holiday.DoesNotExist:
+        return Response({'success': False, 'message': 'Holiday not found.'}, status=404)
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=500)
+
+
+@api_view(['POST'])
+@require_gated_token_api
+@parser_classes([JSONParser])
+def delete_holiday(request):
+    """
+    Delete a holiday. Admin only.
+    """
+    user_id = request.data.get('user_id')
+    employee = Employee.objects.filter(id=user_id, role='admin').first()
+    if not employee:
+        return Response({'success': False, 'message': 'Admin access required.'}, status=403)
+
+    holiday_id = request.data.get('holiday_id')
+    if not holiday_id:
+        return Response({'success': False, 'message': 'holiday_id is required.'}, status=400)
+
+    try:
+        holiday = Holiday.objects.get(id=holiday_id)
+        holiday.delete()
+        return Response({'success': True, 'message': 'Holiday deleted successfully.'})
+    except Holiday.DoesNotExist:
+        return Response({'success': False, 'message': 'Holiday not found.'}, status=404)
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=500)
+
+
+
+@api_view(['GET'])
+@require_gated_token_api
+def get_holidays(request):
+    """
+    Returns holidays for a given year (or current year).
+    Optionally includes user's optional holiday selections.
+    Query params: year, user_id
+    """
+    year = request.GET.get('year', timezone.now().year)
+    user_id = request.GET.get('user_id')
+
+    try:
+        year = int(year)
+    except (ValueError, TypeError):
+        year = timezone.now().year
+
+    holidays = Holiday.objects.filter(year=year)
+
+    # get this user's selected optional holidays
+    selected_ids = set()
+    if user_id:
+        selected_ids = set(
+            UserHoliday.objects.filter(
+                user_id=user_id, holiday__year=year
+            ).values_list('holiday_id', flat=True)
+        )
+
+    data = []
+    for h in holidays:
+        data.append({
+            'id': h.id,
+            'name': h.name,
+            'date': str(h.date),
+            'day': h.day,
+            'is_optional': h.is_optional,
+            'year': h.year,
+            'description': h.description or '',
+            'user_selected': h.id in selected_ids,
+        })
+
+    return Response({'success': True, 'holidays': data, 'year': year})
+
+
+@api_view(['POST'])
+@require_gated_token_api
+@parser_classes([JSONParser])
+def select_optional_holiday(request):
+    """
+    Employee selects / deselects an optional holiday.
+    Enforces max 2 optional selections per year.
+    Body: { user_id, holiday_id, action: 'select'|'deselect' }
+    """
+    MAX_OPTIONAL = 2
+
+    user_id = request.data.get('user_id')
+    holiday_id = request.data.get('holiday_id')
+    action = request.data.get('action', 'select')
+
+    if not user_id or not holiday_id:
+        return Response({'success': False, 'message': 'user_id and holiday_id are required.'}, status=400)
+
+    try:
+        employee = Employee.objects.get(id=user_id)
+        holiday = Holiday.objects.get(id=holiday_id, is_optional=True)
+    except Employee.DoesNotExist:
+        return Response({'success': False, 'message': 'Employee not found.'}, status=404)
+    except Holiday.DoesNotExist:
+        return Response({'success': False, 'message': 'Optional holiday not found.'}, status=404)
+
+    if action == 'deselect':
+        UserHoliday.objects.filter(user=employee, holiday=holiday).delete()
+        return Response({'success': True, 'message': 'Holiday deselected.'})
+
+    # Check limit
+    existing_count = UserHoliday.objects.filter(
+        user=employee, holiday__year=holiday.year
+    ).count()
+    if existing_count >= MAX_OPTIONAL:
+        return Response({
+            'success': False,
+            'message': f'You can select at most {MAX_OPTIONAL} optional holidays per year.'
+        }, status=400)
+
+    uh, created = UserHoliday.objects.get_or_create(user=employee, holiday=holiday)
+    if not created:
+        return Response({'success': False, 'message': 'Holiday already selected.'}, status=400)
+
+    return Response({'success': True, 'message': 'Optional holiday selected successfully.'})
+
+
+@api_view(['GET'])
+@require_gated_token_api
+def export_holidays_ics(request):
+    """
+    Export holidays as an ICS calendar file.
+    Query params: year, user_id (if provided, includes user's optional selections)
+    """
+    year = int(request.GET.get('year', timezone.now().year))
+    user_id = request.GET.get('user_id')
+
+    try:
+        from icalendar import Calendar, Event as ICSEvent
+        from datetime import datetime as dt
+        import pytz
+
+        cal = Calendar()
+        cal.add('prodid', '-//HanuAI Holiday Calendar//EN')
+        cal.add('version', '2.0')
+        cal.add('calscale', 'GREGORIAN')
+        cal.add('x-wr-calname', f'Holidays {year}')
+
+        holidays = Holiday.objects.filter(year=year)
+        selected_ids = set()
+        if user_id:
+            selected_ids = set(
+                UserHoliday.objects.filter(
+                    user_id=user_id, holiday__year=year
+                ).values_list('holiday_id', flat=True)
+            )
+
+        for h in holidays:
+            # Skip optional holidays unless user selected them (or no user_id – export all)
+            if h.is_optional and user_id and h.id not in selected_ids:
+                continue
+
+            event = ICSEvent()
+            event.add('summary', h.name)
+            event.add('dtstart', h.date)
+            event.add('dtend', h.date)
+            event.add('description', f"{'Optional' if h.is_optional else 'Holiday'}")
+            cal.add_component(event)
+
+        ics_bytes = cal.to_ical()
+        response = HttpResponse(ics_bytes, content_type='text/calendar; charset=utf-8')
+        response['Content-Disposition'] = f'attachment; filename="holidays_{year}.ics"'
+        return response
+
+    except ImportError:
+        return Response({'success': False, 'message': 'icalendar library not installed.'}, status=500)
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@require_gated_token_api
+def holiday_upload_history(request):
+    """
+    Returns the last 20 holiday upload audit records (admin only).
+    """
+    user_id = request.GET.get('user_id')
+    employee = Employee.objects.filter(id=user_id, role='admin').first()
+    if not employee:
+        return Response({'success': False, 'message': 'Admin access required.'}, status=403)
+
+    uploads = HolidayUpload.objects.all()[:20]
+    data = []
+    for u in uploads:
+        data.append({
+            'id': u.id,
+            'file_name': u.file_name,
+            'uploaded_by': u.uploaded_by.name if u.uploaded_by else 'Unknown',
+            'uploaded_at': u.uploaded_at.strftime('%Y-%m-%d %H:%M'),
+            'status': u.status,
+            'parsed_count': u.parsed_count,
+            'saved_count': u.saved_count,
+        })
+    return Response({'success': True, 'uploads': data})

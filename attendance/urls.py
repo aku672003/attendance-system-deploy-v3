@@ -112,4 +112,14 @@ urlpatterns = [
     # Meeting Management
     path('meetings', views.meetings_api, name='meetings_api'),
     path('meetings/<int:meeting_id>', views.meeting_detail_api, name='meeting_detail_api'),
+
+    # ── Holiday Management ─────────────────────────────────────────────────────
+    path('holidays', views.get_holidays, name='get_holidays'),
+    path('holiday-update', views.update_holiday, name='update_holiday'),
+    path('holiday-delete', views.delete_holiday, name='delete_holiday'),
+    path('holiday-upload-parse', views.holiday_upload_parse, name='holiday_upload_parse'),
+    path('holiday-save', views.holiday_save, name='holiday_save'),
+    path('holiday-select-optional', views.select_optional_holiday, name='select_optional_holiday'),
+    path('holiday-export-ics', views.export_holidays_ics, name='export_holidays_ics'),
+    path('holiday-upload-history', views.holiday_upload_history, name='holiday_upload_history'),
 ]
