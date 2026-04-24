@@ -1985,71 +1985,84 @@ def admin_summary(request):
         # Total employees (excluding admins)
         total_employees = employees_qs.count()
 
-        # Present today (excluding admins) - includes present, half_day, wfh, client
-        present_today = records_qs.filter(
+        # Collect names and counts for each category
+        present_records = records_qs.filter(
             status__in=['present', 'half_day', 'wfh', 'client']
-        ).count()
+        ).select_related('employee')
+        present_names = [r.employee.name for r in present_records]
+        present_today = len(present_names)
+
+        leave_records = records_qs.filter(status='leave').select_related('employee')
+        leave_names = [r.employee.name for r in leave_records]
+        on_leave_today = len(leave_names)
+
+        wfh_records = records_qs.filter(status='wfh').select_related('employee')
+        wfh_names = [r.employee.name for r in wfh_records]
+        wfh_today = len(wfh_names)
+
+        marked_ids = records_qs.values_list('employee_id', flat=True)
+        absent_employees = employees_qs.exclude(id__in=marked_ids)
+        absent_names = [e.name for e in absent_employees]
+        not_marked_today = len(absent_names)
 
         # Surveyors Detailed Breakdown
         surveyors_qs = employees_qs.filter(department='Surveyors')
         surveyors_records = records_qs.filter(employee__department='Surveyors')
-
         surveyors_total = surveyors_qs.count()
-        
-        # Office: status is present/half_day AND type is office
-        surveyors_office = surveyors_records.filter(
+
+        surveyors_office_records = surveyors_records.filter(
             Q(status__in=['present', 'half_day'], type='office')
-        ).count()
-        
-        # Client: status is client OR (present/half_day AND type is client)
-        surveyors_client = surveyors_records.filter(
+        ).select_related('employee')
+        surveyors_office_names = [r.employee.name for r in surveyors_office_records]
+        surveyors_office = len(surveyors_office_names)
+
+        surveyors_client_records = surveyors_records.filter(
             Q(status='client') | Q(status__in=['present', 'half_day'], type='client')
-        ).count()
-        
-        # WFH: status is wfh OR (present/half_day AND type is wfh)
-        surveyors_wfh = surveyors_records.filter(
+        ).select_related('employee')
+        surveyors_client_names = [r.employee.name for r in surveyors_client_records]
+        surveyors_client = len(surveyors_client_names)
+
+        surveyors_wfh_records = surveyors_records.filter(
             Q(status='wfh') | Q(status__in=['present', 'half_day'], type='wfh')
-        ).count()
+        ).select_related('employee')
+        surveyors_wfh_names = [r.employee.name for r in surveyors_wfh_records]
+        surveyors_wfh = len(surveyors_wfh_names)
+
+        surveyors_leave_records = surveyors_records.filter(status='leave').select_related('employee')
+        surveyors_leave_names = [r.employee.name for r in surveyors_leave_records]
+        surveyors_leave = len(surveyors_leave_names)
         
-        # Leave: explicit leave status
-        surveyors_leave = surveyors_records.filter(status='leave').count()
+        surveyors_marked_ids = surveyors_records.values_list('employee_id', flat=True)
+        surveyors_absent_employees = surveyors_qs.exclude(id__in=surveyors_marked_ids)
+        surveyors_absent_names = [e.name for e in surveyors_absent_employees]
+        surveyors_absent = len(surveyors_absent_names)
 
-        # For backward compatibility or general "working" count
         surveyors_active = surveyors_office + surveyors_client + surveyors_wfh
-
-        # Absent: total - active - leave (This is the most accurate way to show "Not Marked")
-        surveyors_absent = max(0, surveyors_total - surveyors_active - surveyors_leave)
-
-        # On leave today
-        on_leave_today = records_qs.filter(
-            status='leave'
-        ).count()
-
-        # WFH today
-        wfh_today = records_qs.filter(
-            status='wfh'
-        ).count()
-
-        # Not Marked Today: Total - (Present/Active) - Leave
-        # We rename the key return but keep 'absent_today' for frontend compatibility if needed, 
-        # but the calculation is now dynamic.
-        not_marked_today = max(0, total_employees - present_today - on_leave_today)
 
         return Response({
             'success': True,
             'date': str(target_date),
             'total_employees': total_employees,
             'present_today': present_today,
-            'surveyors_total': surveyors_total,
-            'surveyors_present': surveyors_active, # Kept name for compatibility
-            'surveyors_office': surveyors_office,
-            'surveyors_client': surveyors_client,
-            'surveyors_wfh': surveyors_wfh,
-            'surveyors_leave': surveyors_leave,
-            'surveyors_absent': surveyors_absent,
-            'absent_today': not_marked_today, # Frontend expects 'absent_today'
+            'present_names': present_names,
+            'absent_today': not_marked_today,
+            'absent_names': absent_names,
             'on_leave': on_leave_today,
-            'wfh_today': wfh_today
+            'leave_names': leave_names,
+            'wfh_today': wfh_today,
+            'wfh_names': wfh_names,
+            'surveyors_total': surveyors_total,
+            'surveyors_present': surveyors_active,
+            'surveyors_office': surveyors_office,
+            'surveyors_office_names': surveyors_office_names,
+            'surveyors_client': surveyors_client,
+            'surveyors_client_names': surveyors_client_names,
+            'surveyors_wfh': surveyors_wfh,
+            'surveyors_wfh_names': surveyors_wfh_names,
+            'surveyors_leave': surveyors_leave,
+            'surveyors_leave_names': surveyors_leave_names,
+            'surveyors_absent': surveyors_absent,
+            'surveyors_absent_names': surveyors_absent_names,
         })
     except Exception as e:
         import traceback
@@ -3615,10 +3628,24 @@ def meetings_api(request):
             
             data = []
             for m in meetings:
+                import re as _re, json as _json
+                raw_desc = m.description or ''
+                # Extract embedded steps_json
+                steps_data = []
+                steps_match = _re.search(r'__steps_json__(.*?)__end_steps__', raw_desc, _re.DOTALL)
+                if steps_match:
+                    try:
+                        steps_data = _json.loads(steps_match.group(1))
+                    except Exception:
+                        steps_data = []
+                # Clean display description
+                display_desc = _re.sub(r'\n\n__steps_json__.*?__end_steps__', '', raw_desc, flags=_re.DOTALL).strip()
+
                 data.append({
                     'id': m.id,
                     'title': m.title,
-                    'description': m.description,
+                    'description': display_desc,
+                    'steps': steps_data,
                     'date': m.date.strftime('%Y-%m-%d'), 
                     'display_date': m.date.strftime('%d-%m-%Y'),
                     'start_time': m.start_time.strftime('%H:%M') if m.start_time else '', 
@@ -3641,9 +3668,16 @@ def meetings_api(request):
                 return Response({'success': False, 'message': 'Creator ID required'}, status=status.HTTP_400_BAD_REQUEST)
             
             creator = Employee.objects.get(id=creator_id)
+
+            # Store steps_json in description for later editing
+            description = data.get('description', '')
+            steps_json = data.get('steps_json')
+            if steps_json:
+                description = f"{description}\n\n__steps_json__{steps_json}__end_steps__"
+
             meeting = Meeting.objects.create(
                 title=data.get('title'),
-                description=data.get('description'),
+                description=description,
                 date=data.get('date'),
                 start_time=data.get('start_time') if data.get('start_time') else None,
                 created_by=creator
@@ -3672,11 +3706,19 @@ def meeting_detail_api(request, meeting_id):
         elif request.method == 'PATCH':
             data = request.data
             if 'title' in data: meeting.title = data['title']
-            if 'description' in data: meeting.description = data['description']
             if 'date' in data: meeting.date = data['date']
             if 'start_time' in data: 
                 meeting.start_time = data['start_time'] if data['start_time'] else None
             
+            # Update description, embedding steps_json if provided
+            new_desc = data.get('description', meeting.description or '')
+            steps_json = data.get('steps_json')
+            if steps_json:
+                import re
+                new_desc = re.sub(r'\n\n__steps_json__.*?__end_steps__', '', new_desc or '', flags=re.DOTALL)
+                new_desc = f"{new_desc}\n\n__steps_json__{steps_json}__end_steps__"
+            meeting.description = new_desc
+
             if 'participants' in data:
                 meeting.participants.set(Employee.objects.filter(id__in=data['participants']))
             
@@ -4310,6 +4352,169 @@ def attendance_predictions(request):
             'success': False,
             'message': f'Failed to generate predictions: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ========== Company Predictive Report API ==========
+
+@api_view(['GET'])
+@require_gated_token_api
+def company_predictive_report(request):
+    """
+    Generate a company-wide predictive attendance report.
+    Query params:
+        start_date  (YYYY-MM-DD)  — default 30 days ago
+        end_date    (YYYY-MM-DD)  — default today
+    Returns summary + per-employee predictive metrics.
+    """
+    try:
+        from datetime import date, timedelta, datetime as dt
+        from .models import Employee, AttendanceRecord
+
+        today = timezone.localtime(timezone.now()).date()
+
+        start_str = request.GET.get('start_date')
+        end_str   = request.GET.get('end_date')
+
+        try:
+            start_date = dt.strptime(start_str, '%Y-%m-%d').date() if start_str else today - timedelta(days=30)
+            end_date   = dt.strptime(end_str,   '%Y-%m-%d').date() if end_str   else today
+        except ValueError:
+            return Response({'success': False, 'message': 'Invalid date format. Use YYYY-MM-DD.'}, status=400)
+
+        # Enforce max 30-day window
+        if (end_date - start_date).days > 30:
+            return Response({'success': False, 'message': 'Date range cannot exceed 30 days.'}, status=400)
+        if end_date > today:
+            end_date = today
+
+        total_days   = (end_date - start_date).days + 1
+        working_days = sum(1 for i in range(total_days)
+                           if (start_date + timedelta(days=i)).weekday() < 6)
+
+        employees = Employee.objects.filter(is_active=True).exclude(role='admin').order_by('department', 'name')
+
+        # Aggregate all records in range in one query
+        records_qs = AttendanceRecord.objects.filter(
+            date__range=[start_date, end_date],
+            employee__is_active=True
+        ).select_related('employee').values(
+            'employee_id', 'employee__name', 'employee__department',
+            'date', 'status', 'type', 'check_in_time', 'check_out_time', 'total_hours'
+        )
+
+        # Group by employee
+        from collections import defaultdict
+        emp_records = defaultdict(list)
+        for r in records_qs:
+            emp_records[r['employee_id']].append(r)
+
+        # Company totals
+        company_present = 0
+        company_wfh     = 0
+        company_absent  = 0
+        company_leave   = 0
+        company_half    = 0
+
+        per_employee = []
+
+        for emp in employees:
+            recs = emp_records.get(emp.id, [])
+            present  = sum(1 for r in recs if r['status'] == 'present')
+            wfh      = sum(1 for r in recs if r['status'] == 'wfh')
+            half_day = sum(1 for r in recs if r['status'] == 'half_day')
+            leave    = sum(1 for r in recs if r['status'] == 'leave')
+            absent   = sum(1 for r in recs if r['status'] == 'absent')
+            attended = present + wfh + half_day
+
+            att_rate = round((attended / working_days) * 100) if working_days > 0 else 0
+
+            # Check-in times for avg
+            check_in_times = [r['check_in_time'] for r in recs if r['check_in_time']]
+            avg_checkin = None
+            if check_in_times:
+                total_mins = sum(t.hour * 60 + t.minute for t in check_in_times)
+                avg_m = total_mins // len(check_in_times)
+                avg_checkin = f"{avg_m // 60:02d}:{avg_m % 60:02d}"
+
+            # Total hours
+            total_hours = sum(float(r['total_hours'] or 0) for r in recs)
+            avg_hours   = round(total_hours / attended, 1) if attended > 0 else 0
+
+            # Simple trend: compare first half vs second half of period
+            mid = start_date + timedelta(days=total_days // 2)
+            first_half  = sum(1 for r in recs if r['date'] < mid and r['status'] in ('present','wfh','half_day'))
+            second_half = sum(1 for r in recs if r['date'] >= mid and r['status'] in ('present','wfh','half_day'))
+            trend = 'up' if second_half > first_half else ('down' if second_half < first_half else 'stable')
+
+            # Predictive likelihood (simple heuristic based on recent rate)
+            likelihood = min(int(att_rate * 1.05), 100)
+
+            # Daily attendance rate time-series (for mini chart)
+            day_series = []
+            for i in range(total_days):
+                d = start_date + timedelta(days=i)
+                if d.weekday() >= 6:  # skip Sunday
+                    continue
+                day_rec = next((r for r in recs if r['date'] == d), None)
+                status  = day_rec['status'] if day_rec else 'absent'
+                day_series.append({
+                    'date':    str(d),
+                    'day':     d.strftime('%a'),
+                    'status':  status,
+                    'present': 1 if status in ('present', 'wfh', 'half_day') else 0
+                })
+
+            company_present += present
+            company_wfh     += wfh
+            company_absent  += absent
+            company_leave   += leave
+            company_half    += half_day
+
+            per_employee.append({
+                'id':          emp.id,
+                'name':        emp.name,
+                'department':  emp.department,
+                'role':        emp.role,
+                'att_rate':    att_rate,
+                'attended':    attended,
+                'present':     present,
+                'wfh':         wfh,
+                'half_day':    half_day,
+                'leave':       leave,
+                'absent':      absent,
+                'avg_checkin': avg_checkin,
+                'avg_hours':   avg_hours,
+                'total_hours': round(total_hours, 1),
+                'trend':       trend,
+                'likelihood':  likelihood,
+                'day_series':  day_series,
+            })
+
+        total_emp  = len(per_employee)
+        avg_att    = round(sum(e['att_rate'] for e in per_employee) / total_emp) if total_emp else 0
+
+        return Response({
+            'success': True,
+            'period': {
+                'start_date':    str(start_date),
+                'end_date':      str(end_date),
+                'total_days':    total_days,
+                'working_days':  working_days,
+            },
+            'company_summary': {
+                'total_employees': total_emp,
+                'avg_attendance':  avg_att,
+                'total_present':   company_present,
+                'total_wfh':       company_wfh,
+                'total_absent':    company_absent,
+                'total_leave':     company_leave,
+                'total_half_day':  company_half,
+            },
+            'employees': per_employee,
+        })
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return Response({'success': False, 'message': str(e)}, status=500)
 
 
 # ========== Intelligence Hub API Endpoints ==========
@@ -4995,7 +5200,7 @@ def upload_avatar(request):
         return Response({'success': False, 'message': 'Invalid file type. Please upload an image.'}, status=status.HTTP_400_BAD_REQUEST)
 
     # Save file
-    upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', 'avatars')
+    upload_dir = os.path.join(settings.MEDIA_ROOT, 'avatars')
     os.makedirs(upload_dir, exist_ok=True)
     
     ext = os.path.splitext(photo.name)[1].lower()
@@ -5008,13 +5213,13 @@ def upload_avatar(request):
             
     # Update profile
     previous_photo = profile.avatar_url
-    profile.avatar_url = f'uploads/avatars/{filename}'
+    profile.avatar_url = f'avatars/{filename}'
     profile.avatar_emoji = "👤" # Reset emoji if used
     profile.theme_settings.pop('avatar_config', None) # Clear 3D config
     profile.save()
     
     # Delete previous custom avatar if exists and is not default
-    if previous_photo and previous_photo.startswith('uploads/avatars/') and os.path.exists(os.path.join(settings.MEDIA_ROOT, previous_photo)):
+    if previous_photo and os.path.exists(os.path.join(settings.MEDIA_ROOT, previous_photo)):
         try:
             os.remove(os.path.join(settings.MEDIA_ROOT, previous_photo))
         except:

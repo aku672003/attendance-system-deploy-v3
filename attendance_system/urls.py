@@ -27,8 +27,11 @@ handler404 = 'attendance.views.error_404_view'
 handler500 = 'attendance.views.error_500_view'
 
 # Serve media files in development
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Serve media files
+from django.views.static import serve
+urlpatterns += [
+    re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+]
 
 # Ensure uploads directory exists
 import os

@@ -183,11 +183,27 @@ async function setupPushNotifications(employeeId) {
         // Subscribe via PushManager
         const applicationServerKey = urlBase64ToUint8Array(keyData.public_key);
         let subscription = await reg.pushManager.getSubscription();
-        if (!subscription) {
+        
+        // If there's an existing subscription, unsubscribe first to avoid VAPID key mismatches
+        // which often cause "AbortError: Registration failed - push service error"
+        if (subscription) {
+            console.log('[Push] Unsubscribing existing stale subscription...');
+            await subscription.unsubscribe();
+        }
+
+        console.log('[Push] Creating fresh subscription...');
+        try {
             subscription = await reg.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey,
             });
+        } catch (subErr) {
+            if (subErr.name === 'AbortError') {
+                console.error('[Push] Setup failed: The push service rejected the request. (Likely Incognito mode, VPN/Firewall block, or browser push service outage).');
+            } else {
+                console.error('[Push] Setup failed:', subErr);
+            }
+            return;
         }
 
         // Serialize and send subscription to the backend
@@ -195,8 +211,8 @@ async function setupPushNotifications(employeeId) {
         const payload = {
             employee_id: employeeId,
             endpoint: subJson.endpoint,
-            p256dh: subJson.keys.p256dh,
-            auth: subJson.keys.auth,
+            p256dh: subJson.keys?.p256dh || '',
+            auth: subJson.keys?.auth || '',
         };
 
         const saveUrl = `${apiBaseUrl}/save-push-subscription` + (window.GATED_TOKEN ? `?token=${encodeURIComponent(window.GATED_TOKEN)}` : '');
@@ -212,7 +228,7 @@ async function setupPushNotifications(employeeId) {
 
         console.log('[Push] Subscription saved — attendance reminders enabled ✅');
     } catch (err) {
-        console.error('[Push] Setup failed:', err);
+        console.error('[Push] Critical setup error:', err);
     }
 }
 
@@ -1543,7 +1559,7 @@ async function showEmployeeSummary(targetDateStr = null) {
                     </div>
 
                     <div class="summary-grid">
-                        <div class="summary-card">
+                        <div class="summary-card" onclick='showNamesModal("Present Today", ${JSON.stringify(summary.present_names).replace(/"/g, "&quot;")})' style="cursor: pointer;">
                             <div class="summary-icon icon-present">🟢</div>
                             <div class="summary-data">
                                 <span class="value">${summary.present_today || 0}</span>
@@ -1551,7 +1567,7 @@ async function showEmployeeSummary(targetDateStr = null) {
                             </div>
                         </div>
 
-                        <div class="summary-card">
+                        <div class="summary-card" onclick='showNamesModal("Not Marked Today", ${JSON.stringify(summary.absent_names).replace(/"/g, "&quot;")})' style="cursor: pointer;">
                             <div class="summary-icon icon-absent">🔴</div>
                             <div class="summary-data">
                                 <span class="value">${summary.absent_today || 0}</span>
@@ -1559,7 +1575,7 @@ async function showEmployeeSummary(targetDateStr = null) {
                             </div>
                         </div>
 
-                        <div class="summary-card">
+                        <div class="summary-card" onclick='showNamesModal("Work From Home", ${JSON.stringify(summary.wfh_names).replace(/"/g, "&quot;")})' style="cursor: pointer;">
                             <div class="summary-icon icon-wfh">🏠</div>
                             <div class="summary-data">
                                 <span class="value">${summary.wfh_today || 0}</span>
@@ -1567,7 +1583,7 @@ async function showEmployeeSummary(targetDateStr = null) {
                             </div>
                         </div>
 
-                        <div class="summary-card">
+                        <div class="summary-card" onclick='showNamesModal("On Leave", ${JSON.stringify(summary.leave_names).replace(/"/g, "&quot;")})' style="cursor: pointer;">
                             <div class="summary-icon icon-leave">🏖️</div>
                             <div class="summary-data">
                                 <span class="value">${summary.on_leave || 0}</span>
@@ -1596,23 +1612,23 @@ async function showEmployeeSummary(targetDateStr = null) {
                             
                             <!-- Breakdown Grid -->
                             <div class="surveyor-breakdown-grid">
-                                <div class="surveyor-breakdown-item">
+                                <div class="surveyor-breakdown-item" onclick='showNamesModal("Surveyors: Field", ${JSON.stringify(summary.surveyors_client_names).replace(/"/g, "&quot;")})' style="cursor: pointer;">
                                     <div style="font-size: 1.3rem; font-weight: 800; color: #10b981;">${summary.surveyors_client || 0}</div>
                                     <div style="font-size: 0.65rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-top: 4px;">Field</div>
                                 </div>
-                                <div class="surveyor-breakdown-item">
+                                <div class="surveyor-breakdown-item" onclick='showNamesModal("Surveyors: Office", ${JSON.stringify(summary.surveyors_office_names).replace(/"/g, "&quot;")})' style="cursor: pointer;">
                                     <div style="font-size: 1.3rem; font-weight: 800; color: #3b82f6;">${summary.surveyors_office || 0}</div>
                                     <div style="font-size: 0.65rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-top: 4px;">Office</div>
                                 </div>
-                                <div class="surveyor-breakdown-item">
+                                <div class="surveyor-breakdown-item" onclick='showNamesModal("Surveyors: WFH", ${JSON.stringify(summary.surveyors_wfh_names).replace(/"/g, "&quot;")})' style="cursor: pointer;">
                                     <div style="font-size: 1.3rem; font-weight: 800; color: #f59e0b;">${summary.surveyors_wfh || 0}</div>
                                     <div style="font-size: 0.65rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-top: 4px;">WFH</div>
                                 </div>
-                                <div class="surveyor-breakdown-item">
+                                <div class="surveyor-breakdown-item" onclick='showNamesModal("Surveyors: Leave", ${JSON.stringify(summary.surveyors_leave_names).replace(/"/g, "&quot;")})' style="cursor: pointer;">
                                     <div style="font-size: 1.3rem; font-weight: 800; color: #ef4444;">${summary.surveyors_leave || 0}</div>
                                     <div style="font-size: 0.65rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-top: 4px;">Leave</div>
                                 </div>
-                                <div class="surveyor-breakdown-item">
+                                <div class="surveyor-breakdown-item" onclick='showNamesModal("Surveyors: Not Marked", ${JSON.stringify(summary.surveyors_absent_names).replace(/"/g, "&quot;")})' style="cursor: pointer;">
                                     <div style="font-size: 1.3rem; font-weight: 800; color: #64748b;">${summary.surveyors_absent || 0}</div>
                                     <div style="font-size: 0.65rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-top: 4px;">Not Marked</div>
                                 </div>
@@ -1692,6 +1708,65 @@ async function changeSummaryDate(offset) {
 async function resetSummaryDate() {
     currentSummaryDate = getCurrentISTDate();
     await showEmployeeSummary();
+}
+
+/**
+ * Shows a premium sub-modal with names of employees in a specific category
+ */
+function showNamesModal(title, names) {
+    if (!names || names.length === 0) {
+        showNotification(`No employees found for ${title}`, 'info');
+        return;
+    }
+
+    const content = `
+        <div class="names-list-container" style="padding: 20px;">
+            <button class="modal-close-btn" onclick="safeRemoveModal(this.closest('.modal'))">✕</button>
+            <div style="margin-bottom: 20px; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px;">
+                <h3 style="margin: 0; font-size: 1.25rem; color: #1e293b; display: flex; align-items: center; gap: 10px;">
+                    <span style="background: #eff6ff; padding: 6px; border-radius: 12px;">👥</span>
+                    ${title}
+                </h3>
+                <p style="margin: 4px 0 0; color: #64748b; font-size: 0.85rem; font-weight: 600;">
+                    ${names.length} employee${names.length === 1 ? '' : 's'} listed
+                </p>
+            </div>
+            <div class="names-scroll-area" style="max-height: 400px; overflow-y: auto; padding-right: 5px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px;">
+                    ${names.sort().map((name, idx) => `
+                        <div class="name-item" style="background: #f8fafc; padding: 12px 15px; border-radius: 12px; border: 1px solid #e2e8f0; font-weight: 700; color: #334155; font-size: 0.9rem; display: flex; align-items: center; gap: 10px; transition: all 0.2s ease;">
+                            <span style="color: #94a3b8; font-size: 0.75rem;">${idx + 1}.</span>
+                            ${name}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+    `;
+
+    const modal = document.createElement('div');
+    modal.className = 'modal sub-modal-active';
+    modal.style.display = 'flex';
+    modal.style.alignItems = 'center';
+    modal.style.justifyContent = 'center';
+    modal.style.zIndex = '10002'; // Higher than summary modal
+
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 500px; width: 90%; padding: 0; border-radius: 24px; border: none; box-shadow: 0 30px 60px -12px rgba(0,0,0,0.6); animation: modalPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);">
+            ${content}
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    requestAnimationFrame(() => {
+        modal.classList.add('active');
+        updateScrollLock();
+    });
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) safeRemoveModal(modal);
+    });
 }
 
 
@@ -2693,34 +2768,36 @@ function applyRequestFilters() {
 }
 
 async function openTaskMentor(autoAssigneeId = null) {
-    showLoading("Opening Task Mentor...");
-    await refreshTasks();
-    await populateTaskExportEmployeeFilter();
+    try {
+        await refreshTasks();
+        await populateTaskExportEmployeeFilter();
 
-    // If autoAssigneeId is provided (from a notification), trigger addNewTask with it
-    if (autoAssigneeId) {
-        setTimeout(() => {
-            addNewTask(autoAssigneeId);
-        }, 500);
-    }
-
-    // Hide Add Task button for non-admins
-    const addTaskBtn = document.querySelector('#taskMentorModal .modal-actions .btn-primary');
-    if (addTaskBtn) {
-        if (typeof currentUser !== 'undefined' && currentUser && currentUser.role !== 'admin' && currentUser.role !== 'Mentor' && !currentUser.has_subordinates) {
-            addTaskBtn.style.display = 'none';
-        } else {
-            addTaskBtn.style.display = 'inline-block';
+        // If autoAssigneeId is provided (from a notification), trigger addNewTask with it
+        if (autoAssigneeId) {
+            setTimeout(() => {
+                addNewTask(autoAssigneeId);
+            }, 500);
         }
-    }
 
-    const priorityBtn = document.getElementById('btnEnterPriorityMode');
-    if (priorityBtn) {
-        priorityBtn.style.display = 'inline-block';
-    }
+        // Hide Add Task button for non-admins
+        const addTaskBtn = document.querySelector('#taskMentorModal .modal-actions .btn-primary');
+        if (addTaskBtn) {
+            if (typeof currentUser !== 'undefined' && currentUser && currentUser.role !== 'admin' && currentUser.role !== 'Mentor' && !currentUser.has_subordinates) {
+                addTaskBtn.style.display = 'none';
+            } else {
+                addTaskBtn.style.display = 'inline-block';
+            }
+        }
 
-    openModal('taskMentorModal');
-    hideLoading();
+        const priorityBtn = document.getElementById('btnEnterPriorityMode');
+        if (priorityBtn) {
+            priorityBtn.style.display = 'inline-block';
+        }
+
+        openModal('taskMentorModal');
+    } finally {
+        hideLoading();
+    }
 }
 
 async function populateTaskExportEmployeeFilter() {
@@ -2749,6 +2826,7 @@ async function populateTaskExportEmployeeFilter() {
 let tasks = [];
 
 async function refreshTasks() {
+    showLoading("Refreshing task board...");
     try {
         // Always pass employee_id so backend can verify role (Admin vs Employee)
         const empId = typeof currentUser !== 'undefined' && currentUser ? currentUser.id : '';
@@ -2758,9 +2836,9 @@ async function refreshTasks() {
             tasks = res.tasks;
             renderTaskBoard();
         }
-    } catch (error) {
-        console.error('Error loading tasks:', error);
         showNotification('Error loading tasks', 'error');
+    } finally {
+        hideLoading();
     }
 }
 
@@ -3264,9 +3342,9 @@ function updateDashboardVisibility() {
         if (adminStatsGrid) adminStatsGrid.classList.add('hidden');
         if (employeeStatsGrid) employeeStatsGrid.classList.remove('hidden');
     } else {
-        // Regular Employee logic
+        // Regular Employee — now also sees MoM card
         if (taskMentorCard) taskMentorCard.classList.add('hidden');
-        if (meetingMomCard) meetingMomCard.classList.add('hidden');
+        if (meetingMomCard) meetingMomCard.classList.remove('hidden'); // ← visible for all
         if (myTasksCard) myTasksCard.classList.remove('hidden');
 
         if (intelligenceHubCard) intelligenceHubCard.classList.add('hidden');
@@ -3285,240 +3363,357 @@ function updateDashboardVisibility() {
 
 // Legacy function removed as it is merged into renderTaskBoard logic above
 
+// ─── MoM — Step-based with @user tagging ─────────────────────────────────────
+
+/** Shared employee cache for @mention autocomplete */
+window._momAllEmployees = [];
+/** Next step counter */
+window._momStepCounter = 0;
+
 async function openMeetingMomModal() {
-    document.getElementById('momTargetTitle').value = '';
-    const now = new Date();
-    
-    document.getElementById('momTargetDate').value = now.toISOString().split('T')[0];
-    document.getElementById('momStartTime').value = now.toTimeString().slice(0,5);
-    document.getElementById('momEmployeeSearch').value = '';
-    
-    // Fetch employees if not already fetched
+    showLoading('Opening Meeting MoM…');
     try {
-        const res = await apiCall('employees-simple', 'GET');
-        if (res && res.success && Array.isArray(res.employees)) {
-            window.allEmployeesSimple = res.employees;
-            const container = document.getElementById('momAssigneesContainer');
-            container.innerHTML = res.employees.map(emp => `
-                <div class="mom-employee-row" data-search="${(emp.name + ' ' + emp.role).toLowerCase()}" style="display:flex; align-items:center; margin-bottom: 8px; padding: 6px; border-radius: 8px; transition: background 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">
-                    <input type="checkbox" id="momEmp_${emp.id}" value="${emp.id}" style="margin-right:12px; width:18px; height:18px; cursor:pointer;" class="mom-emp-checkbox">
-                    <label for="momEmp_${emp.id}" style="margin:0; font-size:0.95rem; cursor:pointer; flex: 1; color: #1e293b; font-weight: 500;">
-                        ${emp.name} <span style="font-size:0.8rem; color:#64748b;">(${emp.role})</span>
-                    </label>
-                </div>
-            `).join('');
+        // Reset state
+        window.currentEditingMeetingId = null;
+        window._momStepCounter = 0;
+
+        // Pre-fill date/time
+        const now = getCurrentISTDate();
+        document.getElementById('momTargetTitle').value = '';
+        document.getElementById('momTargetDate').value  = now.toISOString().split('T')[0];
+        document.getElementById('momStartTime').value   = now.toTimeString().slice(0, 5);
+        document.getElementById('momNotes').value       = '';
+
+        // Load employees for @mention
+        if (!window._momAllEmployees.length) {
+            try {
+                const res = await apiCall('employees-simple', 'GET');
+                if (res && res.success) window._momAllEmployees = res.employees || [];
+            } catch(e) { console.warn('Could not load employees for MoM:', e); }
         }
-    } catch (e) {
-        console.error('Error loading employees for MoM:', e);
+
+        // Reset steps
+        const stepsWrap = document.getElementById('momStepsWrap');
+        stepsWrap.innerHTML = '';
+        addMomStep(); // start with one empty step
+
+        // Update button text
+        const btnText = document.getElementById('saveMomText');
+        if (btnText) btnText.textContent = 'Publish MoM';
+
+        // Load history
+        await fetchRecentMeetings();
+
+        openModal('meetingMomModal');
+    } finally {
+        hideLoading();
     }
-    
-    // Reset editing state
-    window.currentEditingMeetingId = null;
-    const btnText = document.getElementById('saveMomText');
-    if (btnText) btnText.textContent = 'Complete & Assign';
-    
-    // Fetch recent meetings history
-    fetchRecentMeetings();
-    
-    openModal('meetingMomModal');
 }
 
-function filterMomUsers() {
-    const q = document.getElementById('momEmployeeSearch').value.toLowerCase();
-    const rows = document.querySelectorAll('.mom-employee-row');
-    rows.forEach(row => {
-        if(row.getAttribute('data-search').includes(q)) {
-            row.style.display = 'flex';
-        } else {
-            row.style.display = 'none';
-        }
+/** Add a new action-item step row */
+function addMomStep(prefill = {}) {
+    const wrap = document.getElementById('momStepsWrap');
+    const idx = ++window._momStepCounter;
+    const stepId = `momStep_${idx}`;
+
+    const div = document.createElement('div');
+    div.className = 'mom-step-row';
+    div.id = stepId;
+    div.innerHTML = `
+        <div class="mom-step-number">${idx}</div>
+        <div class="mom-step-body">
+            <div class="mom-step-input-wrap">
+                <textarea class="mom-step-text form-control"
+                    placeholder="Describe this action item or discussion point…"
+                    rows="2">${prefill.text || ''}</textarea>
+                <div class="mom-step-tag-area">
+                    <div class="mom-tag-chips" id="${stepId}_chips"></div>
+                    <div class="mom-tag-input-row">
+                        <span class="mom-at-icon">@</span>
+                        <input type="text"
+                            class="mom-tag-input"
+                            placeholder="Tag a user…"
+                            autocomplete="off"
+                            oninput="filterMomTagSuggest(this, '${stepId}')"
+                            onkeydown="momTagInputKey(event, this, '${stepId}')">
+                        <div class="mom-tag-suggest hidden" id="${stepId}_suggest"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <button type="button" class="mom-step-delete-btn" onclick="removeMomStep('${stepId}')" title="Remove step">×</button>
+    `;
+    wrap.appendChild(div);
+
+    // Pre-fill tagged users if editing
+    if (prefill.tagged && prefill.tagged.length) {
+        prefill.tagged.forEach(u => _momAddChip(stepId, u.id, u.name));
+    }
+}
+
+function removeMomStep(stepId) {
+    const el = document.getElementById(stepId);
+    if (el) el.remove();
+    // Renumber visible steps
+    document.querySelectorAll('#momStepsWrap .mom-step-row').forEach((row, i) => {
+        const num = row.querySelector('.mom-step-number');
+        if (num) num.textContent = i + 1;
     });
 }
 
+/** Filter employee suggestions in the tag input */
+function filterMomTagSuggest(input, stepId) {
+    const q = input.value.trim().toLowerCase();
+    const box = document.getElementById(`${stepId}_suggest`);
+    if (!q) { box.classList.add('hidden'); return; }
+
+    const chips = _momGetChipIds(stepId);
+    const matches = window._momAllEmployees.filter(e =>
+        !chips.includes(e.id) &&
+        (e.name.toLowerCase().includes(q) || (e.role || '').toLowerCase().includes(q))
+    ).slice(0, 8);
+
+    if (!matches.length) { box.classList.add('hidden'); return; }
+
+    box.innerHTML = matches.map(e => `
+        <div class="mom-suggest-item" onmousedown="event.preventDefault(); _momPickUser('${stepId}', ${e.id}, '${e.name.replace(/'/g, "\\'")}')">
+            <span class="mom-suggest-avatar">${e.name.charAt(0)}</span>
+            <span class="mom-suggest-name">${e.name}</span>
+            <span class="mom-suggest-role">${e.role || ''}</span>
+        </div>
+    `).join('');
+    box.classList.remove('hidden');
+}
+
+function momTagInputKey(e, input, stepId) {
+    if (e.key === 'Escape') {
+        document.getElementById(`${stepId}_suggest`).classList.add('hidden');
+    }
+}
+
+function _momPickUser(stepId, empId, empName) {
+    _momAddChip(stepId, empId, empName);
+    const input = document.querySelector(`#${stepId} .mom-tag-input`);
+    if (input) input.value = '';
+    document.getElementById(`${stepId}_suggest`).classList.add('hidden');
+}
+
+function _momAddChip(stepId, empId, empName) {
+    const chipsEl = document.getElementById(`${stepId}_chips`);
+    if (!chipsEl) return;
+    // Prevent duplicate chips
+    if (chipsEl.querySelector(`[data-emp-id="${empId}"]`)) return;
+    const chip = document.createElement('span');
+    chip.className = 'mom-user-chip';
+    chip.dataset.empId = empId;
+    chip.innerHTML = `@${empName} <button type="button" onclick="_momRemoveChip('${stepId}', ${empId})">×</button>`;
+    chipsEl.appendChild(chip);
+}
+
+function _momRemoveChip(stepId, empId) {
+    const chipsEl = document.getElementById(`${stepId}_chips`);
+    if (!chipsEl) return;
+    const chip = chipsEl.querySelector(`[data-emp-id="${empId}"]`);
+    if (chip) chip.remove();
+}
+
+function _momGetChipIds(stepId) {
+    return Array.from(document.querySelectorAll(`#${stepId}_chips .mom-user-chip`))
+        .map(c => parseInt(c.dataset.empId));
+}
+
+function _momGetSteps() {
+    return Array.from(document.querySelectorAll('#momStepsWrap .mom-step-row')).map(row => {
+        const stepId = row.id;
+        const text   = row.querySelector('.mom-step-text')?.value?.trim() || '';
+        const tagged = Array.from(row.querySelectorAll(`#${stepId}_chips .mom-user-chip`)).map(c => ({
+            id:   parseInt(c.dataset.empId),
+            name: c.textContent.replace('×', '').replace('@', '').trim()
+        }));
+        return { text, tagged };
+    }).filter(s => s.text);
+}
+
+/** Save / Publish MoM */
 async function saveMeetingMom() {
     const title = document.getElementById('momTargetTitle').value.trim();
-    if(!title) {
-        showNotification('Meeting purpose is required', 'error');
-        return;
-    }
+    if (!title) { showNotification('Meeting purpose (title) is required', 'error'); return; }
+
+    const steps = _momGetSteps();
+    if (!steps.length) { showNotification('Add at least one action item step', 'warning'); return; }
 
     const meetingDate = document.getElementById('momTargetDate').value;
     const meetingTime = document.getElementById('momStartTime').value;
+    const notes       = document.getElementById('momNotes').value.trim();
 
-    const checkboxes = document.querySelectorAll('.mom-emp-checkbox:checked');
-    const assignees = Array.from(checkboxes).map(cb => parseInt(cb.value));
-    
-    if(assignees.length === 0) {
-        showNotification('Please assign at least one user', 'warning');
-        return;
-    }
-    
-    const btnBtn = document.getElementById('saveMomBtn');
+    const btnBtn  = document.getElementById('saveMomBtn');
     const btnText = document.getElementById('saveMomText');
     const spinner = document.getElementById('saveMomSpinner');
-    
-    if(btnBtn) btnBtn.disabled = true;
-    if(btnText) btnText.classList.add('hidden');
-    if(spinner) spinner.classList.remove('hidden');
-    
-    let fmtStart = new Date().toISOString().split('T')[0];
-    let fmtDue = new Date();
-    fmtDue.setDate(fmtDue.getDate() + 1); // 24 hr default deadline
-    fmtDue = fmtDue.toISOString().split('T')[0];
-    
-    if (meetingDate) {
-        fmtStart = meetingDate;
-        let d = new Date(meetingDate);
-        d.setDate(d.getDate() + 1);
-        fmtDue = d.toISOString().split('T')[0];
-    }
-    
-    const scheduledDateTimeStr = (meetingDate && meetingTime) ? `${meetingDate} at ${meetingTime}` : 'Scheduled instantly';
-    
+    if (btnBtn) btnBtn.disabled = true;
+    if (btnText) btnText.classList.add('hidden');
+    if (spinner) spinner.classList.remove('hidden');
+
     try {
-        // 1. Create/Update Meeting Record
+        // Collect all unique participant IDs across steps
+        const allParticipantIds = [...new Set(steps.flatMap(s => s.tagged.map(u => u.id)))];
+
+        // Date helpers
+        let fmtStart = meetingDate || getCurrentISTDate().toISOString().split('T')[0];
+        let dueDate  = new Date(fmtStart);
+        dueDate.setDate(dueDate.getDate() + 1);
+        const fmtDue = dueDate.toISOString().split('T')[0];
+        const scheduledStr = (meetingDate && meetingTime) ? `${meetingDate} at ${meetingTime}` : 'Now';
+
+        // 1. Create or update the Meeting record
         const meetingPayload = {
-            title: title,
-            description: `Meeting held on ${meetingDate} at ${meetingTime}`,
-            date: meetingDate,
-            start_time: meetingTime,
-            participants: assignees,
-            created_by: currentUser ? currentUser.id : null
+            title,
+            description: notes || `Meeting on ${meetingDate} at ${meetingTime}`,
+            date:         fmtStart,
+            start_time:   meetingTime || null,
+            participants: allParticipantIds,
+            created_by:   currentUser.id,
+            steps_json:   JSON.stringify(steps)   // stored in description as JSON note
         };
-        
-        if (window.currentEditingMeetingId) {
-            await apiCall(`meetings/${window.currentEditingMeetingId}`, 'PATCH', meetingPayload);
+
+        let meetingId = window.currentEditingMeetingId;
+        if (meetingId) {
+            await apiCall(`meetings/${meetingId}`, 'PATCH', meetingPayload);
         } else {
-            await apiCall('meetings', 'POST', meetingPayload);
+            const mRes = await apiCall('meetings', 'POST', meetingPayload);
+            meetingId = mRes?.meeting_id;
         }
 
-        // 2. Create Tasks for participants
-        const payload = {
-            title: title + " (MoM Task)",
-            description: `Task derived from Meeting/MoM: ${title}\nMeeting Time: ${scheduledDateTimeStr}`,
-            priority: "high",
-            start_date: fmtStart,
-            due_date: fmtDue,
-            assignees: assignees,
-            overseer_ids: currentUser ? [currentUser.id] : [],
-            user_id: currentUser ? currentUser.id : null,
-            employee_id: currentUser ? currentUser.id : null,
-            created_by: currentUser ? currentUser.id : null
-        };
-        const res = await apiCall('tasks/create', 'POST', payload);
-        if(res && res.success) {
-            showNotification(window.currentEditingMeetingId ? 'Meeting updated and tasks reassigned' : 'Meeting ended and tasks assigned successfully', 'success');
-            closeModal('meetingMomModal');
-            if(typeof refreshTasks === 'function') await refreshTasks();
-        } else {
-            showNotification(res?.message || 'Failed to assign tasks', 'error');
+        // 2. For each step that has tagged users → create one Task (skip duplicates)
+        let tasksCreated = 0;
+        for (const step of steps) {
+            if (!step.tagged.length) continue;
+            const assigneeIds = step.tagged.map(u => u.id);
+            const taskTitle   = `[MoM] ${title}: ${step.text.slice(0, 80)}`;
+
+            const taskPayload = {
+                title:        taskTitle,
+                description:  `From MoM: "${title}"\n📅 ${scheduledStr}\n\n${step.text}${notes ? '\n\nNotes: ' + notes : ''}`,
+                priority:     'high',
+                start_date:   fmtStart,
+                due_date:     fmtDue,
+                assignees:    assigneeIds,
+                overseer_ids: [currentUser.id],
+                user_id:      currentUser.id,
+                employee_id:  currentUser.id,
+                created_by:   currentUser.id,
+                mom_meeting_id: meetingId,     // custom marker (backend ignores unknown fields safely)
+                check_duplicate_mom: true       // hint to backend
+            };
+            const tRes = await apiCall('tasks/create', 'POST', taskPayload);
+            if (tRes?.success) tasksCreated++;
         }
+
+        showNotification(
+            window.currentEditingMeetingId
+                ? `MoM updated — ${tasksCreated} task(s) refreshed`
+                : `MoM published — ${tasksCreated} task(s) assigned with notifications`,
+            'success'
+        );
+        closeModal('meetingMomModal');
+        if (typeof refreshTasks === 'function') await refreshTasks();
+
     } catch(e) {
-        console.error(e);
-        showNotification('Error completing MoM', 'error');
+        console.error('saveMeetingMom error:', e);
+        showNotification('Error publishing MoM', 'error');
     } finally {
-        if(btnBtn) btnBtn.disabled = false;
-        if(btnText) btnText.classList.remove('hidden');
-        if(spinner) spinner.classList.add('hidden');
+        if (btnBtn) btnBtn.disabled = false;
+        if (btnText) btnText.classList.remove('hidden');
+        if (spinner) spinner.classList.add('hidden');
     }
 }
 
 async function fetchRecentMeetings() {
     const listContainer = document.getElementById('recentMeetingsList');
     if (!listContainer) return;
-
     try {
-        const res = await apiCall('meetings', 'GET', { employee_id: currentUser ? currentUser.id : null });
+        const res = await apiCall('meetings', 'GET', { employee_id: currentUser?.id });
         if (res && res.success) {
             renderRecentMeetings(res.meetings);
         } else {
-            listContainer.innerHTML = '<div style="text-align: center; color: #ef4444; padding: 20px;">Failed to load meetings</div>';
+            listContainer.innerHTML = '<div style="text-align:center;color:#ef4444;padding:20px;">Failed to load meetings</div>';
         }
-    } catch (e) {
-        console.error(e);
-        listContainer.innerHTML = '<div style="text-align: center; color: #ef4444; padding: 20px;">Error fetching meetings</div>';
+    } catch(e) {
+        listContainer.innerHTML = '<div style="text-align:center;color:#ef4444;padding:20px;">Error fetching meetings</div>';
     }
 }
 
 function renderRecentMeetings(meetings) {
     const container = document.getElementById('recentMeetingsList');
     if (!container) return;
-    
-    if (meetings.length === 0) {
-        container.innerHTML = '<div style="text-align: center; color: #64748b; padding: 20px;">No recent meetings found</div>';
+    if (!meetings || !meetings.length) {
+        container.innerHTML = '<div style="text-align:center;color:#64748b;padding:20px;">No meetings yet — create one above!</div>';
         return;
     }
-
     container.innerHTML = meetings.map(m => {
         const canManage = currentUser && (
-            currentUser.role === 'admin' || 
-            currentUser.role === 'Mentor' || 
+            currentUser.role === 'admin' ||
+            currentUser.role === 'Mentor' ||
             currentUser.role === 'mentor' ||
             m.created_by_id === currentUser.id
         );
-
         return `
-        <div class="meeting-item" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s; cursor: default; margin-bottom: 8px;">
-            <div style="flex: 1;">
-                <div style="font-weight: 600; color: #1e293b; font-size: 0.95rem;">${m.title}</div>
-                <div style="font-size: 0.8rem; color: #64748b; margin-top: 2px;">
-                    📅 ${m.display_date} | 🕒 ${m.display_time}
-                </div>
-                <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 4px;">
-                    By ${m.created_by_name} • ${m.participants.length} participants
-                </div>
+        <div class="mom-history-item">
+            <div class="mom-history-body">
+                <div class="mom-history-title">${m.title}</div>
+                <div class="mom-history-meta">📅 ${m.display_date} &nbsp;🕒 ${m.display_time}</div>
+                <div class="mom-history-creator">By ${m.created_by_name} · ${m.participants.length} participant(s)</div>
             </div>
-            <div style="display: flex; gap: 8px;">
-                ${canManage ? `
-                <button onclick='editMeeting(${JSON.stringify(m).replace(/'/g, "&apos;")})' class="btn-icon-sm" style="background: #f1f5f9; color: #475569; width: 32px; height: 32px; border-radius: 8px; border:none; cursor:pointer;" title="Edit Meeting">✏️</button>
-                <button onclick="deleteMeeting(${m.id})" class="btn-icon-sm" style="background: #fef2f2; color: #ef4444; width: 32px; height: 32px; border-radius: 8px; border:none; cursor:pointer;" title="Delete Meeting">🗑️</button>
-                ` : ''}
-            </div>
-        </div>
-        `;
+            ${canManage ? `
+            <div class="mom-history-actions">
+                <button onclick='editMeeting(${JSON.stringify(m).replace(/'/g,"&apos;")})' class="mom-hist-btn mom-hist-edit" title="Edit">✏️</button>
+                <button onclick="deleteMeeting(${m.id})" class="mom-hist-btn mom-hist-del" title="Delete">🗑️</button>
+            </div>` : ''}
+        </div>`;
     }).join('');
 }
 
 async function deleteMeeting(id) {
-    if (!confirm('Are you sure you want to delete this meeting record? Tasks related to it will remain.')) return;
+    if (!(await showConfirm('Delete this meeting record? Assigned tasks will remain.', 'Delete Meeting', '🗑️'))) return;
     try {
         const res = await apiCall(`meetings/${id}`, 'DELETE');
-        if (res && res.success) {
-            showNotification('Meeting record deleted', 'success');
+        if (res?.success) {
+            showNotification('Meeting deleted', 'success');
             fetchRecentMeetings();
         } else {
             showNotification('Failed to delete meeting', 'error');
         }
-    } catch (e) {
-        showNotification('Error deleting meeting', 'error');
-    }
+    } catch(e) { showNotification('Error deleting meeting', 'error'); }
 }
 
 function editMeeting(m) {
-    // Populate form with meeting data
+    // Populate header fields
     document.getElementById('momTargetTitle').value = m.title;
-    document.getElementById('momTargetDate').value = m.date;
-    document.getElementById('momStartTime').value = m.start_time;
-    
-    // Clear checkboxes first
-    document.querySelectorAll('.mom-emp-checkbox').forEach(cb => cb.checked = false);
-    
-    // Check participants
-    m.participants.forEach(p => {
-        const cb = document.getElementById(`momEmp_${p.id}`);
-        if (cb) cb.checked = true;
-    });
-    
-    // Change button text
-    const btnText = document.getElementById('saveMomText');
-    if (btnText) btnText.textContent = 'Update Meeting & Assign';
-    
-    // Store current editing ID
+    document.getElementById('momTargetDate').value  = m.date;
+    document.getElementById('momStartTime').value   = m.start_time || '';
+    document.getElementById('momNotes').value       = m.description || '';
+
+    // Rebuild steps
+    const stepsWrap = document.getElementById('momStepsWrap');
+    stepsWrap.innerHTML = '';
+    window._momStepCounter = 0;
+
+    // Prefer the parsed steps array from the API
+    const parsedSteps = Array.isArray(m.steps) && m.steps.length ? m.steps : [];
+
+    if (parsedSteps.length) {
+        parsedSteps.forEach(s => addMomStep(s));
+    } else {
+        // Legacy fallback: one step with all participants tagged
+        addMomStep({ text: m.title, tagged: m.participants || [] });
+    }
+
     window.currentEditingMeetingId = m.id;
-    
-    // Scroll to top of modal for visibility
-    const modalBody = document.querySelector('#meetingMomModal .premium-modal-body');
-    if (modalBody) modalBody.scrollTop = 0;
+    const btnText = document.getElementById('saveMomText');
+    if (btnText) btnText.textContent = 'Update MoM';
+
+    // Scroll modal to top
+    const body = document.querySelector('#meetingMomModal .premium-modal-body');
+    if (body) body.scrollTop = 0;
 }
 
 
@@ -3601,6 +3796,7 @@ function addNewTask(autoAssigneeId = null) {
  * Populate Edit Task Modal
  */
 async function editTask(taskId) {
+    showLoading("Fetching task details...");
     // Check both global task arrays (Task Mentor and My Tasks)
     const task = (tasks && Array.isArray(tasks) ? tasks.find(t => t.id === taskId) : null) ||
         (myTasks && Array.isArray(myTasks) ? myTasks.find(t => t.id === taskId) : null);
@@ -3654,6 +3850,7 @@ async function editTask(taskId) {
         });
     }
 
+    hideLoading();
     openModal('addTaskModal');
 }
 
@@ -3699,6 +3896,7 @@ document.addEventListener('change', (e) => {
 });
 
 async function saveNewTask() {
+    showLoading("Saving task...");
     const title = document.getElementById('taskTitle').value.trim();
     const description = document.getElementById('taskDescription').value.trim();
     const priority = document.getElementById('taskPriority').value;
@@ -3706,16 +3904,19 @@ async function saveNewTask() {
     const dueDate = document.getElementById('taskDueDate').value;
 
     if (!title) {
+        hideLoading();
         showNotification('Task title is required', 'error');
         return;
     }
 
     if (!dueDate) {
+        hideLoading();
         showNotification('Completion deadline is required', 'error');
         return;
     }
 
     if (!window.currentEditingTaskId && selectedEmployeeIds.length === 0) {
+        hideLoading();
         showNotification('Please select at least one employee', 'error');
         return;
     }
@@ -3974,8 +4175,12 @@ function renderTaskComments(comments) {
 }
 
 async function submitTaskComment() {
+    showLoading("Posting comment...");
     const content = document.getElementById('newTaskComment').value.trim();
-    if (!content || !currentSelectedTaskId) return;
+    if (!content || !currentSelectedTaskId) {
+        hideLoading();
+        return;
+    }
 
     try {
         const res = await apiCall('task-comment', 'POST', {
@@ -4000,6 +4205,8 @@ async function submitTaskComment() {
     } catch (error) {
         console.error('Error adding comment:', error);
         showNotification('An error occurred', 'error');
+    } finally {
+        hideLoading();
     }
 }
 
@@ -4158,6 +4365,7 @@ async function moveTask(taskId, newStatus, isMyTask = false) {
 
 async function deleteTask(taskId) {
     if (!(await showConfirm('Are you sure you want to delete this task?', 'Delete Task', '🗑️'))) return;
+    showLoading("Deleting task...");
 
     try {
         const payload = {
@@ -4176,6 +4384,8 @@ async function deleteTask(taskId) {
     } catch (error) {
         console.error('Error deleting task:', error);
         showNotification('Error deleting task', 'error');
+    } finally {
+        hideLoading();
     }
 }
 
@@ -7064,7 +7274,7 @@ async function confirmCheckOut() {
         }
 
         // 3️⃣ GEOFENCE GATE — Mandatory for office-type attendance
-        // WFH and client records have no fixed office to check against.
+        // Allows check-out from ANY valid office, not just the check-in office.
         const attendanceType = (record.type || '').toLowerCase();
         const isOfficeType = attendanceType === 'office' || attendanceType === '';
         let location = null;
@@ -7093,29 +7303,65 @@ async function confirmCheckOut() {
                 longitude: position.coords.longitude
             };
 
-            // Call the existing check-location endpoint
-            const geoResult = await apiCall('check-location', 'POST', {
-                latitude: location.latitude,
-                longitude: location.longitude,
-                office_id: record.office_id
-            });
+            // ── Multi-office check: try the check-in office first, then all others ──
+            // Fetch all active offices
+            let allOffices = [];
+            try {
+                const officeRes = await apiCall('offices', 'GET');
+                if (officeRes && officeRes.success && Array.isArray(officeRes.offices)) {
+                    allOffices = officeRes.offices;
+                }
+            } catch (_) {}
 
-            if (!geoResult || !geoResult.success) {
+            // Always ensure the check-in office is in the list to check
+            const checkedOfficeIds = new Set(allOffices.map(o => o.id));
+            if (!checkedOfficeIds.has(record.office_id)) {
+                allOffices.unshift({ id: record.office_id }); // fallback if not in list
+            }
+
+            let inRangeOffice = null;
+            let closestDistance = Infinity;
+            let closestOfficeInfo = null;
+
+            for (const office of allOffices) {
+                const geoResult = await apiCall('check-location', 'POST', {
+                    latitude: location.latitude,
+                    longitude: location.longitude,
+                    office_id: office.id
+                });
+
+                if (!geoResult || !geoResult.success) continue;
+
+                if (geoResult.in_range) {
+                    inRangeOffice = { ...office, ...geoResult };
+                    break; // found a valid office — stop checking
+                }
+
+                // Track the closest office for a better error message
+                if (geoResult.distance < closestDistance) {
+                    closestDistance = geoResult.distance;
+                    closestOfficeInfo = geoResult;
+                }
+            }
+
+            if (!inRangeOffice) {
+                const distM = Math.round(closestDistance);
+                const radius = closestOfficeInfo?.office_location?.radius_meters ?? closestOfficeInfo?.radius_meters ?? '?';
                 showNotification(
-                    'Unable to verify your location. Please try again.',
+                    `⛔ You are not within range of any office (closest: ${distM}m away, allowed radius: ${radius}m). Move closer to check out.`,
                     'error'
                 );
                 return;
             }
 
-            if (!geoResult.in_range) {
-                const distM = Math.round(geoResult.distance);
+            // If they checked out from a different office, note it
+            if (inRangeOffice.id !== record.office_id) {
                 showNotification(
-                    `⛔ Geofence violation: You are ${distM}m away from the office (allowed radius: ${geoResult.office_location?.radius_meters ?? '?'}m). Move closer to check out.`,
-                    'error'
+                    `✅ Location verified at ${inRangeOffice.name || 'another office'}.`,
+                    'info'
                 );
-                return;
             }
+
         } else if (navigator.geolocation) {
             // Non-office: still grab location softly for the record, but don't block
             try {
@@ -7280,10 +7526,9 @@ function renderAttendanceTable(records) {
             <div class="records-toolbar-left">Attendance Records</div>
             <input id="attendanceSearchInput"
                     class="form-control records-search-input"
-                    placeholder="Search by name / username / date"
+                    placeholder="Search: name, Apr, April, 22-04-2026, 04/22/2026, Monday, wfh…"
                     value="${oldSearchVal}"
-                    onkeyup="if (event.key === 'Enter') applyAttendanceSearch();">
-            <button class="btn btn-secondary" onclick="applyAttendanceSearch()">Search</button>
+                    onkeyup="applyAttendanceSearch();">
             <button class="btn" onclick="clearAttendanceSearch()">Clear</button>
         </div>
         <div id="attendanceListContainer"></div>
@@ -7440,6 +7685,41 @@ function renderUserMonthWiseView(records, containerEl) {
     recordsContent.innerHTML = html;
 }
 // Search handlers
+/**
+ * Build a rich set of searchable date strings for a given YYYY-MM-DD date string.
+ * Supports: raw ISO, DD-MM-YYYY, DD/MM/YYYY, MM/DD/YYYY, month names (full & short),
+ * day-of-week names (full & short), year only, and display formats.
+ */
+function _buildDateSearchTokens(dateStr) {
+    if (!dateStr) return [];
+    const dateObj = new Date(dateStr);
+    if (isNaN(dateObj)) return [dateStr.toLowerCase()];
+
+    const dd   = String(dateObj.getDate()).padStart(2, '0');
+    const mm   = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const yyyy = String(dateObj.getFullYear());
+
+    return [
+        dateStr.toLowerCase(),                              // 2026-04-22
+        `${dd}-${mm}-${yyyy}`,                              // 22-04-2026
+        `${dd}/${mm}/${yyyy}`,                              // 22/04/2026
+        `${mm}/${dd}/${yyyy}`,                              // 04/22/2026
+        `${dd}-${mm}`,                                      // 22-04  (partial)
+        `${mm}/${dd}`,                                      // 04/22  (partial)
+        yyyy,                                               // 2026
+        // Month — full & short (en-US locale)
+        dateObj.toLocaleDateString('en-US', { month: 'long'  }).toLowerCase(),  // april
+        dateObj.toLocaleDateString('en-US', { month: 'short' }).toLowerCase(),  // apr
+        // Day of week — full & short
+        dateObj.toLocaleDateString('en-US', { weekday: 'long'  }).toLowerCase(), // wednesday
+        dateObj.toLocaleDateString('en-US', { weekday: 'short' }).toLowerCase(), // wed
+        // Long display: "April 22, 2026"
+        dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }).toLowerCase(),
+        // Short display: "Apr 22, 2026"
+        dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).toLowerCase(),
+    ];
+}
+
 function applyAttendanceSearch() {
     const input = document.getElementById('attendanceSearchInput');
     if (!input) return;
@@ -7449,26 +7729,32 @@ function applyAttendanceSearch() {
 
     if (term) {
         filtered = filtered.filter(r => {
-            const name = (r.employee_name || r.name || '').toLowerCase();
+            const name     = (r.employee_name || r.name || '').toLowerCase();
             const username = (r.username || '').toLowerCase();
-            const dateRaw = (r.date || '').toLowerCase();
+            const dept     = (r.department || '').toLowerCase();
+            const status   = (r.status || '').toLowerCase().replace('_', ' ');
+            const type     = (r.type || '').toLowerCase();
+            const office   = (r.office_name || '').toLowerCase();
 
-            // Add display date formatted
-            const dateObj = new Date(r.date);
-            const dateDisplay = dateObj.toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-            }).toLowerCase();
+            // All date format variants
+            const dateTokens = _buildDateSearchTokens(r.date);
+
+            // Check-in / check-out time tokens (e.g. "09:30")
+            const checkIn  = (r.check_in_time  || '').toLowerCase();
+            const checkOut = (r.check_out_time || '').toLowerCase();
 
             return (
-                name.includes(term) ||
+                name.includes(term)     ||
                 username.includes(term) ||
-                dateRaw.includes(term) ||
-                dateDisplay.includes(term)
+                dept.includes(term)     ||
+                status.includes(term)   ||
+                type.includes(term)     ||
+                office.includes(term)   ||
+                checkIn.includes(term)  ||
+                checkOut.includes(term) ||
+                dateTokens.some(tok => tok.includes(term))
             );
         });
-
     }
 
     const listContainer = document.getElementById('attendanceListContainer');
@@ -11261,7 +11547,7 @@ async function renderAvatar(avatarStr, container) {
     }
 
     // Fallback to Image or Emoji
-    if (avatarStr && (avatarStr.startsWith('http') || avatarStr.startsWith('/') || avatarStr.startsWith('uploads/'))) {
+    if (avatarStr && (avatarStr.startsWith('http') || avatarStr.startsWith('/') || avatarStr.includes('avatars/'))) {
         const isHeader = container.id === 'userAvatar';
         const isPerfModal = container.id === 'perfModalAvatar';
         const size = isPerfModal ? '80px' : (isHeader ? '24px' : '100px');

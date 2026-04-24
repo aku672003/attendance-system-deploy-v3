@@ -12,7 +12,7 @@ def load_env():
             for line in f:
                 if line.strip() and not line.startswith('#'):
                     key_val = line.strip().split('=', 1)
-                    if len(key_val) == 2:
+                    if len(key_val) == 2: 
                         os.environ[key_val[0]] = key_val[1]
 
 def generate_gated_token(user_id=1):

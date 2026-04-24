@@ -40,35 +40,40 @@
             background: #000000;
             color: #fff;
             border-radius: 20px;
-            box-shadow: 0 40px 100px rgba(0,0,0,0.8);
-            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 40px 100px rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             overflow: hidden;
             display: flex;
             flex-direction: column;
         }
+
         .emoji-picker-header {
             padding: 16px 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
+
         .emoji-picker-header h3 {
             margin: 0;
             font-size: 1.1rem;
             font-weight: 600;
         }
+
         .emoji-picker-body {
             display: flex;
             height: 400px;
         }
+
         .emoji-sidebar-wrapper {
             width: 220px;
-            background: rgba(255,255,255,0.02);
-            border-right: 1px solid rgba(255,255,255,0.05);
+            background: rgba(255, 255, 255, 0.02);
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
             display: flex;
             flex-direction: column;
         }
+
         .emoji-sidebar {
             padding: 12px;
             display: flex;
@@ -77,6 +82,7 @@
             flex: 1;
             overflow-y: auto;
         }
+
         .emoji-cat {
             padding: 10px 14px;
             border-radius: 10px;
@@ -87,33 +93,43 @@
             gap: 12px;
             font-size: 14px;
         }
-        .emoji-cat:hover { background: rgba(255,255,255,0.05); }
-        .emoji-cat.active { background: var(--primary-color); color: white; }
-        
+
+        .emoji-cat:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .emoji-cat.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
         .emoji-preview-section {
             padding: 20px;
-            border-top: 1px solid rgba(255,255,255,0.05);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 12px;
         }
+
         .emoji-preview-circle {
             width: 100px;
             height: 100px;
             border-radius: 50%;
-            border: 3px solid rgba(255,255,255,0.1);
+            border: 3px solid rgba(255, 255, 255, 0.1);
             background: #000;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
         }
+
         .apple-range-slider {
             width: 100%;
             height: 4px;
             -webkit-appearance: none;
             appearance: none;
-            background: rgba(255,255,255,0.1);
+            background: rgba(255, 255, 255, 0.1);
             border-radius: 2px;
         }
+
         .apple-range-slider::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
@@ -122,7 +138,7 @@
             background: #fff;
             border-radius: 50%;
             cursor: pointer;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
         }
 
         .emoji-main {
@@ -130,54 +146,68 @@
             display: flex;
             flex-direction: column;
         }
+
         .emoji-segmented-control {
             padding: 12px 16px;
             display: flex;
-            background: rgba(0,0,0,0.1);
+            background: rgba(0, 0, 0, 0.1);
             gap: 4px;
         }
+
         .emoji-segmented-control button {
             flex: 1;
-            background: rgba(255,255,255,0.05);
+            background: rgba(255, 255, 255, 0.05);
             border: none;
-            color: rgba(255,255,255,0.6);
+            color: rgba(255, 255, 255, 0.6);
             padding: 6px;
             border-radius: 6px;
             font-size: 12px;
             cursor: pointer;
             transition: all 0.2s;
         }
+
         .emoji-segmented-control button.segment-active {
             background: #444;
             color: #fff;
         }
-        
-        #avatarGrid::-webkit-scrollbar { width: 6px; }
-        #avatarGrid::-webkit-scrollbar-track { background: transparent; }
-        #avatarGrid::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-        
+
+        #avatarGrid::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #avatarGrid::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        #avatarGrid::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
         .emoji-picker-footer {
             padding: 16px 20px;
             display: flex;
             justify-content: flex-end;
             gap: 12px;
-            background: rgba(0,0,0,0.1);
-            border-top: 1px solid rgba(255,255,255,0.05);
+            background: rgba(0, 0, 0, 0.1);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
         }
 
         /* New Avatar Features Styles */
         .photo-upload-zone {
-            border: 2px dashed rgba(255,255,255,0.2);
+            border: 2px dashed rgba(255, 255, 255, 0.2);
             border-radius: 12px;
             padding: 30px;
             cursor: pointer;
             transition: all 0.2s;
-            background: rgba(255,255,255,0.03);
+            background: rgba(255, 255, 255, 0.03);
         }
+
         .photo-upload-zone:hover {
             border-color: var(--primary-color);
-            background: rgba(255,255,255,0.05);
+            background: rgba(255, 255, 255, 0.05);
         }
+
         .color-preset {
             width: 32px;
             height: 32px;
@@ -186,17 +216,25 @@
             border: 2px solid transparent;
             transition: transform 0.2s;
         }
-        .color-preset:hover { transform: scale(1.1); }
-        .color-preset.active { border-color: #fff; transform: scale(1.1); }
-        
+
+        .color-preset:hover {
+            transform: scale(1.1);
+        }
+
+        .color-preset.active {
+            border-color: #fff;
+            transform: scale(1.1);
+        }
+
         .progress-bar-container {
             width: 100%;
             height: 6px;
-            background: rgba(255,255,255,0.1);
+            background: rgba(255, 255, 255, 0.1);
             border-radius: 3px;
             margin-bottom: 4px;
             overflow: hidden;
         }
+
         .progress-bar {
             height: 100%;
             background: var(--primary-color);
@@ -310,23 +348,28 @@
                 <div id="prefAvatarPreview" class="appearance-avatar-preview-circle">👤</div>
                 <div style="text-align:left; min-width:0; flex:1;">
                     <h3 style="margin:0; color:white; font-size:1.2rem;">Personalize Dashboard</h3>
-                    <p style="margin:4px 0 0; opacity:0.8; font-size:0.8rem;">Express yourself and customize your view</p>
+                    <p style="margin:4px 0 0; opacity:0.8; font-size:0.8rem;">Express yourself and customize your view
+                    </p>
                 </div>
-                <button class="close-btn" onclick="closeModal('appearanceModal')" style="color:white; font-size:24px; background:none; border:none; cursor:pointer;">&times;</button>
+                <button class="close-btn" onclick="closeModal('appearanceModal')"
+                    style="color:white; font-size:24px; background:none; border:none; cursor:pointer;">&times;</button>
             </div>
 
             <div class="appearance-modal-scroll-body">
-                <div class="appearance-section-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:20px;">
+                <div class="appearance-section-grid"
+                    style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:20px;">
                     <!-- Avatar Section -->
                     <div class="appearance-section-card" style="margin-bottom:0;">
                         <label class="appearance-section-title">👤 Your Avatar</label>
                         <div class="appearance-avatar-options">
                             <div style="text-align:center;">
-                                <button type="button" id="customAvatarBtn" class="appearance-avatar-btn" onclick="openEmojiPicker()">😀</button>
+                                <button type="button" id="customAvatarBtn" class="appearance-avatar-btn"
+                                    onclick="openEmojiPicker()">😀</button>
                                 <p class="appearance-avatar-label">Emoji/Icon</p>
                             </div>
                             <div style="text-align:center;">
-                                <button type="button" id="create3DAvatarBtn" class="appearance-avatar-btn" disabled style="cursor: not-allowed; opacity: 0.6;">👤</button>
+                                <button type="button" id="create3DAvatarBtn" class="appearance-avatar-btn" disabled
+                                    style="cursor: not-allowed; opacity: 0.6;">👤</button>
                                 <p class="appearance-avatar-label">3D Avatar</p>
                             </div>
                         </div>
@@ -343,21 +386,27 @@
                             </label>
                             <span style="font-size:16px;">🌙</span>
                         </div>
-                        <p style="font-size:11px; color:var(--gray-500); margin-top:12px;">Toggle between light and dark mode</p>
+                        <p style="font-size:11px; color:var(--gray-500); margin-top:12px;">Toggle between light and dark
+                            mode</p>
                     </div>
                 </div>
 
                 <!-- Background Section -->
                 <div class="appearance-section-card" style="margin-top:24px;">
                     <label class="appearance-section-title">🎨 Dashboard Background</label>
-                    <p style="font-size:11px; color:var(--gray-500); margin-bottom:16px;">Customize your gradient by selecting corners and choosing colors.</p>
-                    
+                    <p style="font-size:11px; color:var(--gray-500); margin-bottom:16px;">Customize your gradient by
+                        selecting corners and choosing colors.</p>
+
                     <div class="appearance-gradient-controls" style="display:flex; align-items: center; gap:20px;">
                         <div class="corner-selector-premium">
-                            <button class="corner-btn-premium tl active" onclick="setActiveCorner('tl')" title="Top Left">TL</button>
-                            <button class="corner-btn-premium tr" onclick="setActiveCorner('tr')" title="Top Right">TR</button>
-                            <button class="corner-btn-premium bl" onclick="setActiveCorner('bl')" title="Bottom Left">BL</button>
-                            <button class="corner-btn-premium br" onclick="setActiveCorner('br')" title="Bottom Right">BR</button>
+                            <button class="corner-btn-premium tl active" onclick="setActiveCorner('tl')"
+                                title="Top Left">TL</button>
+                            <button class="corner-btn-premium tr" onclick="setActiveCorner('tr')"
+                                title="Top Right">TR</button>
+                            <button class="corner-btn-premium bl" onclick="setActiveCorner('bl')"
+                                title="Bottom Left">BL</button>
+                            <button class="corner-btn-premium br" onclick="setActiveCorner('br')"
+                                title="Bottom Right">BR</button>
                         </div>
                         <div id="hexColorGridTrigger" style="flex:1;">
                             <button class="spectrum-trigger-premium" onclick="toggleAdvancedColorPicker(true)">
@@ -372,16 +421,20 @@
                     </div>
                 </div>
 
-                <div id="appearanceMsg" style="margin-top:12px; font-size:13px; min-height:18px; text-align:center; font-weight:600;"></div>
+                <div id="appearanceMsg"
+                    style="margin-top:12px; font-size:13px; min-height:18px; text-align:center; font-weight:600;"></div>
             </div>
 
             <div class="appearance-footer">
-                <button id="editDashboardBtn" onclick="toggleEditMode(); closeModal('appearanceModal');" class="btn btn-subtle btn-full-width" style="height:46px; border-radius:14px; font-weight:600;">
+                <button id="editDashboardBtn" onclick="toggleEditMode(); closeModal('appearanceModal');"
+                    class="btn btn-subtle btn-full-width" style="height:46px; border-radius:14px; font-weight:600;">
                     ✏️ Edit Dashboard Layout
                 </button>
                 <div class="appearance-save-row">
-                    <button class="btn btn-secondary" style="flex:1; height:46px; border-radius:14px; font-weight:600;" onclick="closeModal('appearanceModal')">Cancel</button>
-                    <button class="btn btn-primary" style="flex:2; height:46px; border-radius:14px; font-weight:600;" onclick="saveAppearanceSettings()">Apply & Save</button>
+                    <button class="btn btn-secondary" style="flex:1; height:46px; border-radius:14px; font-weight:600;"
+                        onclick="closeModal('appearanceModal')">Cancel</button>
+                    <button class="btn btn-primary" style="flex:2; height:46px; border-radius:14px; font-weight:600;"
+                        onclick="saveAppearanceSettings()">Apply & Save</button>
                 </div>
             </div>
         </div>
@@ -403,7 +456,8 @@
                         <div class="emoji-preview-circle" id="emojiPreviewCircle">
                             <!-- Preview injected here -->
                         </div>
-                        <input type="range" class="apple-range-slider" id="emojiZoomSlider" value="50" min="0" max="100">
+                        <input type="range" class="apple-range-slider" id="emojiZoomSlider" value="50" min="0"
+                            max="100">
                     </div>
                 </div>
                 <div class="emoji-main">
@@ -412,7 +466,7 @@
                         <button onclick="selectAvatarSegment('photo')">Photo</button>
                         <button onclick="selectAvatarSegment('text')">Text</button>
                     </div>
-                    
+
                     <!-- Emoji Grid (Existing) -->
                     <div id="emojiGrid">
                         <!-- Emojis will be rendered here -->
@@ -420,7 +474,8 @@
 
                     <!-- Photo Upload Interface -->
                     <div id="photoAvatarSection" class="hidden" style="padding: 20px; text-align: center;">
-                        <input type="file" id="avatarPhotoInput" hidden accept="image/*" onchange="previewAvatarPhoto(this)">
+                        <input type="file" id="avatarPhotoInput" hidden accept="image/*"
+                            onchange="previewAvatarPhoto(this)">
                         <div class="photo-upload-zone" onclick="document.getElementById('avatarPhotoInput').click()">
                             <span style="font-size: 40px; display: block; margin-bottom: 10px;">📸</span>
                             <p>Tap to choose a photo</p>
@@ -438,19 +493,29 @@
                     <div id="textAvatarSection" class="hidden" style="padding: 20px;">
                         <div class="form-group">
                             <label class="form-label">Type 1-2 characters or an emoji</label>
-                            <input type="text" id="avatarTextInput" class="form-control" maxlength="2" placeholder="Aa" oninput="updateTextAvatarPreview()" style="font-size: 24px; text-align: center; height: 60px;">
+                            <input type="text" id="avatarTextInput" class="form-control" maxlength="2" placeholder="Aa"
+                                oninput="updateTextAvatarPreview()"
+                                style="font-size: 24px; text-align: center; height: 60px;">
                         </div>
                         <div class="form-group" style="margin-top: 15px;">
                             <label class="form-label">Background Color</label>
                             <div class="color-presets" style="display: flex; gap: 8px; flex-wrap: wrap;">
-                                <div class="color-preset" style="background:#ef4444" onclick="setTextAvatarBg('#ef4444')"></div>
-                                <div class="color-preset" style="background:#f59e0b" onclick="setTextAvatarBg('#f59e0b')"></div>
-                                <div class="color-preset" style="background:#10b981" onclick="setTextAvatarBg('#10b981')"></div>
-                                <div class="color-preset" style="background:#3b82f6" onclick="setTextAvatarBg('#3b82f6')"></div>
-                                <div class="color-preset" style="background:#6366f1" onclick="setTextAvatarBg('#6366f1')"></div>
-                                <div class="color-preset" style="background:#8b5cf6" onclick="setTextAvatarBg('#8b5cf6')"></div>
-                                <div class="color-preset" style="background:#ec4899" onclick="setTextAvatarBg('#ec4899')"></div>
-                                <div class="color-preset" style="background:#000000" onclick="setTextAvatarBg('#000000')"></div>
+                                <div class="color-preset" style="background:#ef4444"
+                                    onclick="setTextAvatarBg('#ef4444')"></div>
+                                <div class="color-preset" style="background:#f59e0b"
+                                    onclick="setTextAvatarBg('#f59e0b')"></div>
+                                <div class="color-preset" style="background:#10b981"
+                                    onclick="setTextAvatarBg('#10b981')"></div>
+                                <div class="color-preset" style="background:#3b82f6"
+                                    onclick="setTextAvatarBg('#3b82f6')"></div>
+                                <div class="color-preset" style="background:#6366f1"
+                                    onclick="setTextAvatarBg('#6366f1')"></div>
+                                <div class="color-preset" style="background:#8b5cf6"
+                                    onclick="setTextAvatarBg('#8b5cf6')"></div>
+                                <div class="color-preset" style="background:#ec4899"
+                                    onclick="setTextAvatarBg('#ec4899')"></div>
+                                <div class="color-preset" style="background:#000000"
+                                    onclick="setTextAvatarBg('#000000')"></div>
                             </div>
                         </div>
                     </div>
@@ -480,10 +545,12 @@
                         <!-- Style categories injected by JS -->
                     </div>
                     <div class="emoji-preview-section">
-                        <div class="emoji-preview-circle" id="avatarPreviewCircle" style="overflow:hidden; border-radius:50%; background:#1a1a2e;">
+                        <div class="emoji-preview-circle" id="avatarPreviewCircle"
+                            style="overflow:hidden; border-radius:50%; background:#1a1a2e;">
                             <!-- Selected avatar preview -->
                         </div>
-                        <input type="range" class="apple-range-slider" id="avatarZoomSlider" value="50" min="0" max="100">
+                        <input type="range" class="apple-range-slider" id="avatarZoomSlider" value="50" min="0"
+                            max="100">
                     </div>
                 </div>
 
@@ -492,7 +559,8 @@
                     <div class="emoji-segmented-control" id="avatarSegmentedControl">
                         <!-- Segments injected by JS -->
                     </div>
-                    <div id="avatarGrid" style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; padding:8px; overflow-y:auto; max-height:330px;">
+                    <div id="avatarGrid"
+                        style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; padding:8px; overflow-y:auto; max-height:330px;">
                         <!-- Avatar cards injected by JS -->
                     </div>
                 </div>
@@ -613,7 +681,8 @@
                 <div class="header-title-group">
                     <div class="header-title">Attendance Dashboard</div>
                     <!-- Notification Bell Button -->
-                    <button class="notif-bell-btn" id="notifBellBtn" onclick="toggleNotifications()" title="Notifications">
+                    <button class="notif-bell-btn" id="notifBellBtn" onclick="toggleNotifications()"
+                        title="Notifications">
                         <div class="notif-bell-icon-wrap">
                             <span class="notif-bell-icon">🔔</span>
                             <span class="notif-bell-badge" id="notificationBadge" style="display:none">0</span>
@@ -665,20 +734,33 @@
             </div>
 
             <!-- No Active Tasks Modal (Mandatory Interaction) -->
-            <div id="noTasksModal" class="modal" style="background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); z-index: 10001; transition: all 0.3s ease; align-items: center; justify-content: center;">
-                <div class="stat-card" style="width: 460px; min-height: 540px; height: auto; padding: 50px 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border: none; border-radius: 40px; background: white; box-shadow: 0 40px 100px rgba(0,0,0,0.3); border-top: 10px solid var(--warning-color); animation: scaleUpFade 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); position: relative;">
+            <div id="noTasksModal" class="modal"
+                style="background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); z-index: 10001; transition: all 0.3s ease; align-items: center; justify-content: center;">
+                <div class="stat-card"
+                    style="width: 460px; min-height: 540px; height: auto; padding: 50px 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border: none; border-radius: 40px; background: white; box-shadow: 0 40px 100px rgba(0,0,0,0.3); border-top: 10px solid var(--warning-color); animation: scaleUpFade 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); position: relative;">
                     <!-- Premium Background Spark -->
-                    <div style="position: absolute; top: -50px; left: -50px; width: 150px; height: 150px; background: radial-gradient(circle, rgba(245, 158, 11, 0.15) 0%, transparent 70%); pointer-events: none;"></div>
-                    
-                    <div style="font-size: 70px; margin-bottom: 20px; filter: drop-shadow(0 10px 15px rgba(245, 158, 11, 0.4));">⚠️</div>
-                    <h2 style="margin: 0 0 12px; color: #0f172a; font-size: 2rem; font-weight: 900; letter-spacing: -0.02em; line-height: 1.1;">No Active Tasks!</h2>
-                    <p style="margin: 0 0 25px; color: #475569; font-size: 1.05rem; line-height: 1.6; font-weight: 600;">Your task board is currently empty. Request a new task from your mentor to continue your work.</p>
-                    
+                    <div
+                        style="position: absolute; top: -50px; left: -50px; width: 150px; height: 150px; background: radial-gradient(circle, rgba(245, 158, 11, 0.15) 0%, transparent 70%); pointer-events: none;">
+                    </div>
+
+                    <div
+                        style="font-size: 70px; margin-bottom: 20px; filter: drop-shadow(0 10px 15px rgba(245, 158, 11, 0.4));">
+                        ⚠️</div>
+                    <h2
+                        style="margin: 0 0 12px; color: #0f172a; font-size: 2rem; font-weight: 900; letter-spacing: -0.02em; line-height: 1.1;">
+                        No Active Tasks!</h2>
+                    <p
+                        style="margin: 0 0 25px; color: #475569; font-size: 1.05rem; line-height: 1.6; font-weight: 600;">
+                        Your task board is currently empty. Request a new task from your mentor to continue your work.
+                    </p>
+
                     <div style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
-                        <button class="btn btn-primary" onclick="requestNewTaskFromMentor()" id="btnRequestTask" style="border-radius: 20px; height: 56px; font-weight: 800; font-size: 1.1rem; background: linear-gradient(135deg, var(--warning-color), #d97706); border: none; box-shadow: 0 10px 20px rgba(245, 158, 11, 0.3);">
+                        <button class="btn btn-primary" onclick="requestNewTaskFromMentor()" id="btnRequestTask"
+                            style="border-radius: 20px; height: 56px; font-weight: 800; font-size: 1.1rem; background: linear-gradient(135deg, var(--warning-color), #d97706); border: none; box-shadow: 0 10px 20px rgba(245, 158, 11, 0.3);">
                             🚀 Request New Task
                         </button>
-                        <button class="btn btn-subtle" onclick="closeModal('noTasksModal'); openMyTasks();" style="border-radius: 20px; height: 56px; font-weight: 700; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;">
+                        <button class="btn btn-subtle" onclick="closeModal('noTasksModal'); openMyTasks();"
+                            style="border-radius: 20px; height: 56px; font-weight: 700; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;">
                             Open My Board
                         </button>
                     </div>
@@ -691,7 +773,8 @@
             <!-- Employee Stats Grid (shown for non-admin users) -->
             <div class="stats-grid" id="employeeStatsGrid">
                 <!-- Premium Status Card -->
-                <div class="stat-card status-card premium-glass" id="widget-requests" onclick="openMyRequests()" draggable="false">
+                <div class="stat-card status-card premium-glass" id="widget-requests" onclick="openMyRequests()"
+                    draggable="false">
                     <div class="card-glow"></div>
 
                     <!-- SVG Gradient Definitions -->
@@ -785,7 +868,9 @@
                     <div class="stat-card-title">Today's Status</div>
                     <div class="stat-card-value" id="todayStatus">Not Marked</div>
                     <div class="stat-card-timing" id="todayTiming"></div>
-                    <div id="todayMapPreview" style="height: 60px; margin-top: 10px; border-radius: 8px; overflow: hidden; display: none;"></div>
+                    <div id="todayMapPreview"
+                        style="height: 60px; margin-top: 10px; border-radius: 8px; overflow: hidden; display: none;">
+                    </div>
                     <div class="widget-resize-controls">
                         <button class="resize-btn" onclick="resizeWidget('widget-today-status', 'sm')">S</button>
                         <button class="resize-btn" onclick="resizeWidget('widget-today-status', 'md')">M</button>
@@ -793,9 +878,10 @@
                         <button class="resize-btn" onclick="resizeWidget('widget-today-status', 'xl')">XL</button>
                     </div>
                 </div>
-                
+
                 <div class="stat-card calendar-card" id="widget-mini-calendar" onclick="openAttendanceCalendar()"
-                    style="padding: 12px; display: flex; flex-direction: column; justify-content: center; cursor: pointer;" draggable="false">
+                    style="padding: 12px; display: flex; flex-direction: column; justify-content: center; cursor: pointer;"
+                    draggable="false">
                     <div id="miniCalendarContainer"
                         style="width: 100%; height: 100%; display: flex; flex-direction: column;"></div>
                     <div class="widget-resize-controls" onclick="event.stopPropagation()">
@@ -810,7 +896,9 @@
                     <div class="stat-card-title">Location Status</div>
                     <div class="stat-card-value" id="locationStatus">Checking...</div>
                     <div class="stat-card-timing" id="locationDistance"></div>
-                    <button id="enableLocationBtn" class="btn btn-primary btn-sm" style="margin-top: 10px; width: 100%; display: none;" onclick="manualLocationCheck()">Enable Location</button>
+                    <button id="enableLocationBtn" class="btn btn-primary btn-sm"
+                        style="margin-top: 10px; width: 100%; display: none;" onclick="manualLocationCheck()">Enable
+                        Location</button>
                     <div class="widget-resize-controls">
                         <button class="resize-btn" onclick="resizeWidget('widget-location', 'sm')">S</button>
                         <button class="resize-btn" onclick="resizeWidget('widget-location', 'md')">M</button>
@@ -820,7 +908,8 @@
                 </div>
 
                 <!-- Intelligence Hub Card (Employee Version) -->
-                <div class="stat-card intelligence-hub-card widget-sm hidden" id="intelligenceHubCardEmployee" draggable="false">
+                <div class="stat-card intelligence-hub-card widget-sm hidden" id="intelligenceHubCardEmployee"
+                    draggable="false">
                     <div class="intelligence-hub-header">
                         <div class="intelligence-hub-title-group">
                             <span class="intelligence-hub-icon">🧠</span>
@@ -831,14 +920,17 @@
                                 <span>Confidence: </span>
                                 <span id="hubConfidenceEmployee">--%</span>
                                 <div class="info-tooltip">
-                                    <span class="info-icon" style="background: rgba(255,255,255,0.1); width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: help;">i</span>
-                                    <div class="tooltip-content">Confidence score reflects how consistent and complete the recent data is.</div>
+                                    <span class="info-icon"
+                                        style="background: rgba(255,255,255,0.1); width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: help;">i</span>
+                                    <div class="tooltip-content">Confidence score reflects how consistent and complete
+                                        the recent data is.</div>
                                 </div>
                             </div>
                             <!-- Model Status moved inside the Intelligence Hub -->
                             <div id="trainModelStatusEmployee" class="intelligence-hub-train-status">
                                 <span id="lastTrainedTextEmployee">Checking model status...</span>
-                                <span id="trainSpinnerEmployee" class="loading-spinner hidden" style="display:inline-block; width:10px; height:10px; vertical-align:middle; margin-left:5px;"></span>
+                                <span id="trainSpinnerEmployee" class="loading-spinner hidden"
+                                    style="display:inline-block; width:10px; height:10px; vertical-align:middle; margin-left:5px;"></span>
                             </div>
                         </div>
                     </div>
@@ -863,10 +955,14 @@
 
                     </div>
                     <div class="widget-resize-controls" onclick="event.stopPropagation()">
-                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCardEmployee', 'sm')">S</button>
-                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCardEmployee', 'md')">M</button>
-                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCardEmployee', 'lg')">L</button>
-                        <button class="resize-btn" onclick="resizeWidget('intelligenceHubCardEmployee', 'xl')">XL</button>
+                        <button class="resize-btn"
+                            onclick="resizeWidget('intelligenceHubCardEmployee', 'sm')">S</button>
+                        <button class="resize-btn"
+                            onclick="resizeWidget('intelligenceHubCardEmployee', 'md')">M</button>
+                        <button class="resize-btn"
+                            onclick="resizeWidget('intelligenceHubCardEmployee', 'lg')">L</button>
+                        <button class="resize-btn"
+                            onclick="resizeWidget('intelligenceHubCardEmployee', 'xl')">XL</button>
                     </div>
                 </div>
             </div>
@@ -935,13 +1031,16 @@
                                 <span>Confidence: </span>
                                 <span id="hubConfidence">--%</span>
                                 <div class="info-tooltip">
-                                    <span class="info-icon" style="background: rgba(255,255,255,0.1); width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: help;">i</span>
-                                    <div class="tooltip-content">Confidence score reflects how consistent and complete the recent data is.</div>
+                                    <span class="info-icon"
+                                        style="background: rgba(255,255,255,0.1); width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: help;">i</span>
+                                    <div class="tooltip-content">Confidence score reflects how consistent and complete
+                                        the recent data is.</div>
                                 </div>
                             </div>
                             <div id="trainModelStatus" class="intelligence-hub-train-status">
                                 <span id="lastTrainedText">Checking model status...</span>
-                                <span id="trainSpinner" class="loading-spinner hidden" style="display:inline-block; width:10px; height:10px; vertical-align:middle; margin-left:5px;"></span>
+                                <span id="trainSpinner" class="loading-spinner hidden"
+                                    style="display:inline-block; width:10px; height:10px; vertical-align:middle; margin-left:5px;"></span>
                             </div>
                         </div>
                     </div>
@@ -953,7 +1052,8 @@
                                 <div class="info-tooltip">
                                     <span class="info-icon"
                                         style="background: rgba(255,255,255,0.2); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: help; color: white;">?</span>
-                                    <div class="tooltip-content">Predicted attendance percentage based on historical patterns.</div>
+                                    <div class="tooltip-content">Predicted attendance percentage based on historical
+                                        patterns.</div>
                                 </div>
                             </div>
                             <div class="intelligence-hub-subtitle" id="hubSubtitle">Attendance Forecast</div>
@@ -972,15 +1072,21 @@
                                 onclick="event.stopPropagation(); searchPersonnel();">
                                 <span class="btn-icon">🔍</span> Search
                             </button>
+                            <button class="intelligence-hub-btn" style="flex: 1; background: rgba(16,185,129,0.18); border-color: rgba(16,185,129,0.3);"
+                                onclick="event.stopPropagation(); openCompanyReportModal();">
+                                <span class="btn-icon">🏢</span> Co. Report
+                            </button>
                         </div>
                     </div>
-                    
+
                     <!-- NEW: AI Insight Row -->
                     <!-- AI Insight Row - Removed from card, moved to Intelligence Hub Analysis only -->
-                    <div id="hubAiInsightWrapper" class="hidden" style="display: none; margin-top: 15px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <div id="hubAiInsightWrapper" class="hidden"
+                        style="display: none; margin-top: 15px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
                         <div style="display: flex; align-items: flex-start; gap: 10px;">
                             <span style="font-size: 18px;">🤖</span>
-                            <div style="font-size: 11px; line-height: 1.5; color: rgba(255,255,255,0.9); font-weight: 500;" id="hubAiInsight">
+                            <div style="font-size: 11px; line-height: 1.5; color: rgba(255,255,255,0.9); font-weight: 500;"
+                                id="hubAiInsight">
                                 Aggregating real-time organizational intelligence...
                             </div>
                         </div>
@@ -997,7 +1103,8 @@
                 <div class="action-card hidden" onclick="trainPredictionModel()" id="trainModelCard" draggable="false">
                     <span class="action-card-icon">🧠</span>
                     <div class="action-card-title">Train Forecast Model</div>
-                    <div class="action-card-description">Retrain the prediction model with recent data (Admin only)</div>
+                    <div class="action-card-description">Retrain the prediction model with recent data (Admin only)
+                    </div>
 
                     <div class="widget-resize-controls" onclick="event.stopPropagation()">
                         <button class="resize-btn" onclick="resizeWidget('trainModelCard', 'sm')">S</button>
@@ -1122,7 +1229,8 @@
                         <button class="resize-btn" onclick="resizeWidget('exportCard', 'xl')">XL</button>
                     </div>
                 </div>
-                <div class="action-card hidden" onclick="openTemporaryTagsModal()" id="temporaryTagsCard" draggable="false">
+                <div class="action-card hidden" onclick="openTemporaryTagsModal()" id="temporaryTagsCard"
+                    draggable="false">
                     <span class="action-card-icon">🏷️</span>
                     <div class="action-card-title">Role Rotation</div>
                     <div class="action-card-description">Assign temporary department/role for a fixed period (Admin
@@ -1134,7 +1242,8 @@
                         <button class="resize-btn" onclick="resizeWidget('temporaryTagsCard', 'xl')">XL</button>
                     </div>
                 </div>
-                <div class="action-card hidden" onclick="openAssignMentorModal()" id="assignMentorDashboardCard" draggable="false">
+                <div class="action-card hidden" onclick="openAssignMentorModal()" id="assignMentorDashboardCard"
+                    draggable="false">
                     <span class="action-card-icon">🔗</span>
                     <div class="action-card-title">Assign Mentor</div>
                     <div class="action-card-description">Link employees to their reporting supervisors (Admin only)
@@ -1918,7 +2027,8 @@
 
     <!-- Check Out Confirmation Modal -->
     <div id="checkOutModal" class="modal">
-        <div class="modal-content" style="padding: 32px; border-radius: 24px; max-width: 440px; border: 1px solid rgba(255, 255, 255, 0.1);">
+        <div class="modal-content"
+            style="padding: 32px; border-radius: 24px; max-width: 440px; border: 1px solid rgba(255, 255, 255, 0.1);">
             <div class="text-center">
                 <div style="font-size: 48px; margin-bottom: 16px;">🏃</div>
                 <h3 style="margin-bottom: 16px;">Check Out Confirmation</h3>
@@ -1926,12 +2036,15 @@
                 <div id="tooEarlyWarning" class="hidden"
                     style="background: #fef2f2; padding: 16px; border-radius: 12px; margin-bottom: 20px; color: #b91c1c; border: 1px solid #fecaca;">
                     <h4 style="margin: 0 0 4px; font-weight: 700;">🚫 Session Too Short</h4>
-                    <p style="margin: 0; font-size: 0.9rem; opacity: 0.9;">You have worked less than <strong>4.5 hours</strong>. Minimum 4.5 hours are required to record a half-day session. You cannot check out yet.</p>
+                    <p style="margin: 0; font-size: 0.9rem; opacity: 0.9;">You have worked less than <strong>4.5
+                            hours</strong>. Minimum 4.5 hours are required to record a half-day session. You cannot
+                        check out yet.</p>
                 </div>
                 <div id="halfDayWarning" class="hidden"
                     style="background: #fff7ed; padding: 16px; border-radius: 12px; margin-bottom: 20px; color: #9a3412; border: 1px solid #fed7aa;">
                     <h4 style="margin: 0 0 4px; font-weight: 700;">⚠️ Half Day Warning</h4>
-                    <p style="margin: 0; font-size: 0.9rem; opacity: 0.9;">You have worked less than <strong>9 hours</strong>. This will be recorded as a <strong>half-day</strong> in your records.</p>
+                    <p style="margin: 0; font-size: 0.9rem; opacity: 0.9;">You have worked less than <strong>9
+                            hours</strong>. This will be recorded as a <strong>half-day</strong> in your records.</p>
                 </div>
                 <div style="display: flex; gap: 12px; justify-content: center;">
                     <button onclick="closeModal('checkOutModal')" class="btn btn-secondary">Cancel</button>
@@ -2203,8 +2316,12 @@
                         allocate team tasks</p>
                 </div>
                 <div class="modal-actions" id="taskMentorActions">
-                    <button class="btn btn-warning" id="btnEnterPriorityMode" onclick="enterPriorityMode()" style="background: #f59e0b; color: white; border: none; font-weight: 700; display: none;">⭐ Prioritize</button>
-                    <button class="btn btn-success hidden" id="btnSavePriority" onclick="savePriorityOrder()" style="background: #10b981; color: white; border: none; font-weight: 700;">💾 Save Priority</button>
+                    <button class="btn btn-warning" id="btnEnterPriorityMode" onclick="enterPriorityMode()"
+                        style="background: #f59e0b; color: white; border: none; font-weight: 700; display: none;">⭐
+                        Prioritize</button>
+                    <button class="btn btn-success hidden" id="btnSavePriority" onclick="savePriorityOrder()"
+                        style="background: #10b981; color: white; border: none; font-weight: 700;">💾 Save
+                        Priority</button>
                     <button class="btn btn-primary" onclick="addNewTask()">➕ Add Task</button>
                     <button class="btn btn-secondary" onclick="exportTasksToExcel()">📤 Export</button>
                     <button class="btn btn-secondary" onclick="refreshTasks()">🔄 Refresh</button>
@@ -2317,7 +2434,9 @@
                         manage your assignments</p>
                 </div>
                 <div class="modal-actions">
-                    <button class="btn btn-warning" onclick="requestNewTaskFromMentor()" style="background: var(--warning-color); color: white; border: none; font-weight: 700;">🚀 Request Task</button>
+                    <button class="btn btn-warning" onclick="requestNewTaskFromMentor()"
+                        style="background: var(--warning-color); color: white; border: none; font-weight: 700;">🚀
+                        Request Task</button>
                     <button class="btn btn-primary" onclick="addNewTask()">➕ Add Task</button>
                     <button class="btn btn-secondary" onclick="refreshMyTasks()">🔄 Refresh</button>
                     <button class="btn btn-secondary" onclick="closeModal('myTasksModal')">✕</button>
@@ -2361,7 +2480,8 @@
 
     <!-- Task Detail Modal (with Comments) -->
     <div id="taskDetailModal" class="modal">
-        <div class="modal-content" style="max-width: 600px; padding: 0; border-radius: 24px; display: flex; flex-direction: column; max-height: 90vh; overflow: hidden;">
+        <div class="modal-content"
+            style="max-width: 600px; padding: 0; border-radius: 24px; display: flex; flex-direction: column; max-height: 90vh; overflow: hidden;">
             <div class="modal-header premium-detail-header">
                 <div style="display: flex; flex-direction: column; gap: 12px; flex: 1;">
                     <h3 id="detailTaskTitle" class="premium-task-title">-</h3>
@@ -2370,23 +2490,30 @@
                     </div>
                 </div>
                 <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
-                    <button onclick="closeModal('taskDetailModal')" 
-                            style="background: #f8fafc; border: none; font-size: 18px; width: 34px; height: 34px; border-radius: 10px; cursor: pointer; color: #94a3b8; display: flex; align-items: center; justify-content: center; transition: all 0.2s; margin-top: -4px; margin-right: -4px;" 
-                            onmouseover="this.style.background='#f1f5f9'; this.style.color='#64748b';" 
-                            onmouseout="this.style.background='#f8fafc'; this.style.color='#94a3b8';">✕</button>
+                    <button onclick="closeModal('taskDetailModal')"
+                        style="background: #f8fafc; border: none; font-size: 18px; width: 34px; height: 34px; border-radius: 10px; cursor: pointer; color: #94a3b8; display: flex; align-items: center; justify-content: center; transition: all 0.2s; margin-top: -4px; margin-right: -4px;"
+                        onmouseover="this.style.background='#f1f5f9'; this.style.color='#64748b';"
+                        onmouseout="this.style.background='#f8fafc'; this.style.color='#94a3b8';">✕</button>
                     <div id="detailTaskPriorityBadge"></div>
                 </div>
 
                 <!-- Integrated Progress row (absolute positioned at the bottom border) -->
-                <div id="taskProgressSection" style="position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: #e2e8f0; overflow: hidden;">
-                    <div id="taskProgressBarInner" style="height: 100%; width: 0%; background: linear-gradient(90deg, #3b82f6, #60a5fa); transition: width 0.3s ease;"></div>
+                <div id="taskProgressSection"
+                    style="position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: #e2e8f0; overflow: hidden;">
+                    <div id="taskProgressBarInner"
+                        style="height: 100%; width: 0%; background: linear-gradient(90deg, #3b82f6, #60a5fa); transition: width 0.3s ease;">
+                    </div>
                 </div>
             </div>
 
             <!-- Optional Progress Percent Label above body -->
-            <div style="background: #f8fafc; padding: 8px 24px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 0.65rem; font-weight: 850; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Completion Status</span>
-                <span id="taskProgressPercent" style="font-size: 0.72rem; font-weight: 800; color: var(--primary-color);">0%</span>
+            <div
+                style="background: #f8fafc; padding: 8px 24px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center;">
+                <span
+                    style="font-size: 0.65rem; font-weight: 850; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Completion
+                    Status</span>
+                <span id="taskProgressPercent"
+                    style="font-size: 0.72rem; font-weight: 800; color: var(--primary-color);">0%</span>
             </div>
 
             <div class="modal-body" style="padding: 24px; overflow-y: auto; flex: 1; scrollbar-width: thin;">
@@ -2396,27 +2523,33 @@
 
                 <!-- STEPS SECTION -->
                 <div style="margin-bottom: 24px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <h4 style="margin: 0; font-size: 1rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <h4
+                            style="margin: 0; font-size: 1rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
                             <span>✅</span> Steps to Completion
                         </h4>
-                        <button class="btn btn-sm btn-secondary" onclick="addNewStepUI()" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px;">+ Add Step</button>
+                        <button class="btn btn-sm btn-secondary" onclick="addNewStepUI()"
+                            style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px;">+ Add Step</button>
                     </div>
                     <div id="taskStepsList" style="display: flex; flex-direction: column; gap: 10px;">
                         <!-- Populate via JS -->
                     </div>
                     <div id="addStepInputWrapper" class="hidden" style="margin-top: 10px; display: flex; gap: 8px;">
-                        <input type="text" id="newStepText" class="form-control" placeholder="Describe this step..." style="height: 36px; font-size: 0.9rem;">
+                        <input type="text" id="newStepText" class="form-control" placeholder="Describe this step..."
+                            style="height: 36px; font-size: 0.9rem;">
                         <button class="btn btn-primary btn-sm" onclick="saveNewStep()">Add</button>
                     </div>
                 </div>
 
                 <!-- HISTORY SECTION -->
                 <div style="margin-bottom: 24px;">
-                    <h4 style="margin: 0 0 12px; font-size: 1rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                    <h4
+                        style="margin: 0 0 12px; font-size: 1rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
                         <span>📜</span> History Log
                     </h4>
-                    <div id="taskHistoryLog" style="display: flex; flex-direction: column; gap: 8px; font-size: 0.85rem; color: var(--gray-600); background: #fcfcfc; padding: 12px; border-radius: 12px; border: 1px dashed #e2e8f0;">
+                    <div id="taskHistoryLog"
+                        style="display: flex; flex-direction: column; gap: 8px; font-size: 0.85rem; color: var(--gray-600); background: #fcfcfc; padding: 12px; border-radius: 12px; border: 1px dashed #e2e8f0;">
                         <!-- Populate via JS -->
                     </div>
                 </div>
@@ -2425,7 +2558,8 @@
                 <div id="teamOverviewSection" class="hidden premium-team-section">
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
                         <span style="font-size: 1.2rem;">👥</span>
-                        <h4 style="margin: 0; font-size: 1.1rem; color: var(--primary-color); font-weight: 700;">Team Progress</h4>
+                        <h4 style="margin: 0; font-size: 1.1rem; color: var(--primary-color); font-weight: 700;">Team
+                            Progress</h4>
                     </div>
                     <div id="teamMembersList" style="display: flex; flex-direction: column; gap: 12px;">
                         <!-- Populate via JS -->
@@ -2487,7 +2621,8 @@
                             style="height: 48px; border-radius: 12px;">
                     </div>
                     <div class="premium-field-group">
-                        <label class="premium-label">Completion Deadline <span style="color: var(--error-color);">*</span></label>
+                        <label class="premium-label">Completion Deadline <span
+                                style="color: var(--error-color);">*</span></label>
                         <input type="date" id="taskDueDate" class="form-control" required
                             style="height: 48px; border-radius: 12px;">
                     </div>
@@ -2586,59 +2721,73 @@
     <!-- Meeting / MoM Modal -->
     <div id="meetingMomModal" class="premium-modal-container">
         <div class="premium-modal-backdrop" onclick="closeModal('meetingMomModal')"></div>
-        <div class="premium-modal-content">
+        <div class="premium-modal-content" style="max-width: 680px;">
             <div class="premium-modal-header">
-                <h3>Meeting / MoM</h3>
+                <h3>🤝 Meeting / MoM</h3>
                 <button class="btn-icon-sm" onclick="closeModal('meetingMomModal')"
                     style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">×</button>
             </div>
 
             <div class="premium-modal-body">
+                <!-- Meeting Meta -->
                 <div class="premium-field-group">
-                    <label class="premium-label">Meeting Purpose (Title) <span style="color: var(--error-color);">*</span></label>
-                    <input type="text" id="momTargetTitle" class="form-control" placeholder="What is the meeting about?" required
-                        style="height: 48px; font-size: 1rem; border-radius: 12px; border: 1px solid #e2e8f0;">
+                    <label class="premium-label">Meeting Purpose (Title) <span style="color:var(--error-color);">*</span></label>
+                    <input type="text" id="momTargetTitle" class="form-control"
+                        placeholder="What is this meeting about?"
+                        style="height:48px;font-size:1rem;border-radius:12px;border:1px solid #e2e8f0;">
                 </div>
 
-                <div class="form-row" style="margin-top: 16px;">
+                <div class="form-row" style="margin-top:16px;">
                     <div class="premium-field-group">
                         <label class="premium-label">Meeting Date</label>
                         <input type="date" id="momTargetDate" class="form-control"
-                            style="height: 48px; font-size: 0.95rem; border-radius: 12px; border: 1px solid #e2e8f0; background: #fff;">
+                            style="height:48px;font-size:0.95rem;border-radius:12px;border:1px solid #e2e8f0;background:#fff;">
                     </div>
                     <div class="premium-field-group">
                         <label class="premium-label">Start Time</label>
                         <input type="time" id="momStartTime" class="form-control"
-                            style="height: 48px; font-size: 1rem; border-radius: 12px; border: 1px solid #e2e8f0; background: #fff;">
-                    </div>
-                </div>
-                
-                <div class="premium-field-group" style="margin-top: 16px;">
-                    <label class="premium-label">Assign Task To Users</label>
-                    <div style="margin-bottom: 8px;">
-                        <input type="text" id="momEmployeeSearch" class="form-control" placeholder="Search users by name or role..." onkeyup="filterMomUsers()"
-                            style="height: 40px; font-size: 0.9rem; border-radius: 8px; border: 1px solid #e2e8f0;">
-                    </div>
-                    <div style="max-height: 200px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px;" id="momAssigneesContainer">
-                        <!-- Checkboxes populated via JS -->
+                            style="height:48px;font-size:1rem;border-radius:12px;border:1px solid #e2e8f0;background:#fff;">
                     </div>
                 </div>
 
-                <div class="meeting-history-section" style="margin-top: 24px; border-top: 1px solid #f1f5f9; padding-top: 20px;">
-                    <h4 style="font-size: 1.1rem; color: #1e293b; margin-bottom: 12px;">Recent Meetings History</h4>
-                    <div id="recentMeetingsList" style="display: flex; flex-direction: column; gap: 10px;">
-                        <!-- Meetings populated via JS -->
-                        <div style="text-align: center; color: #64748b; padding: 20px;">Loading meetings...</div>
+                <!-- Notes -->
+                <div class="premium-field-group" style="margin-top:16px;">
+                    <label class="premium-label">General Notes / Description</label>
+                    <textarea id="momNotes" class="form-control" rows="2"
+                        placeholder="Any overall notes, context, or agenda for this meeting…"
+                        style="border-radius:12px;border:1px solid #e2e8f0;resize:vertical;font-size:0.95rem;padding:12px;"></textarea>
+                </div>
+
+                <!-- Steps / Action Items -->
+                <div style="margin-top:24px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                        <label class="premium-label" style="margin:0;">Action Items &amp; Discussion Points</label>
+                        <button type="button" onclick="addMomStep()" class="btn btn-secondary"
+                            style="padding:6px 16px;font-size:0.85rem;border-radius:10px;font-weight:600;">
+                            + Add Step
+                        </button>
+                    </div>
+                    <div id="momStepsWrap" style="display:flex;flex-direction:column;gap:12px;">
+                        <!-- Steps rendered by JS -->
+                    </div>
+                </div>
+
+                <!-- History -->
+                <div class="meeting-history-section"
+                    style="margin-top:28px;border-top:1px solid #f1f5f9;padding-top:20px;">
+                    <h4 style="font-size:1rem;color:#1e293b;margin-bottom:12px;font-weight:700;">📋 Recent MoMs</h4>
+                    <div id="recentMeetingsList" style="display:flex;flex-direction:column;gap:8px;">
+                        <div style="text-align:center;color:#64748b;padding:20px;">Loading…</div>
                     </div>
                 </div>
             </div>
 
-             <div class="premium-modal-footer">
+            <div class="premium-modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('meetingMomModal')"
-                    style="padding: 12px 24px; border-radius: 12px; font-weight: 500;">Cancel</button>
+                    style="padding:12px 24px;border-radius:12px;font-weight:500;">Cancel</button>
                 <button class="btn btn-primary" onclick="saveMeetingMom()" id="saveMomBtn"
-                    style="padding: 12px 32px; border-radius: 12px; font-weight: 600;">
-                    <span id="saveMomText">Complete & Assign</span>
+                    style="padding:12px 32px;border-radius:12px;font-weight:600;">
+                    <span id="saveMomText">Publish MoM</span>
                     <span id="saveMomSpinner" class="loading-spinner hidden"></span>
                 </button>
             </div>
@@ -2979,77 +3128,77 @@
 
             <div class="modal-body-premium" style="padding: 24px;">
 
-            <!-- Add New Tag Form -->
-            <div class="card"
-                style="background: var(--gray-50); margin-bottom: 24px; padding: 16px; border: 1px solid var(--gray-200);">
-                <h4 style="margin-top: 0; margin-bottom: 12px;">Add New Temporary Tag</h4>
-                <div class="form-row"
-                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
-                    <div class="form-group">
-                        <label class="form-label">Search Employee</label>
-                        <input type="text" id="tempTagSearchInput" class="form-control"
-                            placeholder="Search name/user..." oninput="filterTempTagEmployees()">
+                <!-- Add New Tag Form -->
+                <div class="card"
+                    style="background: var(--gray-50); margin-bottom: 24px; padding: 16px; border: 1px solid var(--gray-200);">
+                    <h4 style="margin-top: 0; margin-bottom: 12px;">Add New Temporary Tag</h4>
+                    <div class="form-row"
+                        style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">Search Employee</label>
+                            <input type="text" id="tempTagSearchInput" class="form-control"
+                                placeholder="Search name/user..." oninput="filterTempTagEmployees()">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Employee</label>
+                            <select id="tempTagEmployee" class="form-control"></select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Department</label>
+                            <select id="tempTagDept" class="form-control">
+                                <option value="IT">IT</option>
+                                <option value="HR">HR</option>
+                                <option value="Surveyors">Surveyors</option>
+                                <option value="Accounts">Accounts</option>
+                                <option value="Growth">Growth</option>
+                                <option value="Others">Others</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Role</label>
+                            <select id="tempTagRole" class="form-control">
+                                <option value="employee">Employee</option>
+                                <option value="Mentor">Mentor</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Employee</label>
-                        <select id="tempTagEmployee" class="form-control"></select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Department</label>
-                        <select id="tempTagDept" class="form-control">
-                            <option value="IT">IT</option>
-                            <option value="HR">HR</option>
-                            <option value="Surveyors">Surveyors</option>
-                            <option value="Accounts">Accounts</option>
-                            <option value="Growth">Growth</option>
-                            <option value="Others">Others</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Role</label>
-                        <select id="tempTagRole" class="form-control">
-                            <option value="employee">Employee</option>
-                            <option value="Mentor">Mentor</option>
-                            <option value="admin">Admin</option>
-                        </select>
+                    <div class="form-row"
+                        style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; margin-top: 12px; align-items: end;">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label class="form-label">Start Date</label>
+                            <input type="date" id="tempTagStart" class="form-control">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label class="form-label">End Date</label>
+                            <input type="date" id="tempTagEnd" class="form-control">
+                        </div>
+                        <button class="btn btn-primary" onclick="submitTemporaryTag()" style="height: 42px;">Add
+                            Tag</button>
                     </div>
                 </div>
-                <div class="form-row"
-                    style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; margin-top: 12px; align-items: end;">
-                    <div class="form-group" style="margin-bottom:0;">
-                        <label class="form-label">Start Date</label>
-                        <input type="date" id="tempTagStart" class="form-control">
-                    </div>
-                    <div class="form-group" style="margin-bottom:0;">
-                        <label class="form-label">End Date</label>
-                        <input type="date" id="tempTagEnd" class="form-control">
-                    </div>
-                    <button class="btn btn-primary" onclick="submitTemporaryTag()" style="height: 42px;">Add
-                        Tag</button>
-                </div>
-            </div>
 
-            <!-- Tags List -->
-            <div id="temporaryTagsListContainer" style="overflow-x: auto;">
-                <table class="records-table">
-                    <thead>
-                        <tr>
-                            <th>Employee</th>
-                            <th>Temp Dept</th>
-                            <th>Temp Role</th>
-                            <th>Start Date</th>
-                            <th>End Date</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="temporaryTagsList">
-                        <!-- Filled by JS -->
-                    </tbody>
-                </table>
+                <!-- Tags List -->
+                <div id="temporaryTagsListContainer" style="overflow-x: auto;">
+                    <table class="records-table">
+                        <thead>
+                            <tr>
+                                <th>Employee</th>
+                                <th>Temp Dept</th>
+                                <th>Temp Role</th>
+                                <th>Start Date</th>
+                                <th>End Date</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="temporaryTagsList">
+                            <!-- Filled by JS -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
     <!-- Intelligence Hub Modals -->
 
@@ -3085,15 +3234,18 @@
                     <div class="tabs-header"
                         style="display: flex; border-bottom: 1px solid #e5e7eb; margin-bottom: 16px;">
                         <button class="training-tab-btn active" id="tabLogsBtn" onclick="switchTrainingTab('logs')"
-                            style="padding: 10px 16px; border: none; background: none; cursor: pointer; border-bottom: 2px solid var(--primary-color); font-weight: 600; color: var(--primary-color);">Live Logs</button>
+                            style="padding: 10px 16px; border: none; background: none; cursor: pointer; border-bottom: 2px solid var(--primary-color); font-weight: 600; color: var(--primary-color);">Live
+                            Logs</button>
                         <button class="training-tab-btn" id="tabHistoryBtn" onclick="switchTrainingTab('history')"
-                            style="padding: 10px 16px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; font-weight: 500; color: var(--gray-500);">Training History</button>
+                            style="padding: 10px 16px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; font-weight: 500; color: var(--gray-500);">Training
+                            History</button>
                     </div>
 
                     <div id="trainingLogTab" class="tab-content">
                         <div id="trainingLogs" class="log-console"
                             style="background: #111827; color: #10b981; padding: 16px; border-radius: 8px; font-family: 'Courier New', Courier, monospace; font-size: 12px; height: 200px; overflow-y: auto; line-height: 1.5;">
-                            <div class="log-entry" style="color: #9ca3af;">[SYSTEM] Waiting for training sequence to start...</div>
+                            <div class="log-entry" style="color: #9ca3af;">[SYSTEM] Waiting for training sequence to
+                                start...</div>
                         </div>
                     </div>
 
@@ -3104,7 +3256,8 @@
                                 <span class="btn-icon">🗑️</span> Clear History
                             </button>
                         </div>
-                        <div id="trainingHistoryItems" class="history-list" style="max-height: 200px; overflow-y: auto;">
+                        <div id="trainingHistoryItems" class="history-list"
+                            style="max-height: 200px; overflow-y: auto;">
                             <!-- History populated by JS -->
                         </div>
                     </div>
@@ -3119,10 +3272,12 @@
             <div style="font-size: 48px; margin-bottom: 12px;">🗑️</div>
             <h3 style="color: var(--gray-900); margin-bottom: 8px;">Clear Training History?</h3>
             <p style="color: var(--gray-500); font-size: 14px; margin-bottom: 24px; line-height: 1.5;">
-                This will permanently delete all past AI model training records. This action <strong>cannot be undone</strong>.
+                This will permanently delete all past AI model training records. This action <strong>cannot be
+                    undone</strong>.
             </p>
             <div style="display: flex; gap: 12px; justify-content: center;">
-                <button class="btn btn-secondary" onclick="closeModal('clearHistoryModal')" style="flex: 1;">Cancel</button>
+                <button class="btn btn-secondary" onclick="closeModal('clearHistoryModal')"
+                    style="flex: 1;">Cancel</button>
                 <button class="btn btn-primary" onclick="confirmClearHistory()" id="confirmClearBtn"
                     style="flex: 1; background: var(--error-color); border-color: var(--error-color);">
                     <span id="confirmClearText">Yes, Clear All</span>
@@ -3136,18 +3291,21 @@
          HOLIDAY UPLOAD MODAL (Admin)
     ═══════════════════════════════════════════════════════════════════════ -->
     <div id="holidayUploadModal" class="modal" style="z-index:10500;">
-        <div class="modal-content" style="max-width:900px;width:95%;padding:0;border-radius:24px;overflow:hidden;max-height:90vh;display:flex;flex-direction:column;">
+        <div class="modal-content"
+            style="max-width:900px;width:95%;padding:0;border-radius:24px;overflow:hidden;max-height:90vh;display:flex;flex-direction:column;">
 
             <!-- Header -->
             <div style="background:linear-gradient(135deg,#4f46e5 0%,#6366f1 100%);padding:24px 28px;color:white;">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
                     <div>
                         <h3 style="margin:0;font-size:1.4rem;font-weight:700;">📂 Upload Holiday Calendar</h3>
-                        <p style="margin:6px 0 0;opacity:.8;font-size:.85rem;">Upload PDF, DOCX, Excel or TXT — AI will extract holiday data automatically</p>
+                        <p style="margin:6px 0 0;opacity:.8;font-size:.85rem;">Upload PDF, DOCX, Excel or TXT — AI will
+                            extract holiday data automatically</p>
                     </div>
                     <div style="display:flex;gap:10px;align-items:center;">
                         <button onclick="loadHolidayUploadHistory()" title="Upload History"
-                            style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:10px;padding:7px 14px;font-size:12px;color:white;cursor:pointer;font-weight:600;">📋 History</button>
+                            style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:10px;padding:7px 14px;font-size:12px;color:white;cursor:pointer;font-weight:600;">📋
+                            History</button>
                         <button onclick="closeModal('holidayUploadModal')"
                             style="background:rgba(255,255,255,.15);border:none;width:36px;height:36px;border-radius:50%;color:white;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;">×</button>
                     </div>
@@ -3162,8 +3320,10 @@
                     <div id="holidayDropZone"
                         style="border:2px dashed #a5b4fc;border-radius:16px;padding:48px 24px;text-align:center;cursor:pointer;background:#f5f3ff;transition:all .2s;position:relative;"
                         onclick="document.getElementById('holidayFileInput').click()"
-                        ondragover="holidayDragOver(event)" ondragleave="holidayDragLeave(event)" ondrop="holidayDrop(event)">
-                        <input type="file" id="holidayFileInput" hidden accept=".pdf,.docx,.xlsx,.xls,.csv,.txt" onchange="onHolidayFileSelected(this)">
+                        ondragover="holidayDragOver(event)" ondragleave="holidayDragLeave(event)"
+                        ondrop="holidayDrop(event)">
+                        <input type="file" id="holidayFileInput" hidden accept=".pdf,.docx,.xlsx,.xls,.csv,.txt"
+                            onchange="onHolidayFileSelected(this)">
                         <div style="font-size:48px;margin-bottom:12px;">📄</div>
                         <h4 style="margin:0 0 8px;color:#4f46e5;font-size:1.1rem;">Drop your holiday file here</h4>
                         <p style="margin:0;color:#64748b;font-size:.9rem;">Supported: PDF, DOCX, XLSX, XLS, CSV, TXT</p>
@@ -3172,7 +3332,8 @@
 
                     <!-- Upload Progress -->
                     <div id="holidayUploadProgress" style="display:none;margin-top:20px;">
-                        <div style="display:flex;align-items:center;gap:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px;">
+                        <div
+                            style="display:flex;align-items:center;gap:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px;">
                             <span class="loading-spinner" style="border-top-color:#10b981;"></span>
                             <div>
                                 <div style="font-weight:600;color:#065f46;">Parsing document with AI…</div>
@@ -3187,33 +3348,49 @@
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
                         <div>
                             <h4 style="margin:0;color:#1e293b;">Preview Extracted Holidays</h4>
-                            <p style="margin:4px 0 0;font-size:.85rem;color:#64748b;">Review and edit before saving. Uncheck rows you want to exclude.</p>
+                            <p style="margin:4px 0 0;font-size:.85rem;color:#64748b;">Review and edit before saving.
+                                Uncheck rows you want to exclude.</p>
                         </div>
                         <div style="display:flex;gap:10px;">
-                            <span id="holidayParseStats" style="font-size:.85rem;background:#ede9fe;color:#5b21b6;padding:6px 12px;border-radius:20px;font-weight:600;"></span>
+                            <span id="holidayParseStats"
+                                style="font-size:.85rem;background:#ede9fe;color:#5b21b6;padding:6px 12px;border-radius:20px;font-weight:600;"></span>
                             <button onclick="resetHolidayUpload()"
-                                style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;padding:6px 14px;font-size:.85rem;cursor:pointer;color:#64748b;">← Re-upload</button>
+                                style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;padding:6px 14px;font-size:.85rem;cursor:pointer;color:#64748b;">←
+                                Re-upload</button>
                         </div>
                     </div>
 
                     <!-- Legend -->
                     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
-                        <span style="display:flex;align-items:center;gap:6px;font-size:.8rem;"><span style="width:12px;height:12px;border-radius:3px;background:#dcfce7;display:inline-block;"></span>Holiday</span>
-                        <span style="display:flex;align-items:center;gap:6px;font-size:.8rem;"><span style="width:12px;height:12px;border-radius:3px;background:#fef9c3;display:inline-block;"></span>Optional</span>
+                        <span style="display:flex;align-items:center;gap:6px;font-size:.8rem;"><span
+                                style="width:12px;height:12px;border-radius:3px;background:#dcfce7;display:inline-block;"></span>Holiday</span>
+                        <span style="display:flex;align-items:center;gap:6px;font-size:.8rem;"><span
+                                style="width:12px;height:12px;border-radius:3px;background:#fef9c3;display:inline-block;"></span>Optional</span>
                     </div>
 
                     <div style="max-height:340px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:12px;">
                         <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
                             <thead style="position:sticky;top:0;background:#f8fafc;z-index:1;">
                                 <tr>
-                                    <th style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;width:36px;">
-                                        <input type="checkbox" id="holidaySelectAll" onchange="toggleAllHolidays(this)" checked>
+                                    <th
+                                        style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;width:36px;">
+                                        <input type="checkbox" id="holidaySelectAll" onchange="toggleAllHolidays(this)"
+                                            checked>
                                     </th>
-                                    <th style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;width:40px;">Sr No</th>
-                                    <th style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;">Holiday Name</th>
-                                    <th style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;width:120px;">Date</th>
-                                    <th style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;width:90px;">Day</th>
-                                    <th style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;width:120px;">Type</th>
+                                    <th
+                                        style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;width:40px;">
+                                        Sr No</th>
+                                    <th style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;">Holiday
+                                        Name</th>
+                                    <th
+                                        style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;width:120px;">
+                                        Date</th>
+                                    <th
+                                        style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;width:90px;">
+                                        Day</th>
+                                    <th
+                                        style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;width:120px;">
+                                        Type</th>
                                 </tr>
                             </thead>
                             <tbody id="holidayPreviewTableBody"></tbody>
@@ -3227,16 +3404,22 @@
                 <div id="holidayHistoryPanel" style="display:none;">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
                         <h4 style="margin:0;">📋 Upload History</h4>
-                        <button onclick="document.getElementById('holidayHistoryPanel').style.display='none';document.getElementById('holidayUploadStep1').style.display='';" style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;padding:6px 14px;font-size:.85rem;cursor:pointer;">← Back</button>
+                        <button
+                            onclick="document.getElementById('holidayHistoryPanel').style.display='none';document.getElementById('holidayUploadStep1').style.display='';"
+                            style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;padding:6px 14px;font-size:.85rem;cursor:pointer;">←
+                            Back</button>
                     </div>
-                    <div id="holidayHistoryList" style="display:flex;flex-direction:column;gap:10px;max-height:380px;overflow-y:auto;"></div>
+                    <div id="holidayHistoryList"
+                        style="display:flex;flex-direction:column;gap:10px;max-height:380px;overflow-y:auto;"></div>
                 </div>
             </div>
 
             <!-- Footer -->
-            <div style="padding:16px 24px;border-top:1px solid #f1f5f9;background:#f8fafc;display:flex;justify-content:flex-end;gap:12px;" id="holidayUploadFooter">
+            <div style="padding:16px 24px;border-top:1px solid #f1f5f9;background:#f8fafc;display:flex;justify-content:flex-end;gap:12px;"
+                id="holidayUploadFooter">
                 <button onclick="closeModal('holidayUploadModal')" class="btn btn-secondary">Cancel</button>
-                <button id="holidaySaveBtn" onclick="saveHolidays()" class="btn btn-primary" style="display:none;padding:10px 28px;background:linear-gradient(135deg,#4f46e5,#6366f1);border:none;">
+                <button id="holidaySaveBtn" onclick="saveHolidays()" class="btn btn-primary"
+                    style="display:none;padding:10px 28px;background:linear-gradient(135deg,#4f46e5,#6366f1);border:none;">
                     <span id="holidaySaveBtnText">💾 Save Holidays</span>
                     <span id="holidaySaveSpinner" class="loading-spinner hidden"></span>
                 </button>
@@ -3248,17 +3431,20 @@
          HOLIDAY CALENDAR MODAL (Employee + Admin)
     ═══════════════════════════════════════════════════════════════════════ -->
     <div id="holidayCalendarModal" class="modal" style="z-index:10400;">
-        <div class="modal-content" style="max-width:820px;width:95%;padding:0;border-radius:24px;overflow:hidden;max-height:90vh;display:flex;flex-direction:column;">
+        <div class="modal-content"
+            style="max-width:820px;width:95%;padding:0;border-radius:24px;overflow:hidden;max-height:90vh;display:flex;flex-direction:column;">
 
             <!-- Header -->
             <div style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);padding:24px 28px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
                     <div>
                         <h3 style="margin:0;font-size:1.4rem;font-weight:700;color:white;">🗓️ Holiday Calendar</h3>
-                        <p style="margin:6px 0 0;opacity:.7;font-size:.85rem;color:white;" id="holidayCalYearLabel">2026 Holiday List</p>
+                        <p style="margin:6px 0 0;opacity:.7;font-size:.85rem;color:white;" id="holidayCalYearLabel">2026
+                            Holiday List</p>
                     </div>
                     <div style="display:flex;gap:10px;align-items:center;">
-                        <select id="holidayYearSelector" class="form-control" onchange="loadHolidayCalendar()" style="width:90px;height:36px;font-size:.9rem;padding:4px 8px;"></select>
+                        <select id="holidayYearSelector" class="form-control" onchange="loadHolidayCalendar()"
+                            style="width:90px;height:36px;font-size:.9rem;padding:4px 8px;"></select>
                         <button onclick="closeModal('holidayCalendarModal')"
                             style="background:rgba(255,255,255,.1);border:none;width:36px;height:36px;border-radius:50%;color:white;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;">×</button>
                     </div>
@@ -3266,11 +3452,20 @@
 
                 <!-- Legend -->
                 <div class="employee-only" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;">
-                    <span style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:rgba(255,255,255,.9);"><span style="width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block;"></span>Holiday</span>
-                    <span style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:rgba(255,255,255,.9);"><span style="width:10px;height:10px;border-radius:50%;background:#f59e0b;display:inline-block;"></span>Optional (Unselected)</span>
-                    <span style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:rgba(255,255,255,.9);"><span style="width:10px;height:10px;border-radius:50%;background:#10b981;display:inline-block;"></span>Your Selected Optional</span>
+                    <span
+                        style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:rgba(255,255,255,.9);"><span
+                            style="width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block;"></span>Holiday</span>
+                    <span
+                        style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:rgba(255,255,255,.9);"><span
+                            style="width:10px;height:10px;border-radius:50%;background:#f59e0b;display:inline-block;"></span>Optional
+                        (Unselected)</span>
+                    <span
+                        style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:rgba(255,255,255,.9);"><span
+                            style="width:10px;height:10px;border-radius:50%;background:#10b981;display:inline-block;"></span>Your
+                        Selected Optional</span>
 
-                    <span id="optionalQuotaDisplay" style="margin-left:auto;font-size:.8rem;color:rgba(255,255,255,.8);background:rgba(255,255,255,.1);padding:4px 10px;border-radius:20px;"></span>
+                    <span id="optionalQuotaDisplay"
+                        style="margin-left:auto;font-size:.8rem;color:rgba(255,255,255,.8);background:rgba(255,255,255,.1);padding:4px 10px;border-radius:20px;"></span>
                 </div>
             </div>
 
@@ -3280,11 +3475,14 @@
                     <span class="loading-spinner" style="border-top-color:#6366f1;"></span>
                     <p style="margin-top:12px;">Loading holidays…</p>
                 </div>
-                
+
                 <div id="holidayCalendarContent" style="display:none;">
                     <div style="text-align:center;margin-bottom:24px;">
-                        <h2 style="margin:0;font-size:1.6rem;text-decoration:underline;text-transform:uppercase;color:#0f172a;">Holiday Calendar</h2>
-                        <p style="margin:8px 0;font-weight:700;font-size:1rem;color:#1e293b;">Applicability: To all the employees of HanuAI</p>
+                        <h2
+                            style="margin:0;font-size:1.6rem;text-decoration:underline;text-transform:uppercase;color:#0f172a;">
+                            Holiday Calendar</h2>
+                        <p style="margin:8px 0;font-weight:700;font-size:1rem;color:#1e293b;">Applicability: To all the
+                            employees of HanuAI</p>
                     </div>
 
                     <!-- Holidays Table -->
@@ -3305,11 +3503,14 @@
                     </table>
 
                     <div style="margin:24px 0 16px;font-size:13px;line-height:1.5;color:#1e293b;">
-                        <p style="margin:0;font-weight:700;">Note: 2 Holidays can be taken from the optional list shared. Pl. inform your manager and discuss the delivery before planning the holidays. Uninformed/ Unplanned optional holiday will be considered as absence.</p>
+                        <p style="margin:0;font-weight:700;">Note: 2 Holidays can be taken from the optional list
+                            shared. Pl. inform your manager and discuss the delivery before planning the holidays.
+                            Uninformed/ Unplanned optional holiday will be considered as absence.</p>
                     </div>
 
                     <!-- Optional Holidays Table -->
-                    <div class="table-title" id="optionalTableTitle">List of Optional Holidays for the Year 2026 (Choose any two)</div>
+                    <div class="table-title" id="optionalTableTitle">List of Optional Holidays for the Year 2026 (Choose
+                        any two)</div>
                     <table class="trad-table" id="optionalHolidayTable">
                         <thead>
                             <tr>
@@ -3324,7 +3525,7 @@
                         </thead>
                         <tbody id="optionalHolidayBody"></tbody>
                     </table>
-                    
+
                     <div style="margin-top:12px;font-size:12px;font-style:italic;color:#64748b;">
                         * Note: Any other festival which is not here can be taken after approval
                     </div>
@@ -3333,7 +3534,8 @@
                 <div id="holidayCalendarEmpty" style="display:none;text-align:center;padding:60px;">
                     <div style="font-size:48px;margin-bottom:16px;">🌴</div>
                     <h4 style="color:#64748b;">No holidays found for this year</h4>
-                    <p style="color:#94a3b8;font-size:.9rem;">Admin can upload a holiday file to populate the calendar.</p>
+                    <p style="color:#94a3b8;font-size:.9rem;">Admin can upload a holiday file to populate the calendar.
+                    </p>
                 </div>
             </div>
         </div>
@@ -3343,13 +3545,15 @@
         <div class="modal-content calendar-modal-content">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <h3 style="margin: 0; font-size: 1.2rem;">Attendance Calendar – <span id="calendarMonthLabel"></span></h3>
+                    <h3 style="margin: 0; font-size: 1.2rem;">Attendance Calendar – <span
+                            id="calendarMonthLabel"></span></h3>
                     <div class="calendar-nav-controls">
                         <button onclick="changeCalendarMonth(-1)" class="btn-calendar-nav">❮</button>
                         <button onclick="changeCalendarMonth(1)" class="btn-calendar-nav">❯</button>
                     </div>
                 </div>
-                <button onclick="closeModal('calendarModal')" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--gray-500);">&times;</button>
+                <button onclick="closeModal('calendarModal')"
+                    style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--gray-500);">&times;</button>
             </div>
 
             <div class="calendar-items-legend">
@@ -3365,7 +3569,8 @@
             <div class="multi-select-toggle-container">
                 <div style="flex: 1;">
                     <span style="font-size: 14px; font-weight: 600; color: var(--gray-700);">Multi-date Selection</span>
-                    <p style="font-size: 11px; color: var(--gray-500); margin: 2px 0 0 0;">Select days for bulk requests</p>
+                    <p style="font-size: 11px; color: var(--gray-500); margin: 2px 0 0 0;">Select days for bulk requests
+                    </p>
                 </div>
                 <label class="toggle-switch">
                     <input type="checkbox" id="multiSelectToggle" onchange="toggleMultiSelectMode()">
@@ -3385,21 +3590,31 @@
 
     <div id="dateRequestModal" class="modal">
         <div class="modal-content" style="max-width:400px; padding: 24px;">
-            <h3 style="margin-bottom: 8px;">Request for <span id="requestDateLabel" style="color: var(--primary-color);"></span></h3>
-            <p style="font-size:14px; color:var(--gray-500); margin-bottom:24px;">Select the type of request you want to submit:</p>
+            <h3 style="margin-bottom: 8px;">Request for <span id="requestDateLabel"
+                    style="color: var(--primary-color);"></span></h3>
+            <p style="font-size:14px; color:var(--gray-500); margin-bottom:24px;">Select the type of request you want to
+                submit:</p>
 
-            <button class="btn btn-secondary btn-full-width" style="margin-bottom: 12px; height: 50px; justify-content: flex-start; padding: 0 20px;" onclick="submitDateRequest('wfh')">
+            <button class="btn btn-secondary btn-full-width"
+                style="margin-bottom: 12px; height: 50px; justify-content: flex-start; padding: 0 20px;"
+                onclick="submitDateRequest('wfh')">
                 <span style="font-size: 20px; margin-right: 12px;">🏠</span> Work From Home
             </button>
-            <button class="btn btn-secondary btn-full-width" style="margin-bottom: 24px; height: 50px; justify-content: flex-start; padding: 0 20px;" onclick="submitDateRequest('full_day')">
+            <button class="btn btn-secondary btn-full-width"
+                style="margin-bottom: 24px; height: 50px; justify-content: flex-start; padding: 0 20px;"
+                onclick="submitDateRequest('full_day')">
                 <span style="font-size: 20px; margin-right: 12px;">📅</span> Full Day Leave
             </button>
 
             <div style="padding-top: 20px; border-top: 1px solid var(--gray-100);">
-                <label style="font-size:13px; font-weight:700; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom:12px; display:block;">Half Day Leave Options</label>
+                <label
+                    style="font-size:13px; font-weight:700; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom:12px; display:block;">Half
+                    Day Leave Options</label>
                 <div style="display:flex; gap:12px;">
-                    <button class="btn btn-secondary" style="flex:1; height: 45px;" onclick="submitDateRequest('half_day', 'first_half')">🌅 Morning</button>
-                    <button class="btn btn-secondary" style="flex:1; height: 45px;" onclick="submitDateRequest('half_day', 'second_half')">🌇 Afternoon</button>
+                    <button class="btn btn-secondary" style="flex:1; height: 45px;"
+                        onclick="submitDateRequest('half_day', 'first_half')">🌅 Morning</button>
+                    <button class="btn btn-secondary" style="flex:1; height: 45px;"
+                        onclick="submitDateRequest('half_day', 'second_half')">🌇 Afternoon</button>
                 </div>
             </div>
 
@@ -3468,8 +3683,8 @@
     <!-- External JavaScript -->
     <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     {% load static %}
-    <script src="{% static 'script.js' %}?v=1.0.3"></script>
-    <script src="{% static 'predictive_card.js' %}?v=1.0.2"></script>
+    <script src="{% static 'script.js' %}?v=1.1.0"></script>
+    <script src="{% static 'predictive_card.js' %}?v=1.1.0"></script>
 
     <!-- ═══════════════════════════════════════════════════════════════════
          HOLIDAY MANAGEMENT — CSS + JS
@@ -3487,10 +3702,27 @@
             cursor: pointer;
             position: relative;
         }
-        .hol-row:hover { transform: translateX(4px); box-shadow: 0 4px 12px rgba(0,0,0,.08); }
-        .hol-row.holiday  { background: #fef2f2; border-left: 4px solid #ef4444; }
-        .hol-row.optional   { background: #fffbeb; border-left: 4px solid #f59e0b; }
-        .hol-row.selected   { background: #ecfdf5; border-left: 4px solid #10b981; }
+
+        .hol-row:hover {
+            transform: translateX(4px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, .08);
+        }
+
+        .hol-row.holiday {
+            background: #fef2f2;
+            border-left: 4px solid #ef4444;
+        }
+
+        .hol-row.optional {
+            background: #fffbeb;
+            border-left: 4px solid #f59e0b;
+        }
+
+        .hol-row.selected {
+            background: #ecfdf5;
+            border-left: 4px solid #10b981;
+        }
+
         .hol-month-header {
             font-size: .7rem;
             font-weight: 800;
@@ -3500,6 +3732,7 @@
             padding: 4px 0 8px;
             margin-top: 16px;
         }
+
         .hol-select-btn {
             margin-left: auto;
             font-size: .75rem;
@@ -3511,26 +3744,57 @@
             transition: all .2s;
             white-space: nowrap;
         }
-        .hol-select-btn.select-opt  { background: #fef9c3; color: #92400e; }
-        .hol-select-btn.deselect-opt{ background: #dcfce7; color: #065f46; }
-        .hol-select-btn:hover { opacity: .8; }
+
+        .hol-select-btn.select-opt {
+            background: #fef9c3;
+            color: #92400e;
+        }
+
+        .hol-select-btn.deselect-opt {
+            background: #dcfce7;
+            color: #065f46;
+        }
+
+        .hol-select-btn:hover {
+            opacity: .8;
+        }
+
         .hol-badge {
             font-size: .7rem;
             padding: 3px 8px;
             border-radius: 10px;
             font-weight: 600;
         }
-        .hol-badge.holiday  { background: #fee2e2; color: #b91c1c; }
-        .hol-badge.optional   { background: #fef3c7; color: #b45309; }
-        .hol-badge.selected   { background: #d1fae5; color: #065f46; }
+
+        .hol-badge.holiday {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+
+        .hol-badge.optional {
+            background: #fef3c7;
+            color: #b45309;
+        }
+
+        .hol-badge.selected {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
         /* Holiday Upload Drop Zone hover */
         .holiday-drag-over {
             border-color: #6366f1 !important;
             background: #eef2ff !important;
         }
+
         /* Preview table row backgrounds */
-        .hol-preview-holiday { background: #f0fdf4; }
-        .hol-preview-optional  { background: #fffbeb; }
+        .hol-preview-holiday {
+            background: #f0fdf4;
+        }
+
+        .hol-preview-optional {
+            background: #fffbeb;
+        }
 
         /* Traditional Table Styles */
         .trad-table {
@@ -3540,6 +3804,7 @@
             font-size: 13px;
             color: #1e293b;
         }
+
         .trad-table th {
             background: #f8fafc;
             border: 1px solid #cbd5e1;
@@ -3549,13 +3814,21 @@
             font-size: 11px;
             letter-spacing: 0.05em;
         }
+
         .trad-table td {
             border: 1px solid #cbd5e1;
             padding: 10px 8px;
             text-align: center;
         }
-        .trad-table .text-left { text-align: left; }
-        .trad-table tr:hover { background: #f1f5f9; }
+
+        .trad-table .text-left {
+            text-align: left;
+        }
+
+        .trad-table tr:hover {
+            background: #f1f5f9;
+        }
+
         .table-title {
             background: #f1f5f9;
             border: 1px solid #cbd5e1;
@@ -3568,119 +3841,119 @@
     </style>
 
     <script>
-    // ───────────────────────────────────────────────────────────────────────
-    //  HOLIDAY MANAGEMENT JS
-    // ───────────────────────────────────────────────────────────────────────
-    window.GATED_TOKEN = "{{ gated_token }}";
+        // ───────────────────────────────────────────────────────────────────────
+        //  HOLIDAY MANAGEMENT JS
+        // ───────────────────────────────────────────────────────────────────────
+        window.GATED_TOKEN = "{{ gated_token }}";
 
-    let _holidayUploadId   = null;
-    let _holidayPreviewData = [];
-    const MAX_OPTIONAL_HOLIDAYS = 2;
+        let _holidayUploadId = null;
+        let _holidayPreviewData = [];
+        const MAX_OPTIONAL_HOLIDAYS = 2;
 
-    /* ── Drag & Drop helpers ──────────────────────────────────────────── */
-    function holidayDragOver(e) {
-        e.preventDefault();
-        document.getElementById('holidayDropZone').classList.add('holiday-drag-over');
-    }
-    function holidayDragLeave(e) {
-        document.getElementById('holidayDropZone').classList.remove('holiday-drag-over');
-    }
-    function holidayDrop(e) {
-        e.preventDefault();
-        document.getElementById('holidayDropZone').classList.remove('holiday-drag-over');
-        const file = e.dataTransfer.files[0];
-        if (file) processHolidayFile(file);
-    }
-    function onHolidayFileSelected(input) {
-        if (input.files && input.files[0]) processHolidayFile(input.files[0]);
-    }
-
-    /* ── Open / Reset modals ─────────────────────────────────────────── */
-    function openHolidayUploadModal() {
-        resetHolidayUpload();
-        openModal('holidayUploadModal');
-    }
-    function resetHolidayUpload() {
-        _holidayUploadId   = null;
-        _holidayPreviewData = [];
-        document.getElementById('holidayUploadStep1').style.display = '';
-        document.getElementById('holidayUploadStep2').style.display = 'none';
-        document.getElementById('holidayHistoryPanel').style.display = 'none';
-        document.getElementById('holidayUploadProgress').style.display = 'none';
-        document.getElementById('holidaySaveBtn').style.display = 'none';
-        document.getElementById('holidayUploadMsg').textContent = '';
-        document.getElementById('holidayFileInput').value = '';
-    }
-
-    function openHolidayCalendarModal() {
-        // Populate year selector
-        const sel = document.getElementById('holidayYearSelector');
-        sel.innerHTML = '';
-        const curYear = new Date().getFullYear();
-        for (let y = curYear - 1; y <= curYear + 2; y++) {
-            const o = document.createElement('option');
-            o.value = y; o.textContent = y;
-            if (y === curYear) o.selected = true;
-            sel.appendChild(o);
+        /* ── Drag & Drop helpers ──────────────────────────────────────────── */
+        function holidayDragOver(e) {
+            e.preventDefault();
+            document.getElementById('holidayDropZone').classList.add('holiday-drag-over');
         }
-        openModal('holidayCalendarModal');
-        loadHolidayCalendar();
-    }
+        function holidayDragLeave(e) {
+            document.getElementById('holidayDropZone').classList.remove('holiday-drag-over');
+        }
+        function holidayDrop(e) {
+            e.preventDefault();
+            document.getElementById('holidayDropZone').classList.remove('holiday-drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file) processHolidayFile(file);
+        }
+        function onHolidayFileSelected(input) {
+            if (input.files && input.files[0]) processHolidayFile(input.files[0]);
+        }
 
-    /* ── Parse / Upload ─────────────────────────────────────────────── */
-    async function processHolidayFile(file) {
-        if (!currentUser || !currentUser.id) { showNotification('Please log in first.', 'error'); return; }
-
-        document.getElementById('holidayUploadProgress').style.display = '';
-        document.getElementById('holidayUploadFileName').textContent = file.name;
-
-        const fd = new FormData();
-        fd.append('file', file);
-        fd.append('user_id', currentUser.id);
-
-        try {
-            const res = await fetch(`/api/holiday-upload-parse?token=${window.GATED_TOKEN}`, {
-                method: 'POST',
-                body: fd,
-            });
-            const data = await res.json();
-
+        /* ── Open / Reset modals ─────────────────────────────────────────── */
+        function openHolidayUploadModal() {
+            resetHolidayUpload();
+            openModal('holidayUploadModal');
+        }
+        function resetHolidayUpload() {
+            _holidayUploadId = null;
+            _holidayPreviewData = [];
+            document.getElementById('holidayUploadStep1').style.display = '';
+            document.getElementById('holidayUploadStep2').style.display = 'none';
+            document.getElementById('holidayHistoryPanel').style.display = 'none';
             document.getElementById('holidayUploadProgress').style.display = 'none';
+            document.getElementById('holidaySaveBtn').style.display = 'none';
+            document.getElementById('holidayUploadMsg').textContent = '';
+            document.getElementById('holidayFileInput').value = '';
+        }
 
-            if (!data.success) {
-                showNotification(data.message || 'Parse failed.', 'error');
+        function openHolidayCalendarModal() {
+            // Populate year selector
+            const sel = document.getElementById('holidayYearSelector');
+            sel.innerHTML = '';
+            const curYear = new Date().getFullYear();
+            for (let y = curYear - 1; y <= curYear + 2; y++) {
+                const o = document.createElement('option');
+                o.value = y; o.textContent = y;
+                if (y === curYear) o.selected = true;
+                sel.appendChild(o);
+            }
+            openModal('holidayCalendarModal');
+            loadHolidayCalendar();
+        }
+
+        /* ── Parse / Upload ─────────────────────────────────────────────── */
+        async function processHolidayFile(file) {
+            if (!currentUser || !currentUser.id) { showNotification('Please log in first.', 'error'); return; }
+
+            document.getElementById('holidayUploadProgress').style.display = '';
+            document.getElementById('holidayUploadFileName').textContent = file.name;
+
+            const fd = new FormData();
+            fd.append('file', file);
+            fd.append('user_id', currentUser.id);
+
+            try {
+                const res = await fetch(`/api/holiday-upload-parse?token=${window.GATED_TOKEN}`, {
+                    method: 'POST',
+                    body: fd,
+                });
+                const data = await res.json();
+
+                document.getElementById('holidayUploadProgress').style.display = 'none';
+
+                if (!data.success) {
+                    showNotification(data.message || 'Parse failed.', 'error');
+                    return;
+                }
+
+                _holidayUploadId = data.upload_id;
+                _holidayPreviewData = data.holidays;
+
+                renderHolidayPreview(data.holidays, file.name, data.parsed_count);
+            } catch (err) {
+                document.getElementById('holidayUploadProgress').style.display = 'none';
+                showNotification('Upload error: ' + err.message, 'error');
+            }
+        }
+
+        function renderHolidayPreview(holidays, fileName, count) {
+            document.getElementById('holidayUploadStep1').style.display = 'none';
+            document.getElementById('holidayUploadStep2').style.display = '';
+            document.getElementById('holidayParseStats').textContent = `${count} holidays found in "${fileName}"`;
+
+            const tbody = document.getElementById('holidayPreviewTableBody');
+            tbody.innerHTML = '';
+
+            if (!holidays.length) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:#94a3b8;">No holidays could be extracted. Try a different file format.</td></tr>`;
                 return;
             }
 
-            _holidayUploadId   = data.upload_id;
-            _holidayPreviewData = data.holidays;
-
-            renderHolidayPreview(data.holidays, file.name, data.parsed_count);
-        } catch (err) {
-            document.getElementById('holidayUploadProgress').style.display = 'none';
-            showNotification('Upload error: ' + err.message, 'error');
-        }
-    }
-
-    function renderHolidayPreview(holidays, fileName, count) {
-        document.getElementById('holidayUploadStep1').style.display = 'none';
-        document.getElementById('holidayUploadStep2').style.display = '';
-        document.getElementById('holidayParseStats').textContent = `${count} holidays found in "${fileName}"`;
-
-        const tbody = document.getElementById('holidayPreviewTableBody');
-        tbody.innerHTML = '';
-
-        if (!holidays.length) {
-            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:#94a3b8;">No holidays could be extracted. Try a different file format.</td></tr>`;
-            return;
-        }
-
-        holidays.forEach((h, idx) => {
-            const isOpt = h.is_optional;
-            const bg    = isOpt ? 'hol-preview-optional' : 'hol-preview-holiday';
-            const tr    = document.createElement('tr');
-            tr.className = bg;
-            tr.innerHTML = `
+            holidays.forEach((h, idx) => {
+                const isOpt = h.is_optional;
+                const bg = isOpt ? 'hol-preview-optional' : 'hol-preview-holiday';
+                const tr = document.createElement('tr');
+                tr.className = bg;
+                tr.innerHTML = `
                 <td style="padding:8px 10px;">
                     <input type="checkbox" class="holiday-row-check" data-idx="${idx}" checked>
                 </td>
@@ -3700,94 +3973,97 @@
                     <select data-idx="${idx}" data-field="is_optional"
                         style="border:none;background:transparent;font-size:.85rem;"
                         onchange="updateHolidayPreview(${idx},'is_optional',this.value==='true')">
-                        <option value="false" ${!isOpt?'selected':''}>Holiday</option>
-                        <option value="true"  ${isOpt?'selected':''}>Optional</option>
+                        <option value="false" ${!isOpt ? 'selected' : ''}>Holiday</option>
+                        <option value="true"  ${isOpt ? 'selected' : ''}>Optional</option>
                     </select>
                 </td>`;
-            tbody.appendChild(tr);
-        });
-
-        document.getElementById('holidaySaveBtn').style.display = '';
-    }
-
-    function updateHolidayPreview(idx, field, value) {
-        if (_holidayPreviewData[idx] !== undefined) {
-            _holidayPreviewData[idx][field] = value;
-        }
-    }
-    function toggleAllHolidays(chk) {
-        document.querySelectorAll('.holiday-row-check').forEach(c => c.checked = chk.checked);
-    }
-
-    /* ── Save ───────────────────────────────────────────────────────── */
-    async function saveHolidays() {
-        if (!currentUser || !currentUser.id) { showNotification('Please log in first.', 'error'); return; }
-        const btn  = document.getElementById('holidaySaveBtn');
-        const txt  = document.getElementById('holidaySaveBtnText');
-        const spin = document.getElementById('holidaySaveSpinner');
-
-        // Collect only checked rows
-        const checked = document.querySelectorAll('.holiday-row-check');
-        const toSave  = [];
-        checked.forEach(c => {
-            if (c.checked) {
-                const idx = parseInt(c.dataset.idx);
-                if (_holidayPreviewData[idx]) toSave.push(_holidayPreviewData[idx]);
-            }
-        });
-
-        if (!toSave.length) {
-            showNotification('No rows selected to save.', 'warning');
-            return;
-        }
-
-        txt.textContent = 'Saving…';
-        spin.classList.remove('hidden');
-        btn.disabled = true;
-
-        try {
-            const res = await fetch(`/api/holiday-save?token=${window.GATED_TOKEN}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: currentUser.id, upload_id: _holidayUploadId, holidays: toSave }),
+                tbody.appendChild(tr);
             });
-            const data = await res.json();
 
-            if (data.success) {
-                const msg = `✅ ${data.created} added, ${data.updated} updated, ${data.skipped} skipped.`;
-                document.getElementById('holidayUploadMsg').innerHTML =
-                    `<span style="color:#10b981;font-weight:600;">${msg}</span>`;
-                showNotification(msg, 'success');
-                document.getElementById('holidaySaveBtn').style.display = 'none';
-            } else {
-                showNotification(data.message || 'Save failed.', 'error');
-            }
-        } catch (err) {
-            showNotification('Save error: ' + err.message, 'error');
-        } finally {
-            txt.textContent = '💾 Save Holidays';
-            spin.classList.add('hidden');
-            btn.disabled = false;
+            document.getElementById('holidaySaveBtn').style.display = '';
         }
-    }
 
-    /* ── History ───────────────────────────────────────────────────── */
-    async function loadHolidayUploadHistory() {
-        if (!currentUser || !currentUser.id) return;
-        document.getElementById('holidayUploadStep1').style.display = 'none';
-        document.getElementById('holidayUploadStep2').style.display = 'none';
-        document.getElementById('holidayHistoryPanel').style.display = '';
-        const list = document.getElementById('holidayHistoryList');
-        list.innerHTML = '<div style="text-align:center;padding:20px;"><span class="loading-spinner" style="border-top-color:#6366f1;"></span></div>';
+        function updateHolidayPreview(idx, field, value) {
+            if (_holidayPreviewData[idx] !== undefined) {
+                _holidayPreviewData[idx][field] = value;
+            }
+        }
+        function toggleAllHolidays(chk) {
+            document.querySelectorAll('.holiday-row-check').forEach(c => c.checked = chk.checked);
+        }
 
-        try {
-            const res  = await fetch(`/api/holiday-upload-history?user_id=${currentUser.id}&token=${window.GATED_TOKEN}`);
-            const data = await res.json();
-            if (!data.success || !data.uploads.length) {
-                list.innerHTML = '<p style="text-align:center;color:#94a3b8;padding:24px;">No uploads yet.</p>';
+        /* ── Save ───────────────────────────────────────────────────────── */
+        async function saveHolidays() {
+            showLoading("Saving holidays...");
+            if (!currentUser || !currentUser.id) { showNotification('Please log in first.', 'error'); return; }
+            const btn = document.getElementById('holidaySaveBtn');
+            const txt = document.getElementById('holidaySaveBtnText');
+            const spin = document.getElementById('holidaySaveSpinner');
+
+            // Collect only checked rows
+            const checked = document.querySelectorAll('.holiday-row-check');
+            const toSave = [];
+            checked.forEach(c => {
+                if (c.checked) {
+                    const idx = parseInt(c.dataset.idx);
+                    if (_holidayPreviewData[idx]) toSave.push(_holidayPreviewData[idx]);
+                }
+            });
+
+            if (!toSave.length) {
+                showNotification('No rows selected to save.', 'warning');
                 return;
             }
-            list.innerHTML = data.uploads.map(u => `
+
+            txt.textContent = 'Saving…';
+            spin.classList.remove('hidden');
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`/api/holiday-save?token=${window.GATED_TOKEN}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: currentUser.id, upload_id: _holidayUploadId, holidays: toSave }),
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    const msg = `✅ ${data.created} added, ${data.updated} updated, ${data.skipped} skipped.`;
+                    document.getElementById('holidayUploadMsg').innerHTML =
+                        `<span style="color:#10b981;font-weight:600;">${msg}</span>`;
+                    showNotification(msg, 'success');
+                    document.getElementById('holidaySaveBtn').style.display = 'none';
+                } else {
+                    showNotification(data.message || 'Save failed.', 'error');
+                }
+            } catch (err) {
+                showNotification('Save error: ' + err.message, 'error');
+            } finally {
+                txt.textContent = '💾 Save Holidays';
+                spin.classList.add('hidden');
+                btn.disabled = false;
+                hideLoading();
+            }
+        }
+
+        /* ── History ───────────────────────────────────────────────────── */
+        async function loadHolidayUploadHistory() {
+            showLoading("Loading history...");
+            if (!currentUser || !currentUser.id) return;
+            document.getElementById('holidayUploadStep1').style.display = 'none';
+            document.getElementById('holidayUploadStep2').style.display = 'none';
+            document.getElementById('holidayHistoryPanel').style.display = '';
+            const list = document.getElementById('holidayHistoryList');
+            list.innerHTML = '<div style="text-align:center;padding:20px;"><span class="loading-spinner" style="border-top-color:#6366f1;"></span></div>';
+
+            try {
+                const res = await fetch(`/api/holiday-upload-history?user_id=${currentUser.id}&token=${window.GATED_TOKEN}`);
+                const data = await res.json();
+                if (!data.success || !data.uploads.length) {
+                    list.innerHTML = '<p style="text-align:center;color:#94a3b8;padding:24px;">No uploads yet.</p>';
+                    return;
+                }
+                list.innerHTML = data.uploads.map(u => `
                 <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:14px;">
                     <div style="font-size:28px;">📄</div>
                     <div style="flex:1;min-width:0;">
@@ -3796,108 +4072,110 @@
                     </div>
                     <div style="text-align:right;flex-shrink:0;">
                         <span style="padding:3px 10px;border-radius:10px;font-size:.75rem;font-weight:700;
-                            background:${u.status==='approved'?'#dcfce7':u.status==='rejected'?'#fee2e2':'#ede9fe'};
-                            color:${u.status==='approved'?'#065f46':u.status==='rejected'?'#991b1b':'#5b21b6'};">${u.status.toUpperCase()}</span>
+                            background:${u.status === 'approved' ? '#dcfce7' : u.status === 'rejected' ? '#fee2e2' : '#ede9fe'};
+                            color:${u.status === 'approved' ? '#065f46' : u.status === 'rejected' ? '#991b1b' : '#5b21b6'};">${u.status.toUpperCase()}</span>
                         <div style="font-size:.75rem;color:#94a3b8;margin-top:4px;">${u.parsed_count} parsed · ${u.saved_count} saved</div>
                     </div>
                 </div>`).join('');
-        } catch (err) {
-            list.innerHTML = `<p style="color:#ef4444;text-align:center;">${err.message}</p>`;
-        }
-    }
-
-    /* ── Holiday Calendar Load ─────────────────────────────────────── */
-    async function loadHolidayCalendar() {
-        if (!currentUser || !currentUser.id) return;
-        const year  = document.getElementById('holidayYearSelector').value;
-        document.getElementById('holidayCalYearLabel').textContent = `${year} Holiday List`;
-        
-        // Update titles with correct year
-        if (document.getElementById('holidayTableTitle')) {
-            document.getElementById('holidayTableTitle').textContent = `List of Holidays for the Year ${year}`;
-        }
-        if (document.getElementById('optionalTableTitle')) {
-            document.getElementById('optionalTableTitle').textContent = `List of Optional Holidays for the Year ${year} (Choose any two)`;
+            } catch (err) {
+                list.innerHTML = `<p style="color:#ef4444;text-align:center;">${err.message}</p>`;
+            } finally {
+                hideLoading();
+            }
         }
 
-        document.getElementById('holidayCalendarLoading').style.display = '';
-        document.getElementById('holidayCalendarContent').style.display = 'none';
-        document.getElementById('holidayCalendarEmpty').style.display = 'none';
+        /* ── Holiday Calendar Load ─────────────────────────────────────── */
+        async function loadHolidayCalendar() {
+            if (!currentUser || !currentUser.id) return;
+            const year = document.getElementById('holidayYearSelector').value;
+            document.getElementById('holidayCalYearLabel').textContent = `${year} Holiday List`;
 
-        try {
-            const res  = await fetch(`/api/holidays?year=${year}&user_id=${currentUser.id}&token=${window.GATED_TOKEN}`);
-            const data = await res.json();
-            document.getElementById('holidayCalendarLoading').style.display = 'none';
-
-            if (!data.success || !data.holidays.length) {
-                document.getElementById('holidayCalendarEmpty').style.display = '';
-                return;
+            // Update titles with correct year
+            if (document.getElementById('holidayTableTitle')) {
+                document.getElementById('holidayTableTitle').textContent = `List of Holidays for the Year ${year}`;
+            }
+            if (document.getElementById('optionalTableTitle')) {
+                document.getElementById('optionalTableTitle').textContent = `List of Optional Holidays for the Year ${year} (Choose any two)`;
             }
 
-            const mandatoryBody = document.getElementById('holidayHolidayBody');
-            const optionalBody = document.getElementById('optionalHolidayBody');
-            mandatoryBody.innerHTML = '';
-            optionalBody.innerHTML = '';
+            document.getElementById('holidayCalendarLoading').style.display = '';
+            document.getElementById('holidayCalendarContent').style.display = 'none';
+            document.getElementById('holidayCalendarEmpty').style.display = 'none';
 
-            const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-            
-            let mCount = 0;
-            let oCount = 0;
+            try {
+                const res = await fetch(`/api/holidays?year=${year}&user_id=${currentUser.id}&token=${window.GATED_TOKEN}`);
+                const data = await res.json();
+                document.getElementById('holidayCalendarLoading').style.display = 'none';
 
-            data.holidays.forEach(h => {
-                const dateObj = new Date(h.date + 'T00:00:00');
-                const monthName = MONTHS[dateObj.getMonth()];
-                const dateDay = dateObj.getDate();
-                
-                // Add suffix for date (1st, 2nd, etc.)
-                let suffix = 'th';
-                if (dateDay === 1 || dateDay === 21 || dateDay === 31) suffix = 'st';
-                else if (dateDay === 2 || dateDay === 22) suffix = 'nd';
-                else if (dateDay === 3 || dateDay === 23) suffix = 'rd';
-                
-                const formattedDate = `${dateDay}${suffix}`;
-                
-                let holidayName = h.name;
-                if (h.is_optional) {
-                    holidayName += ' (Optional)';
-                }
-                
-                if (h.is_optional && h.user_selected) {
-                    holidayName += ' <span style="color:#10b981;font-weight:700;">(Selected)</span>';
+                if (!data.success || !data.holidays.length) {
+                    document.getElementById('holidayCalendarEmpty').style.display = '';
+                    return;
                 }
 
-                const tr = document.createElement('tr');
-                if (h.is_optional && h.user_selected) {
-                    tr.style.background = '#f0fdf4';
-                }
-                
-                const isAdmin = currentUser.role === 'admin';
-                const canSelect = h.is_optional && !isAdmin;
-                const selectedCount = data.holidays.filter(x => x.user_selected).length;
-                const quotaFull = selectedCount >= MAX_OPTIONAL_HOLIDAYS && !h.user_selected;
+                const mandatoryBody = document.getElementById('holidayHolidayBody');
+                const optionalBody = document.getElementById('optionalHolidayBody');
+                mandatoryBody.innerHTML = '';
+                optionalBody.innerHTML = '';
 
-                let actionHtml = '';
-                if (canSelect) {
-                    if (h.user_selected) {
-                        actionHtml = `<br><button class="btn btn-subtle btn-sm" onclick="toggleOptionalHoliday(${h.id},'deselect',this)" style="font-size:10px;padding:2px 6px;margin-top:4px;">Deselect</button>`;
-                    } else if (!quotaFull) {
-                        actionHtml = `<br><button class="btn btn-primary btn-sm" onclick="toggleOptionalHoliday(${h.id},'select',this)" style="font-size:10px;padding:2px 6px;margin-top:4px;">Select</button>`;
+                const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+                let mCount = 0;
+                let oCount = 0;
+
+                data.holidays.forEach(h => {
+                    const dateObj = new Date(h.date + 'T00:00:00');
+                    const monthName = MONTHS[dateObj.getMonth()];
+                    const dateDay = dateObj.getDate();
+
+                    // Add suffix for date (1st, 2nd, etc.)
+                    let suffix = 'th';
+                    if (dateDay === 1 || dateDay === 21 || dateDay === 31) suffix = 'st';
+                    else if (dateDay === 2 || dateDay === 22) suffix = 'nd';
+                    else if (dateDay === 3 || dateDay === 23) suffix = 'rd';
+
+                    const formattedDate = `${dateDay}${suffix}`;
+
+                    let holidayName = h.name;
+                    if (h.is_optional) {
+                        holidayName += ' (Optional)';
                     }
-                }
 
-                let adminActionHtml = '';
-                if (isAdmin) {
-                    adminActionHtml = `
+                    if (h.is_optional && h.user_selected) {
+                        holidayName += ' <span style="color:#10b981;font-weight:700;">(Selected)</span>';
+                    }
+
+                    const tr = document.createElement('tr');
+                    if (h.is_optional && h.user_selected) {
+                        tr.style.background = '#f0fdf4';
+                    }
+
+                    const isAdmin = currentUser.role === 'admin';
+                    const canSelect = h.is_optional && !isAdmin;
+                    const selectedCount = data.holidays.filter(x => x.user_selected).length;
+                    const quotaFull = selectedCount >= MAX_OPTIONAL_HOLIDAYS && !h.user_selected;
+
+                    let actionHtml = '';
+                    if (canSelect) {
+                        if (h.user_selected) {
+                            actionHtml = `<br><button class="btn btn-subtle btn-sm" onclick="toggleOptionalHoliday(${h.id},'deselect',this)" style="font-size:10px;padding:2px 6px;margin-top:4px;">Deselect</button>`;
+                        } else if (!quotaFull) {
+                            actionHtml = `<br><button class="btn btn-primary btn-sm" onclick="toggleOptionalHoliday(${h.id},'select',this)" style="font-size:10px;padding:2px 6px;margin-top:4px;">Select</button>`;
+                        }
+                    }
+
+                    let adminActionHtml = '';
+                    if (isAdmin) {
+                        adminActionHtml = `
                         <td class="admin-only">
                             <button onclick="editHolidayInline(${h.id}, this)" title="Edit" style="background:none;border:none;cursor:pointer;font-size:14px;color:#6366f1;">✏️</button>
                             <button onclick="deleteHolidayInline(${h.id})" title="Delete" style="background:none;border:none;cursor:pointer;font-size:14px;color:#ef4444;margin-left:4px;">🗑️</button>
                         </td>
                     `;
-                }
+                    }
 
-                if (!h.is_optional) {
-                    mCount++;
-                    tr.innerHTML = `
+                    if (!h.is_optional) {
+                        mCount++;
+                        tr.innerHTML = `
                         <td>${mCount}</td>
                         <td id="hol-month-${h.id}">${monthName}</td>
                         <td id="hol-date-${h.id}" data-raw-date="${h.date}">${formattedDate}</td>
@@ -3906,11 +4184,11 @@
                         <td id="hol-type-${h.id}" data-optional="false" class="admin-only" style="font-size:10px; color:#64748b;">Holiday</td>
                         ${adminActionHtml}
                     `;
-                    mandatoryBody.appendChild(tr);
-                } else {
-                    oCount++;
-                    tr.style.background = h.user_selected ? '#f0fdf4' : '#fffbeb';
-                    tr.innerHTML = `
+                        mandatoryBody.appendChild(tr);
+                    } else {
+                        oCount++;
+                        tr.style.background = h.user_selected ? '#f0fdf4' : '#fffbeb';
+                        tr.innerHTML = `
                         <td>${oCount}</td>
                         <td id="hol-month-${h.id}">${monthName}</td>
                         <td id="hol-date-${h.id}" data-raw-date="${h.date}">${formattedDate}</td>
@@ -3922,167 +4200,167 @@
                         <td id="hol-type-${h.id}" data-optional="true" class="admin-only" style="font-size:10px; color:#f59e0b;">Optional</td>
                         ${adminActionHtml}
                     `;
-                    optionalBody.appendChild(tr);
+                        optionalBody.appendChild(tr);
+                    }
+
+                });
+
+                // Toggle admin columns
+                const isAdminView = currentUser.role === 'admin';
+                document.querySelectorAll('.admin-only').forEach(el => {
+                    el.style.display = isAdminView ? '' : 'none';
+                });
+                document.querySelectorAll('.employee-only').forEach(el => {
+                    el.style.display = isAdminView ? 'none' : '';
+                });
+
+                // Update quota display
+                const selectedCountTotal = data.holidays.filter(h => h.user_selected).length;
+                const quotaDisplay = document.getElementById('optionalQuotaDisplay');
+                if (quotaDisplay) {
+                    quotaDisplay.textContent = `Optional selected: ${selectedCountTotal}/${MAX_OPTIONAL_HOLIDAYS}`;
+                    quotaDisplay.style.display = (currentUser && currentUser.role === 'admin') ? 'none' : 'block';
                 }
 
-            });
-
-            // Toggle admin columns
-            const isAdminView = currentUser.role === 'admin';
-            document.querySelectorAll('.admin-only').forEach(el => {
-                el.style.display = isAdminView ? '' : 'none';
-            });
-            document.querySelectorAll('.employee-only').forEach(el => {
-                el.style.display = isAdminView ? 'none' : '';
-            });
-
-            // Update quota display
-            const selectedCountTotal = data.holidays.filter(h => h.user_selected).length;
-            const quotaDisplay = document.getElementById('optionalQuotaDisplay');
-            if (quotaDisplay) {
-                quotaDisplay.textContent = `Optional selected: ${selectedCountTotal}/${MAX_OPTIONAL_HOLIDAYS}`;
-                quotaDisplay.style.display = (currentUser && currentUser.role === 'admin') ? 'none' : 'block';
+                document.getElementById('holidayCalendarContent').style.display = '';
+            } catch (err) {
+                document.getElementById('holidayCalendarLoading').style.display = 'none';
+                showNotification('Failed to load holidays: ' + err.message, 'error');
             }
-
-            document.getElementById('holidayCalendarContent').style.display = '';
-        } catch (err) {
-            document.getElementById('holidayCalendarLoading').style.display = 'none';
-            showNotification('Failed to load holidays: ' + err.message, 'error');
         }
-    }
 
-    /* ── Edit Holiday Inline ────────────────────────────────────────── */
-    async function editHolidayInline(id, btn) {
-        const nameSpan = document.getElementById(`hol-name-${id}`);
-        const dateTd   = document.getElementById(`hol-date-${id}`);
-        const dayTd    = document.getElementById(`hol-day-${id}`);
-        const typeTd   = document.getElementById(`hol-type-${id}`);
-        if (!nameSpan || !dateTd || !dayTd || !typeTd) return;
+        /* ── Edit Holiday Inline ────────────────────────────────────────── */
+        async function editHolidayInline(id, btn) {
+            const nameSpan = document.getElementById(`hol-name-${id}`);
+            const dateTd = document.getElementById(`hol-date-${id}`);
+            const dayTd = document.getElementById(`hol-day-${id}`);
+            const typeTd = document.getElementById(`hol-type-${id}`);
+            if (!nameSpan || !dateTd || !dayTd || !typeTd) return;
 
-        const originalName = nameSpan.textContent.trim();
-        const originalDate = dateTd.getAttribute('data-raw-date');
-        const originalDay  = dayTd.textContent.trim();
-        const originalOpt  = typeTd.getAttribute('data-optional') === 'true';
-        
-        // If already editing, save it
-        if (btn.textContent === '💾') {
-            const newName = nameSpan.querySelector('input').value.trim();
-            const newDate = dateTd.querySelector('input').value;
-            const newDay  = dayTd.querySelector('input').value.trim();
-            const newOpt  = typeTd.querySelector('select').value === 'true';
-            
-            if (!newName || !newDate) {
-                showNotification('Name and Date are required.', 'error');
+            const originalName = nameSpan.textContent.trim();
+            const originalDate = dateTd.getAttribute('data-raw-date');
+            const originalDay = dayTd.textContent.trim();
+            const originalOpt = typeTd.getAttribute('data-optional') === 'true';
+
+            // If already editing, save it
+            if (btn.textContent === '💾') {
+                const newName = nameSpan.querySelector('input').value.trim();
+                const newDate = dateTd.querySelector('input').value;
+                const newDay = dayTd.querySelector('input').value.trim();
+                const newOpt = typeTd.querySelector('select').value === 'true';
+
+                if (!newName || !newDate) {
+                    showNotification('Name and Date are required.', 'error');
+                    return;
+                }
+
+                btn.disabled = true;
+                try {
+                    const res = await fetch(`/api/holiday-update?token=${window.GATED_TOKEN}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            user_id: currentUser.id,
+                            holiday_id: id,
+                            name: newName,
+                            date: newDate,
+                            day: newDay,
+                            is_optional: newOpt
+                        }),
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        showNotification('Holiday updated!', 'success');
+                        loadHolidayCalendar();
+                    } else {
+                        showNotification(data.message, 'error');
+                        btn.disabled = false;
+                    }
+                } catch (err) {
+                    showNotification(err.message, 'error');
+                    btn.disabled = false;
+                }
                 return;
             }
-            
-            btn.disabled = true;
+
+            // Change to edit mode
+            nameSpan.innerHTML = `<input type="text" value="${originalName}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:2px 4px;font-size:inherit;font-family:inherit;">`;
+            dateTd.innerHTML = `<input type="date" value="${originalDate}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:2px 4px;font-size:inherit;font-family:inherit;">`;
+            dayTd.innerHTML = `<input type="text" value="${originalDay}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:2px 4px;font-size:inherit;font-family:inherit;">`;
+            typeTd.innerHTML = `
+            <select style="font-size:10px; border:1px solid #ddd; border-radius:4px; background:white;">
+                <option value="false" ${!originalOpt ? 'selected' : ''}>Mandatory</option>
+                <option value="true"  ${originalOpt ? 'selected' : ''}>Optional</option>
+            </select>
+        `;
+
+            btn.textContent = '💾';
+            btn.title = 'Save';
+
+            // Add a cancel button
+            const cancelBtn = document.createElement('button');
+            cancelBtn.textContent = '❌';
+            cancelBtn.className = 'inline-cancel-btn';
+            cancelBtn.style = 'background:none;border:none;cursor:pointer;font-size:12px;margin-left:4px;';
+            cancelBtn.onclick = () => loadHolidayCalendar();
+            btn.parentNode.appendChild(cancelBtn);
+        }
+
+
+        async function deleteHolidayInline(id) {
+            if (!confirm('Are you sure you want to delete this holiday?')) return;
+
             try {
-                const res = await fetch(`/api/holiday-update?token=${window.GATED_TOKEN}`, {
+                const res = await fetch(`/api/holiday-delete?token=${window.GATED_TOKEN}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        user_id: currentUser.id, 
-                        holiday_id: id, 
-                        name: newName,
-                        date: newDate,
-                        day: newDay,
-                        is_optional: newOpt
-                    }),
+                    body: JSON.stringify({ user_id: currentUser.id, holiday_id: id }),
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showNotification('Holiday updated!', 'success');
+                    showNotification('Holiday deleted!', 'success');
                     loadHolidayCalendar();
                 } else {
                     showNotification(data.message, 'error');
+                }
+            } catch (err) {
+                showNotification(err.message, 'error');
+            }
+        }
+
+        function formatHolDate(dateStr) {
+            const d = new Date(dateStr + 'T00:00:00');
+            return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+        }
+
+        /* ── Select / Deselect Optional Holiday ─────────────────────────── */
+        async function toggleOptionalHoliday(holidayId, action, btn) {
+            if (!currentUser || !currentUser.id) { showNotification('Please log in first.', 'error'); return; }
+            btn.disabled = true;
+            btn.textContent = '…';
+            try {
+                const res = await fetch(`/api/holiday-select-optional?token=${window.GATED_TOKEN}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: currentUser.id, holiday_id: holidayId, action }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showNotification(data.message, 'success');
+                    loadHolidayCalendar(); // re-render
+                } else {
+                    showNotification(data.message || 'Action failed.', 'error');
                     btn.disabled = false;
+                    btn.textContent = action === 'select' ? '+ Select' : '✓ Selected';
                 }
             } catch (err) {
                 showNotification(err.message, 'error');
                 btn.disabled = false;
             }
-            return;
         }
 
-        // Change to edit mode
-        nameSpan.innerHTML = `<input type="text" value="${originalName}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:2px 4px;font-size:inherit;font-family:inherit;">`;
-        dateTd.innerHTML   = `<input type="date" value="${originalDate}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:2px 4px;font-size:inherit;font-family:inherit;">`;
-        dayTd.innerHTML    = `<input type="text" value="${originalDay}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:2px 4px;font-size:inherit;font-family:inherit;">`;
-        typeTd.innerHTML   = `
-            <select style="font-size:10px; border:1px solid #ddd; border-radius:4px; background:white;">
-                <option value="false" ${!originalOpt?'selected':''}>Mandatory</option>
-                <option value="true"  ${originalOpt?'selected':''}>Optional</option>
-            </select>
-        `;
-        
-        btn.textContent = '💾';
-        btn.title = 'Save';
-        
-        // Add a cancel button
-        const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = '❌';
-        cancelBtn.className = 'inline-cancel-btn';
-        cancelBtn.style = 'background:none;border:none;cursor:pointer;font-size:12px;margin-left:4px;';
-        cancelBtn.onclick = () => loadHolidayCalendar();
-        btn.parentNode.appendChild(cancelBtn);
-    }
-
-
-    async function deleteHolidayInline(id) {
-        if (!confirm('Are you sure you want to delete this holiday?')) return;
-        
-        try {
-            const res = await fetch(`/api/holiday-delete?token=${window.GATED_TOKEN}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: currentUser.id, holiday_id: id }),
-            });
-            const data = await res.json();
-            if (data.success) {
-                showNotification('Holiday deleted!', 'success');
-                loadHolidayCalendar();
-            } else {
-                showNotification(data.message, 'error');
-            }
-        } catch (err) {
-            showNotification(err.message, 'error');
-        }
-    }
-
-    function formatHolDate(dateStr) {
-        const d = new Date(dateStr + 'T00:00:00');
-        return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
-    }
-
-    /* ── Select / Deselect Optional Holiday ─────────────────────────── */
-    async function toggleOptionalHoliday(holidayId, action, btn) {
-        if (!currentUser || !currentUser.id) { showNotification('Please log in first.', 'error'); return; }
-        btn.disabled = true;
-        btn.textContent = '…';
-        try {
-            const res  = await fetch(`/api/holiday-select-optional?token=${window.GATED_TOKEN}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: currentUser.id, holiday_id: holidayId, action }),
-            });
-            const data = await res.json();
-            if (data.success) {
-                showNotification(data.message, 'success');
-                loadHolidayCalendar(); // re-render
-            } else {
-                showNotification(data.message || 'Action failed.', 'error');
-                btn.disabled = false;
-                btn.textContent = action === 'select' ? '+ Select' : '✓ Selected';
-            }
-        } catch (err) {
-            showNotification(err.message, 'error');
-            btn.disabled = false;
-        }
-    }
-
-    /* ── ICS Export ─────────────────────────────────────────────────── */
-    // Function disabled and removed based on user request.
+        /* ── ICS Export ─────────────────────────────────────────────────── */
+        // Function disabled and removed based on user request.
     </script>
 
     <!-- Birthday Special Effects Container -->

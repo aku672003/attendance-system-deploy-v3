@@ -427,8 +427,560 @@ async function viewTrends() {
         hideLoading();
     }
 }
+// ========== Company Predictive Report ==========
 
-window.currentGraphContext = { type: 'trends', id: null, days: 3 };
+function openCompanyReportModal() {
+    const existing = document.getElementById('companyReportModal');
+    if (existing) existing.remove();
+
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const d7  = new Date(today); d7.setDate(today.getDate() - 7);
+    const d30 = new Date(today); d30.setDate(today.getDate() - 30);
+    const pad = n => String(n).padStart(2,'0');
+    const fmt = dt => `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}`;
+
+    const modal = document.createElement('div');
+    modal.id = 'companyReportModal';
+    modal.className = 'modal active';
+    modal.style.zIndex = '9999999';
+    modal.innerHTML = `
+        <div style="background:#fff;border-radius:28px;width:520px;max-width:96vw;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,0.22);display:flex;flex-direction:column;max-height:95vh;">
+            <!-- Header -->
+            <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:28px 32px 20px;color:#fff;flex-shrink:0;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                    <div>
+                        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:2px;opacity:0.75;margin-bottom:6px;">INTELLIGENCE HUB</div>
+                        <div style="font-size:22px;font-weight:900;letter-spacing:-0.5px;">🏢 Company Predictive Report</div>
+                        <div style="font-size:11px;opacity:0.75;margin-top:4px;">AI-powered attendance analysis for all personnel</div>
+                    </div>
+                    <button onclick="this.closest('.modal').remove();updateScrollLock();" style="background:rgba(255,255,255,0.15);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">×</button>
+                </div>
+            </div>
+
+            <!-- Date Picker Section -->
+            <div style="padding:24px 28px;border-bottom:1px solid #f1f5f9;flex-shrink:0;">
+                <div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">Select Report Period <span style="color:#ef4444;font-weight:700;">(Max 30 Days)</span></div>
+
+                <!-- Quick picks -->
+                <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+                    ${[7,14,30].map(d => `
+                        <button id="crqBtn${d}" onclick="setCRPeriod(${d})" style="padding:7px 18px;border-radius:10px;border:1.5px solid ${d===30?'#6366f1':'#e2e8f0'};background:${d===30?'#eef2ff':'#fff'};color:${d===30?'#4f46e5':'#475569'};font-size:12px;font-weight:700;cursor:pointer;transition:all 0.2s;">${d} Days</button>
+                    `).join('')}
+                </div>
+
+                <!-- Custom date range -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:6px;">
+                    <div>
+                        <label style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;">From</label>
+                        <input type="date" id="crStartDate" value="${fmt(d30)}" max="${todayStr}"
+                            style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:13px;font-weight:600;color:#0f172a;outline:none;box-sizing:border-box;"
+                            oninput="validateCRDates()">
+                    </div>
+                    <div>
+                        <label style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;">To</label>
+                        <input type="date" id="crEndDate" value="${todayStr}" max="${todayStr}"
+                            style="width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:13px;font-weight:600;color:#0f172a;outline:none;box-sizing:border-box;"
+                            oninput="validateCRDates()">
+                    </div>
+                </div>
+                <div id="crDateError" style="color:#ef4444;font-size:11px;font-weight:700;display:none;margin-top:6px;background:#fff5f5;padding:7px 12px;border-radius:8px;border:1px solid #fecaca;"></div>
+            </div>
+
+            <!-- Footer -->
+            <div style="padding:20px 28px;display:flex;gap:12px;flex-shrink:0;">
+                <button onclick="this.closest('.modal').remove();updateScrollLock();" style="flex:1;padding:13px;border-radius:12px;border:1.5px solid #e2e8f0;background:#fff;color:#64748b;font-weight:800;font-size:13px;cursor:pointer;">Cancel</button>
+                <button id="crGenerateBtn" onclick="fetchCompanyReport()" style="flex:2;padding:13px;border-radius:12px;border:none;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:900;font-size:13px;cursor:pointer;box-shadow:0 6px 16px rgba(99,102,241,0.35);display:flex;align-items:center;justify-content:center;gap:8px;">
+                    🧠 Generate Predictive Report
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    updateScrollLock();
+}
+
+function setCRPeriod(days) {
+    const today = new Date();
+    const from  = new Date(today); from.setDate(today.getDate() - days);
+    const pad = n => String(n).padStart(2,'0');
+    const fmt = dt => `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}`;
+    const s = document.getElementById('crStartDate');
+    const e = document.getElementById('crEndDate');
+    if (s) s.value = fmt(from);
+    if (e) e.value = fmt(today);
+    // Update quick pick button highlight
+    [7,14,30].forEach(d => {
+        const btn = document.getElementById(`crqBtn${d}`);
+        if (!btn) return;
+        const active = d === days;
+        btn.style.borderColor  = active ? '#6366f1' : '#e2e8f0';
+        btn.style.background   = active ? '#eef2ff' : '#fff';
+        btn.style.color        = active ? '#4f46e5' : '#475569';
+    });
+    validateCRDates();
+}
+
+function validateCRDates() {
+    const s = document.getElementById('crStartDate');
+    const e = document.getElementById('crEndDate');
+    const errDiv = document.getElementById('crDateError');
+    const btn    = document.getElementById('crGenerateBtn');
+    if (!s || !e || !errDiv) return;
+
+    const start = new Date(s.value);
+    const end   = new Date(e.value);
+    const diff  = (end - start) / (1000 * 60 * 60 * 24);
+
+    if (isNaN(start) || isNaN(end)) { errDiv.style.display = 'none'; return; }
+    if (start > end) {
+        errDiv.textContent = '⚠ Start date cannot be after end date.';
+        errDiv.style.display = 'block';
+        if (btn) btn.disabled = true;
+        return;
+    }
+    if (diff > 30) {
+        // Auto-clamp: move start date forward
+        const clamped = new Date(end); clamped.setDate(end.getDate() - 30);
+        const pad = n => String(n).padStart(2,'0');
+        s.value = `${clamped.getFullYear()}-${pad(clamped.getMonth()+1)}-${pad(clamped.getDate())}`;
+        errDiv.textContent = '⚠ Range auto-clamped to 30 days maximum.';
+        errDiv.style.display = 'block';
+        if (btn) btn.disabled = false;
+        return;
+    }
+    errDiv.style.display = 'none';
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+}
+
+async function fetchCompanyReport() {
+    const startDate = document.getElementById('crStartDate')?.value;
+    const endDate   = document.getElementById('crEndDate')?.value;
+    if (!startDate || !endDate) return;
+
+    const btn = document.getElementById('crGenerateBtn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Analyzing...'; }
+
+    showLoading('Generating Company Predictive Report…');
+
+    try {
+        const result = await apiCall(`company-predictive-report?start_date=${startDate}&end_date=${endDate}`, 'GET');
+        if (!result || !result.success) {
+            showNotification(result?.message || 'Failed to generate report', 'error');
+            return;
+        }
+        // Close the date picker modal
+        document.getElementById('companyReportModal')?.remove();
+        renderCompanyReportModal(result);
+    } catch (err) {
+        console.error('Company Report Error:', err);
+        showNotification('Failed to generate company report', 'error');
+    } finally {
+        hideLoading();
+        const b = document.getElementById('crGenerateBtn');
+        if (b) { b.disabled = false; b.innerHTML = '🧠 Generate Predictive Report'; }
+    }
+}
+
+function renderCompanyReportModal(data) {
+    const existing = document.getElementById('companyReportResultModal');
+    if (existing) existing.remove();
+
+    const p  = data.period;
+    const cs = data.company_summary;
+    const employees = data.employees || [];
+
+    const fmtDate = s => new Date(s + 'T00:00:00').toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'});
+    const reportDate = new Date().toLocaleDateString('en-IN', {day:'2-digit',month:'long',year:'numeric'});
+
+    // Sort employees by attendance rate descending
+    const sorted = [...employees].sort((a, b) => b.att_rate - a.att_rate);
+
+    // ─── Compute HR-meaningful insight metrics ───
+    const totalEmp      = cs.total_employees || 1;
+    const avgAtt        = cs.avg_attendance;
+    const highPerformers = employees.filter(e => e.att_rate >= 80).length;
+    const atRisk         = employees.filter(e => e.att_rate < 60).length;
+    const consistentUp   = employees.filter(e => e.trend === 'up').length;
+    const wfhPct         = employees.length > 0
+        ? Math.round(employees.filter(e => e.wfh > 0).length / employees.length * 100)
+        : 0;
+    const avgHours       = employees.length > 0
+        ? (employees.reduce((s, e) => s + e.avg_hours, 0) / employees.length).toFixed(1)
+        : 0;
+    const perfectAtt     = employees.filter(e => e.att_rate === 100).length;
+
+    // ─── HR insight cards (rates & people counts, not cumulative totals) ───
+    const kpiCards = [
+        {
+            icon: '📊', label: 'Company Attendance Rate',
+            value: avgAtt + '%',
+            sub: `${p.working_days}-day period`,
+            color: avgAtt >= 80 ? '#10b981' : avgAtt >= 60 ? '#f59e0b' : '#ef4444',
+            bg:   avgAtt >= 80 ? '#ecfdf5' : avgAtt >= 60 ? '#fffbeb' : '#fff5f5',
+        },
+        {
+            icon: '🏆', label: 'High Performers',
+            value: highPerformers,
+            sub: `≥80% attendance · ${Math.round(highPerformers/totalEmp*100)}% of team`,
+            color: '#10b981', bg: '#ecfdf5',
+        },
+        {
+            icon: '⚠️', label: 'At-Risk Employees',
+            value: atRisk,
+            sub: `<60% attendance · need follow-up`,
+            color: atRisk > 0 ? '#ef4444' : '#10b981', bg: atRisk > 0 ? '#fff5f5' : '#ecfdf5',
+        },
+        {
+            icon: '📈', label: 'Improving Trend',
+            value: consistentUp,
+            sub: `employees trending upward`,
+            color: '#6366f1', bg: '#eef2ff',
+        },
+        {
+            icon: '🏠', label: 'WFH Usage',
+            value: wfhPct + '%',
+            sub: `of team used WFH this period`,
+            color: '#3b82f6', bg: '#eff6ff',
+        },
+        {
+            icon: '⏱️', label: 'Avg Working Hours',
+            value: avgHours + 'h',
+            sub: `per attended day · target 9h`,
+            color: parseFloat(avgHours) >= 8.5 ? '#10b981' : '#f59e0b',
+            bg:   parseFloat(avgHours) >= 8.5 ? '#ecfdf5' : '#fffbeb',
+        },
+    ];
+
+    // ─── Bar chart: all employees sorted by attendance rate ───
+    const chartEmps = sorted.slice(0, 20);
+    const barW = 18, barGap = 14, chartH = 100;
+    const svgW = chartEmps.length * (barW + barGap) + barGap;
+    const barsSVG = chartEmps.map((e, i) => {
+        const bh  = Math.max((e.att_rate / 100) * chartH, e.att_rate > 0 ? 4 : 0);
+        const x   = barGap + i * (barW + barGap);
+        const y   = chartH - bh;
+        const col = e.att_rate >= 80 ? '#10b981' : e.att_rate >= 60 ? '#6366f1' : '#ef4444';
+        
+        // Use first name or truncated name
+        const displayName = e.name.split(' ')[0].substring(0, 10);
+        
+        return `
+            <rect x="${x}" y="${y}" width="${barW}" height="${bh}" rx="4" fill="${col}" opacity="0.85"/>
+            <text x="${x + barW/2}" y="${y - 4}" text-anchor="middle" font-size="9" font-weight="800" fill="${col}">${e.att_rate}%</text>
+            <g transform="translate(${x + barW/2}, ${chartH + 10}) rotate(45)">
+                <text x="0" y="0" text-anchor="start" font-size="7.5" font-weight="700" fill="#64748b">${displayName}</text>
+            </g>
+        `;
+    }).join('');
+
+    // ─── Employee rows ───
+    const empRows = sorted.map((e, idx) => {
+        const trendIcon  = e.trend === 'up' ? '↑' : e.trend === 'down' ? '↓' : '→';
+        const trendColor = e.trend === 'up' ? '#10b981' : e.trend === 'down' ? '#ef4444' : '#94a3b8';
+        const rateColor  = e.att_rate >= 80 ? '#10b981' : e.att_rate >= 60 ? '#f59e0b' : '#ef4444';
+        const rowBg      = idx % 2 === 0 ? '#ffffff' : '#fafbff';
+        const initials   = e.name.split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
+
+        const series   = e.day_series || [];
+        const miniBarW = Math.max(3, Math.min(8, Math.floor(260 / Math.max(series.length, 1))));
+        const miniBarSvg = series.map((d, i) => {
+            const col = d.status === 'present' ? '#10b981' : d.status === 'wfh' ? '#3b82f6' : d.status === 'half_day' ? '#8b5cf6' : d.status === 'leave' ? '#f59e0b' : '#fecaca';
+            return `<rect x="${i * (miniBarW + 1)}" y="0" width="${miniBarW}" height="14" rx="2" fill="${col}" opacity="0.85"/>`;
+        }).join('');
+        const miniSvgW = series.length * (miniBarW + 1);
+
+        // Status tier pill
+        const tier = e.att_rate >= 80 ? {lbl:'High',bg:'#d1fae5',col:'#065f46'} :
+                     e.att_rate >= 60 ? {lbl:'Mid',bg:'#fef3c7',col:'#92400e'} :
+                                        {lbl:'At Risk',bg:'#fee2e2',col:'#991b1b'};
+
+        return `<tr style="background:${rowBg};transition:background 0.15s;" onmouseover="this.style.background='#f0f4ff'" onmouseout="this.style.background='${rowBg}'">
+            <td style="padding:12px 14px;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${initials}</div>
+                    <div>
+                        <div style="font-size:13px;font-weight:700;color:#0f172a;">${e.name}</div>
+                        <div style="font-size:10px;color:#94a3b8;margin-top:1px;">${e.department || '-'}</div>
+                    </div>
+                </div>
+            </td>
+            <td style="padding:12px 14px;text-align:center;">
+                <div style="display:inline-flex;align-items:center;gap:5px;">
+                    <span style="font-size:18px;font-weight:900;color:${rateColor};">${e.att_rate}%</span>
+                    <span style="font-size:14px;font-weight:900;color:${trendColor};">${trendIcon}</span>
+                </div>
+                <div style="font-size:9px;color:#94a3b8;margin-top:2px;">${e.attended}/${p.working_days} days</div>
+            </td>
+            <td style="padding:12px 14px;text-align:center;">
+                <span style="background:${tier.bg};color:${tier.col};padding:3px 10px;border-radius:20px;font-size:10px;font-weight:800;">${tier.lbl}</span>
+            </td>
+            <td style="padding:12px 14px;">
+                <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+                    <span style="background:#d1fae5;color:#065f46;padding:2px 7px;border-radius:6px;font-size:9px;font-weight:800;">P:${e.present}</span>
+                    <span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:6px;font-size:9px;font-weight:800;">W:${e.wfh}</span>
+                    <span style="background:#fee2e2;color:#991b1b;padding:2px 7px;border-radius:6px;font-size:9px;font-weight:800;">A:${e.absent}</span>
+                    <span style="background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:6px;font-size:9px;font-weight:800;">L:${e.leave}</span>
+                </div>
+                ${series.length > 0 ? `<svg viewBox="0 0 ${miniSvgW} 14" style="width:100%;max-width:${miniSvgW}px;height:14px;margin-top:5px;display:block;">${miniBarSvg}</svg>` : ''}
+            </td>
+            <td style="padding:12px 14px;text-align:center;white-space:nowrap;">
+                <div style="font-size:11px;font-weight:700;color:#0f172a;">${e.avg_hours}h avg</div>
+                <div style="font-size:9px;color:#94a3b8;">${e.avg_checkin || '-'} check-in</div>
+            </td>
+            <td style="padding:12px 14px;text-align:center;">
+                <button onclick="closeCompanyReportModal();showEmployeePerformanceAnalysis(${e.id})"
+                    style="padding:6px 12px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;color:#475569;font-size:11px;font-weight:700;cursor:pointer;transition:all 0.2s;white-space:nowrap;"
+                    onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#fff'">
+                    View Analysis
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+
+    const modal = document.createElement('div');
+    modal.id = 'companyReportResultModal';
+    modal.className = 'modal active';
+    modal.style.zIndex = '9999999';
+    modal.innerHTML = `
+        <div id="crReportInner" style="background:#fff;border-radius:32px;width:95vw;max-width:1100px;max-height:95vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,0.25);">
+
+            <!-- Header -->
+            <div style="background:linear-gradient(135deg,#1e1b4b,#312e81,#4c1d95);padding:24px 32px 18px;color:#fff;flex-shrink:0;position:relative;overflow:hidden;">
+                <div style="position:absolute;top:-20px;right:-20px;width:160px;height:160px;background:rgba(255,255,255,0.03);border-radius:50%;"></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;">
+                    <div>
+                        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:2px;opacity:0.65;margin-bottom:5px;">INTELLIGENCE HUB · COMPANY REPORT</div>
+                        <div style="font-size:22px;font-weight:900;letter-spacing:-0.5px;">Predictive Attendance Analysis</div>
+                        <div style="font-size:11px;opacity:0.65;margin-top:4px;">${fmtDate(p.start_date)} → ${fmtDate(p.end_date)} &nbsp;·&nbsp; ${p.working_days} working days &nbsp;·&nbsp; ${totalEmp} employees</div>
+                    </div>
+                    <div style="display:flex;gap:10px;align-items:center;flex-shrink:0;">
+                        <button onclick="downloadCompanyReportPDF()" id="crPdfBtn"
+                            style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.3);color:#fff;padding:9px 18px;border-radius:10px;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all 0.2s;white-space:nowrap;"
+                            onmouseover="this.style.background='rgba(255,255,255,0.25)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'">
+                            📥 Download PDF
+                        </button>
+                        <button onclick="closeCompanyReportModal()" style="background:rgba(255,255,255,0.1);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;">×</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scrollable body -->
+            <div id="crReportBody" style="overflow-y:auto;flex:1;padding:24px 28px;">
+
+                <!-- ── HR Insight KPI Cards ── -->
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px;">
+                    ${kpiCards.map(k => `
+                        <div style="background:${k.bg};border:1.5px solid ${k.color}22;border-left:4px solid ${k.color};border-radius:16px;padding:16px 18px;display:flex;align-items:center;gap:14px;">
+                            <div style="font-size:26px;flex-shrink:0;">${k.icon}</div>
+                            <div style="min-width:0;">
+                                <div style="font-size:22px;font-weight:900;color:${k.color};letter-spacing:-0.5px;">${k.value}</div>
+                                <div style="font-size:10px;font-weight:800;color:#374151;text-transform:uppercase;letter-spacing:0.5px;margin-top:1px;">${k.label}</div>
+                                <div style="font-size:9px;color:#94a3b8;margin-top:2px;font-weight:600;">${k.sub}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <!-- Bar Chart (top 20) -->
+                <div style="background:#fafbff;border:1.5px solid #e2e8f0;border-radius:20px;padding:20px 24px;margin-bottom:24px;">
+                    <div style="font-size:12px;font-weight:900;color:#0f172a;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">
+                        Attendance Rate — Top ${chartEmps.length} Employees
+                        <span style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:none;letter-spacing:0;margin-left:10px;">🟢 ≥80% &nbsp;🔵 60–79% &nbsp;🔴 &lt;60%</span>
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <svg viewBox="0 0 ${svgW} ${chartH + 45}" style="width:100%;min-width:${Math.min(svgW,600)}px;height:${chartH + 45}px;display:block;">
+                            <line x1="0" y1="${chartH}" x2="${svgW}" y2="${chartH}" stroke="#e2e8f0" stroke-width="1"/>
+                            ${barsSVG}
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Employee Table -->
+                <div style="border:1.5px solid #e2e8f0;border-radius:20px;overflow:hidden;">
+                    <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:14px 20px;font-size:12px;font-weight:900;color:#fff;text-transform:uppercase;letter-spacing:1px;">
+                        📋 Individual Personnel Predictive Data
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table style="width:100%;border-collapse:collapse;min-width:700px;">
+                            <thead>
+                                <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">
+                                    <th style="padding:11px 14px;text-align:left;font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Employee</th>
+                                    <th style="padding:11px 14px;text-align:center;font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Attendance</th>
+                                    <th style="padding:11px 14px;text-align:center;font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Tier</th>
+                                    <th style="padding:11px 14px;text-align:left;font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Breakdown &amp; Daily Trend</th>
+                                    <th style="padding:11px 14px;text-align:center;font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Avg Hours</th>
+                                    <th style="padding:11px 14px;text-align:center;font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>${empRows}</tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Legend -->
+                <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:14px;padding:10px 14px;background:#f8fafc;border-radius:10px;">
+                    <span style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Daily Trend:</span>
+                    ${[['#10b981','Present'],['#3b82f6','WFH'],['#8b5cf6','Half-Day'],['#f59e0b','Leave'],['#fecaca','Absent']].map(([col,lbl]) =>
+                        `<span style="display:inline-flex;align-items:center;gap:5px;">
+                            <span style="width:11px;height:11px;border-radius:3px;background:${col};display:inline-block;"></span>
+                            <span style="font-size:10px;font-weight:700;color:#475569;">${lbl}</span>
+                        </span>`
+                    ).join('')}
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div style="padding:14px 28px;background:#fff;border-top:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+                <div style="font-size:11px;color:#94a3b8;font-weight:600;">HanuAI Intelligence Hub &nbsp;·&nbsp; ${reportDate} &nbsp;·&nbsp; Confidential</div>
+                <div style="display:flex;gap:10px;">
+                    <button onclick="closeCompanyReportModal()" style="padding:10px 22px;border-radius:10px;border:1.5px solid #e2e8f0;background:#fff;color:#475569;font-weight:700;font-size:12px;cursor:pointer;">Close</button>
+                    <button onclick="downloadCompanyReportPDF()" style="padding:10px 22px;border-radius:10px;border:none;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:800;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 4px 12px rgba(99,102,241,0.3);">
+                        📥 Download PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    updateScrollLock();
+
+    // Store report metadata for PDF
+    window._crReportMeta = { period: p, totalEmp, avgAtt, highPerformers, atRisk, reportDate, fmtDate };
+}
+
+function closeCompanyReportModal() {
+    document.getElementById('companyReportResultModal')?.remove();
+    updateScrollLock();
+}
+
+async function downloadCompanyReportPDF() {
+    const btn = document.getElementById('crPdfBtn');
+    if (btn) { btn.innerHTML = '⏳ Generating PDF...'; btn.disabled = true; }
+    showLoading('Building Company Report PDF…');
+
+    const body   = document.getElementById('crReportBody');
+    const inner  = document.getElementById('crReportInner');
+
+    // ── Stash original scroll-container styles ──
+    const savedBodyOverflow  = body ? body.style.overflow  : '';
+    const savedBodyHeight    = body ? body.style.height    : '';
+    const savedBodyMaxHeight = body ? body.style.maxHeight : '';
+    const savedInnerMaxH     = inner ? inner.style.maxHeight : '';
+    const savedInnerOverflow = inner ? inner.style.overflow  : '';
+
+    try {
+        if (!body) throw new Error('Report body not found');
+
+        // ── Expand container to full content (removes scroll clipping) ──
+        body.style.overflow  = 'visible';
+        body.style.height    = 'auto';
+        body.style.maxHeight = 'none';
+        if (inner) {
+            inner.style.maxHeight = 'none';
+            inner.style.overflow  = 'visible';
+        }
+
+        // Give the browser one paint cycle to reflow
+        await new Promise(r => setTimeout(r, 80));
+
+        const fullH = body.scrollHeight;
+
+        const { jsPDF } = window.jspdf;
+        const meta = window._crReportMeta || {};
+
+        const canvas = await html2canvas(body, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            x: 0,
+            y: 0,
+            scrollX: 0,
+            scrollY: -window.scrollY,
+            width:  body.offsetWidth,
+            height: fullH,
+            windowWidth:  body.offsetWidth,
+            windowHeight: fullH,
+            logging: false,
+        });
+
+        const pdf   = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const pageW = pdf.internal.pageSize.getWidth();
+        const pageH = pdf.internal.pageSize.getHeight();
+        const imgW  = pageW;
+        const imgH  = (canvas.height * imgW) / canvas.width;
+
+        // ── Page 1 cover header ──
+        pdf.setFillColor(30, 27, 75);
+        pdf.rect(0, 0, pageW, 26, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(13); pdf.setFont('helvetica', 'bold');
+        pdf.text('Company Predictive Attendance Report', 10, 10);
+        pdf.setFontSize(7.5); pdf.setFont('helvetica', 'normal');
+        const subtitle = `${meta.fmtDate?.(meta.period?.start_date) ?? ''} → ${meta.fmtDate?.(meta.period?.end_date) ?? ''} · ${meta.totalEmp ?? ''} Employees · Generated ${meta.reportDate ?? ''}`;
+        pdf.text(subtitle, 10, 18);
+        pdf.text('CONFIDENTIAL · HanuAI Intelligence Hub', pageW - 8, 18, { align: 'right' });
+
+        // ── Slice canvas into pages ──
+        let yOffset = 28;
+        let remainH = imgH;
+
+        while (remainH > 0) {
+            const availH = pageH - yOffset - 4;
+            const sliceH = Math.min(availH, remainH);
+            const srcY   = (imgH - remainH) * (canvas.height / imgH);
+            const srcH   = sliceH * (canvas.height / imgH);
+
+            const slice = document.createElement('canvas');
+            slice.width  = canvas.width;
+            slice.height = Math.ceil(srcH);
+            const sCtx = slice.getContext('2d', { willReadFrequently: true });
+            sCtx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
+
+            pdf.addImage(slice.toDataURL('image/jpeg', 0.93), 'JPEG', 0, yOffset, imgW, sliceH);
+            remainH -= sliceH;
+            yOffset  = 0;
+
+            if (remainH > 0) {
+                pdf.addPage();
+                pdf.setFillColor(30, 27, 75);
+                pdf.rect(0, 0, pageW, 8, 'F');
+                pdf.setTextColor(255, 255, 255);
+                pdf.setFontSize(6.5); pdf.setFont('helvetica', 'normal');
+                pdf.text('HanuAI · Company Attendance Report · CONFIDENTIAL', pageW / 2, 5.5, { align: 'center' });
+                yOffset = 10;
+            }
+        }
+
+        const safeStart = (meta.period?.start_date ?? 'report').replace(/-/g, '');
+        const safeEnd   = (meta.period?.end_date   ?? 'report').replace(/-/g, '');
+        pdf.save(`Company_Predictive_Report_${safeStart}_to_${safeEnd}.pdf`);
+        showNotification('Report PDF downloaded successfully!', 'success');
+
+    } catch (err) {
+        console.error('PDF error:', err);
+        showNotification('Failed to generate PDF', 'error');
+    } finally {
+        // ── Always restore scroll styles ──
+        if (body) {
+            body.style.overflow  = savedBodyOverflow;
+            body.style.height    = savedBodyHeight;
+            body.style.maxHeight = savedBodyMaxHeight;
+        }
+        if (inner) {
+            inner.style.maxHeight = savedInnerMaxH;
+            inner.style.overflow  = savedInnerOverflow;
+        }
+        hideLoading();
+        if (btn) { btn.innerHTML = '📥 Download PDF'; btn.disabled = false; }
+    }
+}
+
+
+
+
+
+
 
 async function changePredictiveDays(days) {
     const ctx = window.currentGraphContext;
@@ -570,8 +1122,9 @@ function openPredictiveAnalysisModal(data, predictDays = 3) {
                                 <span style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">Attendance Rate</span>
                             </div>
                             <div style="display: flex; gap: 4px;">
-                                <button onclick="changePredictiveDays(3)" style="padding: 5px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; border: 1px solid ${predictDays === 3 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 3 ? '#eef2ff' : 'white'}; color: ${predictDays === 3 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">3 Days</button>
-                                <button onclick="changePredictiveDays(7)" style="padding: 5px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; border: 1px solid ${predictDays === 7 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 7 ? '#eef2ff' : 'white'}; color: ${predictDays === 7 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">1 Week</button>
+                                <button onclick="changePredictiveDays(7)" style="padding: 5px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; border: 1px solid ${predictDays === 7 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 7 ? '#eef2ff' : 'white'}; color: ${predictDays === 7 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">7 Days</button>
+                                <button onclick="changePredictiveDays(14)" style="padding: 5px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; border: 1px solid ${predictDays === 14 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 14 ? '#eef2ff' : 'white'}; color: ${predictDays === 14 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">14 Days</button>
+                                <button onclick="changePredictiveDays(30)" style="padding: 5px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; border: 1px solid ${predictDays === 30 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 30 ? '#eef2ff' : 'white'}; color: ${predictDays === 30 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">30 Days</button>
                             </div>
                         </div>
                     </div>
@@ -1003,8 +1556,9 @@ function renderEmployeePerformanceModal(data, employeeId, predictDays = 3) {
                                 </div>
                             </div>
                             <div style="display: flex; gap: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase;">
-                                <button onclick="changePredictiveDays(3)" style="padding: 6px 12px; border-radius: 8px; border: 1px solid ${predictDays === 3 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 3 ? '#eef2ff' : 'white'}; color: ${predictDays === 3 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">3 Days</button>
-                                <button onclick="changePredictiveDays(7)" style="padding: 6px 12px; border-radius: 8px; border: 1px solid ${predictDays === 7 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 7 ? '#eef2ff' : 'white'}; color: ${predictDays === 7 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">1 Week</button>
+                                <button onclick="changePredictiveDays(7)" style="padding: 6px 12px; border-radius: 8px; border: 1px solid ${predictDays === 7 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 7 ? '#eef2ff' : 'white'}; color: ${predictDays === 7 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">7 Days</button>
+                                <button onclick="changePredictiveDays(14)" style="padding: 6px 12px; border-radius: 8px; border: 1px solid ${predictDays === 14 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 14 ? '#eef2ff' : 'white'}; color: ${predictDays === 14 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">14 Days</button>
+                                <button onclick="changePredictiveDays(30)" style="padding: 6px 12px; border-radius: 8px; border: 1px solid ${predictDays === 30 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 30 ? '#eef2ff' : 'white'}; color: ${predictDays === 30 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">30 Days</button>
                             </div>
                         </div>
                     </div>

@@ -93,6 +93,7 @@ urlpatterns = [
     path('clear-training-history', views.clear_training_history, name='clear_training_history'),
     path('employee-performance-analysis/<int:employee_id>', views.employee_performance_analysis, name='employee_performance_analysis'),
     path('employee-hr-report/<int:employee_id>', views.employee_hr_report, name='employee_hr_report'),
+    path('company-predictive-report', views.company_predictive_report, name='company_predictive_report'),
     path('temporary-tags', views.temporary_tags_api, name='temporary_tags_api'),
 
     # Forgot Password
