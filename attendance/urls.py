@@ -64,6 +64,7 @@ urlpatterns = [
     path('tasks/<int:task_id>', views.task_detail_api, name='task_detail_api'),
     path('bulk-update-tasks', views.bulk_update_tasks, name='bulk_update_tasks'),
     path('task-comment', views.task_comment_api, name='task_comment_api'),
+    path('tasks/attach', views.task_attach_api, name='task_attach_api'),
     
     # Team Management
     path('create-team', views.create_team, name='create_team'),
@@ -123,4 +124,5 @@ urlpatterns = [
     path('holiday-select-optional', views.select_optional_holiday, name='select_optional_holiday'),
     path('holiday-export-ics', views.export_holidays_ics, name='export_holidays_ics'),
     path('holiday-upload-history', views.holiday_upload_history, name='holiday_upload_history'),
+    path('manage-date', views.manage_date, name='manage_date'),
 ]

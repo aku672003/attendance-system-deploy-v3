@@ -1,0 +1,252 @@
+<!-- Task Manager V2 - Main Container -->
+<div id="taskManagerV2Modal" class="task-manager-v2-modal">
+    <div class="tm-v2-header">
+        <div class="tm-v2-tabs">
+            <div class="tm-v2-tab active" data-tab="todo">
+                <i class="fas fa-list-ul"></i>
+                <span>To Do</span>
+                <span class="tm-v2-tab-count" id="tmV2Count-todo">0</span>
+            </div>
+            <div class="tm-v2-tab" data-tab="inProgress">
+                <i class="fas fa-bolt"></i>
+                <span>In Progress</span>
+                <span class="tm-v2-tab-count" id="tmV2Count-inProgress">0</span>
+            </div>
+            <div class="tm-v2-tab" data-tab="completed">
+                <i class="fas fa-check-double"></i>
+                <span>Completed</span>
+                <span class="tm-v2-tab-count" id="tmV2Count-completed">0</span>
+            </div>
+        </div>
+        
+        <div class="tm-v2-controls">
+            <div class="tm-v2-search-wrapper">
+                <i class="fas fa-search tm-v2-search-icon"></i>
+                <input type="text" id="tmV2Search" placeholder="Search tasks...">
+            </div>
+            <button class="btn btn-primary btn-lg" onclick="TaskManagerV2.openNewTaskModal()">
+                <i class="fas fa-plus"></i> New Task
+            </button>
+            <button class="btn btn-secondary btn-icon" onclick="TaskManagerV2.refresh()" title="Refresh">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+            <button class="btn btn-secondary btn-icon" onclick="TaskManagerV2.exportTasks()" title="Export Tasks">
+                <i class="fas fa-file-export"></i>
+            </button>
+            <div class="tm-v2-close-btn" onclick="TaskManagerV2.close()" title="Close Dashboard">
+                <i class="fas fa-times"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="tm-v2-content">
+        <div id="tmV2Loader" class="tm-v2-main-loader">
+            <div class="tm-loader-spinner"></div>
+            <p>Loading your tasks...</p>
+        </div>
+        <div id="tmV2Panel-todo" class="tm-v2-panel">
+            <div id="tmV2Grid-todo" class="tm-v2-grid"></div>
+        </div>
+        <div id="tmV2Panel-inProgress" class="tm-v2-panel">
+            <div id="tmV2Grid-inProgress" class="tm-v2-grid"></div>
+        </div>
+        <div id="tmV2Panel-completed" class="tm-v2-panel">
+            <div id="tmV2Grid-completed" class="tm-v2-grid"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Task Detail V2 Modal (Full Screen Sidebar Style) -->
+<div id="taskDetailV2Modal" class="tm-v2-detail-modal">
+    <div class="tm-v2-detail-overlay" onclick="TaskManagerV2.closeDetail()"></div>
+    <div class="tm-v2-detail-container">
+        <div class="tm-v2-detail-header">
+            <div class="tm-v2-detail-header-left">
+                <span id="detailV2Priority" class="tm-v2-priority"></span>
+                <h2 id="detailV2Title">Task Title</h2>
+                
+                <!-- Progress bar under title -->
+                <div id="detailV2ProgressSection" style="display:flex; align-items:center; gap: 12px; margin-top: 8px;">
+                    <div class="tm-v2-progress" style="width: 200px; height: 8px; margin: 0;">
+                        <div id="detailV2ProgressFill" class="tm-v2-progress-fill" style="width: 0%"></div>
+                    </div>
+                    <span id="detailV2ProgressText" style="font-weight: 800; color: var(--tm-primary); font-size: 0.9rem;">0%</span>
+                </div>
+
+                <div id="detailV2Actions" style="display:flex; gap: 8px; margin-top: 12px;"></div>
+            </div>
+            <div class="tm-v2-detail-header-right">
+                <div class="tm-v2-close-btn" onclick="TaskManagerV2.closeDetail()">
+                    <i class="fas fa-times"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="tm-v2-detail-body">
+            <div class="tm-v2-detail-main">
+                <section>
+                    <h3>Description</h3>
+                    <p id="detailV2Desc" class="tm-v2-detail-text">No description provided.</p>
+                </section>
+
+                <section>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3>Steps / Milestones</h3>
+                        <button class="btn btn-sm btn-outline" onclick="TaskManagerV2.addStepPrompt()">+ Add Step</button>
+                    </div>
+                    <div id="detailV2Steps" class="tm-v2-steps-list">
+                        <!-- Steps rendered here -->
+                    </div>
+                </section>
+
+                <section>
+                    <h3>Comments</h3>
+                    <div id="detailV2Comments" class="tm-v2-comments-list">
+                        <!-- Comments rendered here -->
+                    </div>
+                    <div class="tm-v2-comment-input-wrap">
+                        <textarea id="detailV2CommentInput" placeholder="Add a comment..."></textarea>
+                        <button class="btn btn-primary btn-sm" onclick="TaskManagerV2.submitComment()">Post</button>
+                    </div>
+                </section>
+            </div>
+
+            <div class="tm-v2-detail-sidebar">
+                <div class="tm-v2-sidebar-group">
+                    <label>Overseer / Mentor</label>
+                    <div id="detailV2Overseer" class="tm-v2-assignee-group">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+                <div class="tm-v2-sidebar-group">
+                    <label>Assignees</label>
+                    <div id="detailV2Assignees" class="tm-v2-assignee-group">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+                <div class="tm-v2-sidebar-group">
+                    <label>Due Date</label>
+                    <div id="detailV2DueDate" class="tm-v2-sidebar-info"></div>
+                </div>
+                <div class="tm-v2-sidebar-group">
+                    <label>Created At</label>
+                    <div id="detailV2CreatedAt" class="tm-v2-sidebar-info"></div>
+                </div>
+                <div class="tm-v2-sidebar-group">
+                    <label>Attachments</label>
+                    <div id="detailV2Attachments" class="tm-v2-attachments-grid">
+                        <!-- Attachments here -->
+                    </div>
+                </div>
+                <div class="tm-v2-sidebar-group">
+                    <label>History Logs</label>
+                    <div id="detailV2History" class="tm-v2-history-list">
+                        <!-- History logs here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Export Tasks Modal -->
+<div id="exportTasksModal" class="tm-v2-new-modal">
+    <div class="tm-v2-new-content" style="max-width: 400px;">
+        <div class="tm-v2-new-header">
+            <h3><i class="fas fa-file-export"></i> Export Tasks</h3>
+            <div class="tm-v2-close-btn" onclick="TaskManagerV2.closeExportTasks()">
+                <i class="fas fa-times"></i>
+            </div>
+        </div>
+        <div style="padding: 20px;">
+            <div class="tm-v2-form-group">
+                <label>From Date</label>
+                <input type="date" id="exportTasksFromDate" class="form-control" style="width: 100%; box-sizing: border-box; padding: 8px;">
+            </div>
+            <div class="tm-v2-form-group">
+                <label>To Date</label>
+                <input type="date" id="exportTasksToDate" class="form-control" style="width: 100%; box-sizing: border-box; padding: 8px;">
+            </div>
+            <div style="text-align: right; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="TaskManagerV2.closeExportTasks()">Cancel</button>
+                <button class="btn btn-primary" onclick="TaskManagerV2.confirmExportTasks()">Export to CSV</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- New Task V2 Modal (Compact Overlay) -->
+<div id="newTaskV2Modal" class="tm-v2-new-modal">
+    <div class="tm-v2-new-content">
+        <div class="tm-v2-new-header">
+            <h3 id="newTaskV2HeaderTitle"><i class="fas fa-plus-circle"></i> Create New Task</h3>
+            <div class="tm-v2-close-btn" onclick="TaskManagerV2.closeNewTask()">
+                <i class="fas fa-times"></i>
+            </div>
+        </div>
+        <form id="newTaskV2Form" onsubmit="TaskManagerV2.saveNewTask(event)">
+            <input type="hidden" id="newTaskV2Id" value="">
+            <div class="tm-v2-form-group">
+                <label>Title</label>
+                <input type="text" id="newTaskV2Title" required placeholder="What needs to be done?">
+            </div>
+            <div class="tm-v2-form-group">
+                <label>Description</label>
+                <textarea id="newTaskV2Desc" placeholder="Provide more details..."></textarea>
+            </div>
+            <div class="tm-v2-form-row">
+                <div class="tm-v2-form-group">
+                    <label>Priority</label>
+                    <select id="newTaskV2Priority">
+                        <option value="p1">P1 (Urgent/Critical)</option>
+                        <option value="p2">P2 (High)</option>
+                        <option value="p3" selected>P3 (Medium)</option>
+                        <option value="p4">P4 (Low)</option>
+                    </select>
+                </div>
+                <div class="tm-v2-form-group">
+                    <label>Start Date</label>
+                    <input type="date" id="newTaskV2StartDate">
+                </div>
+                <div class="tm-v2-form-group">
+                    <label>Due Date</label>
+                    <input type="date" id="newTaskV2DueDate" required>
+                </div>
+            </div>
+            <div class="tm-v2-form-row">
+                <div class="tm-v2-form-group">
+                    <label>Assignees <span id="newTaskV2AssigneeCount" class="tm-v2-count-badge">0</span></label>
+                    <div class="tm-v2-searchable-list-wrap">
+                        <div class="tm-v2-search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="newTaskV2AssigneeSearch" placeholder="Search employees..." oninput="TaskManagerV2.filterAssignees(this.value)">
+                        </div>
+                        <div id="newTaskV2AssigneeList" class="tm-v2-searchable-list">
+                            <!-- Populated by JS with checkboxes -->
+                        </div>
+                    </div>
+                </div>
+                <div class="tm-v2-form-group">
+                    <label>Overseer / Mentor</label>
+                    <div class="tm-v2-search-box">
+                        <i class="fas fa-user-shield"></i>
+                        <select id="newTaskV2Overseer">
+                            <option value="">Select Overseer (Optional)</option>
+                            <!-- Employees populated by JS -->
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="tm-v2-form-group">
+                <label>Attachments</label>
+                <div id="newTaskV2AttachmentsList" class="tm-v2-attachments-preview"></div>
+                <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('newTaskV2FileUpload').click()">📎 Add Files</button>
+                <input type="file" id="newTaskV2FileUpload" hidden multiple onchange="TaskManagerV2.previewNewTaskFiles(event)">
+            </div>
+            <div class="tm-v2-form-actions">
+                <button type="button" class="btn btn-secondary" onclick="TaskManagerV2.closeNewTask()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create Task</button>
+            </div>
+        </form>
+    </div>
+</div>

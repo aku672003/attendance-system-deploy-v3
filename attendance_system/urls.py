@@ -3,7 +3,7 @@ from django.contrib import admin
 from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView, RedirectView
 from attendance import views
 
 urlpatterns = [
@@ -14,10 +14,10 @@ urlpatterns = [
     path('sw.js', views.service_worker_view, name='service_worker'),
     
     # Favicon handling
-    path('favicon.ico', TemplateView.as_view(template_name="index.html"), name='favicon'),
+    path('favicon.ico', RedirectView.as_view(url='/static/favicon.ico', permanent=True)),
     
     # Catch-all pattern for SPA - serve protected spa_view for all non-API routes
-    re_path(r'^(?!api/|admin/|static/|media/).*$', views.spa_view, name='spa'),
+    re_path(r'^(?!api/|admin/|static/|media/|manifest\.json|browserconfig\.xml).*$', views.spa_view, name='spa'),
 ]
 
 # Configure custom error handlers

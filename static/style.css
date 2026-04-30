@@ -90,7 +90,7 @@ body {
     justify-content: center;
     padding: 24px;
     position: relative;
-    overflow: hidden;
+    /* overflow: hidden; -- Removed to prevent clipping on hover scale */
 }
 
 .login-card {
@@ -890,7 +890,7 @@ body {
     /* Change from center to flex-start */
     padding: 40px 20px;
     /* Add padding for safe scroll space */
-    z-index: 5000;
+    z-index: 12000;
     overflow-y: auto;
     /* Ensure the modal container itself can scroll if needed */
     overscroll-behavior: contain;
@@ -1145,14 +1145,34 @@ body.modal-open .modal {
     background: var(--white);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
     position: relative;
-    overflow: hidden;
+    /* overflow: hidden; -- Removed to prevent clipping on hover scale */
+}
+
+.calendar-day-details-panel {
+    margin-top: 20px;
+    padding: 18px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    min-height: 90px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.calendar-day-details-panel .placeholder-text {
+    color: #94a3b8;
+    font-style: italic;
+    font-size: 13px;
+    font-weight: 500;
 }
 
 /* Hover effect */
 .calendar-day:not(:empty):hover {
     transform: translateY(-4px) scale(1.05);
     box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.15);
-    z-index: 10;
+    z-index: 100;
     background: white;
 }
 
@@ -1382,7 +1402,7 @@ body.modal-open .modal {
     transition: padding 0.3s ease, box-shadow 0.2s ease, transform 0.2s ease;
     box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
     position: relative;
-    overflow: hidden;
+    /* overflow: hidden; -- Removed to prevent clipping on hover scale */
 }
 
 .notif-bell-btn:hover {
@@ -2142,7 +2162,7 @@ body.dark-mode .member-role-badge {
     display: none;
     align-items: center;
     justify-content: center;
-    z-index: 10000;
+    z-index: 20000;
 }
 
 .docs-modal.show {
@@ -2411,7 +2431,7 @@ body.dark-mode .member-role-badge {
     transition: all 0.3s ease;
     cursor: grab;
     position: relative;
-    overflow: hidden;
+    /* overflow: hidden; -- Removed to prevent clipping on hover scale */
 }
 
 .task-card:hover {
@@ -3219,7 +3239,7 @@ body.dark-mode .member-role-badge {
 
 .birthday-detail-item {
     position: relative;
-    overflow: hidden;
+    /* overflow: hidden; -- Removed to prevent clipping on hover scale */
 }
 
 .birthday-detail-item::before {
@@ -3246,7 +3266,7 @@ body.dark-mode .member-role-badge {
     padding: 12px;
     box-shadow: none;
     border: 1px solid rgba(0, 0, 0, 0.05);
-    z-index: 10000;
+    z-index: 20000;
     min-width: 200px;
     pointer-events: none;
     opacity: 0;
@@ -3506,7 +3526,7 @@ body.dark-mode .member-role-badge {
     color: white;
     box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.4);
     position: relative;
-    overflow: hidden;
+    /* overflow: hidden; -- Removed to prevent clipping on hover scale */
 }
 
 .summary-hero::before {
@@ -5704,7 +5724,7 @@ body.dark-mode .member-role-badge {
     border-radius: 8px;
     font-size: 0.8rem;
     line-height: 1.5;
-    z-index: 10000;
+    z-index: 20000;
     pointer-events: none;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     opacity: 0;
@@ -8564,7 +8584,7 @@ body.dark-mode #mentorStatusSection h4 {
 
 .create-option-card {
     position: relative;
-    overflow: hidden;
+    /* overflow: hidden; -- Removed to prevent clipping on hover scale */
 }
 
 .create-option-card div {

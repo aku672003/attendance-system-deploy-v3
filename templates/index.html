@@ -18,6 +18,7 @@
     <script>
         window.MAPS_API_KEY = "{{ maps_api_key }}";
         window.GATED_TOKEN = "{{ gated_token }}";
+        window.IS_DEVELOPMENT = "{{ is_development|yesno:'true,false' }}" === "true";
     </script>
 
 
@@ -34,6 +35,7 @@
     {% load static %}
     <link rel="stylesheet" href="{% static 'style.css' %}">
     <link rel="stylesheet" href="{% static 'predictive_card.css' %}">
+    <link rel="stylesheet" href="{% static 'task_manager_v2.css' %}">
     <style>
         /* Apple-Style Emoji/Avatar Picker Refinements */
         .emoji-picker-container {
@@ -239,6 +241,21 @@
             height: 100%;
             background: var(--primary-color);
             transition: width 0.3s ease;
+        }
+
+        /* Status Overview Mobile Fix */
+        @media (max-width: 480px) {
+            .status-content {
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 16px !important;
+            }
+            .vertical-divider {
+                display: none;
+            }
+            .status-metric {
+                flex: 1 1 120px;
+            }
         }
     </style>
 </head>
@@ -755,11 +772,11 @@
                     </p>
 
                     <div style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
-                        <button class="btn btn-primary" onclick="requestNewTaskFromMentor()" id="btnRequestTask"
+                        <button class="btn btn-primary" onclick="closeModal('noTasksModal'); TaskManagerV2.open();" id="btnRequestTask"
                             style="border-radius: 20px; height: 56px; font-weight: 800; font-size: 1.1rem; background: linear-gradient(135deg, var(--warning-color), #d97706); border: none; box-shadow: 0 10px 20px rgba(245, 158, 11, 0.3);">
                             🚀 Request New Task
                         </button>
-                        <button class="btn btn-subtle" onclick="closeModal('noTasksModal'); openMyTasks();"
+                        <button class="btn btn-subtle" onclick="closeModal('noTasksModal'); TaskManagerV2.open();"
                             style="border-radius: 20px; height: 56px; font-weight: 700; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;">
                             Open My Board
                         </button>
@@ -818,41 +835,25 @@
 
                         <div class="vertical-divider"></div>
 
-                        <!-- Leaves Section -->
-                        <div class="status-metric">
+                        <!-- CL Section -->
+                        <div class="status-metric" onclick="showLeaveDatesModal(true)" style="cursor: pointer;">
                             <div class="progress-ring-container">
                                 <svg class="progress-ring" width="56" height="56">
                                     <circle class="progress-ring-bg" stroke="rgba(0,0,0,0.05)" stroke-width="5"
                                         fill="transparent" r="24" cx="28" cy="28" />
-                                    <circle class="progress-ring-fill" id="leavesRing" stroke="url(#gradientLeaves)"
+                                    <circle class="progress-ring-fill" id="clRing" stroke="url(#gradientLeaves)"
                                         stroke-width="5" fill="transparent" r="24" cx="28" cy="28" />
                                 </svg>
-                                <div class="metric-icon" style="font-size: 16px;">✈️</div>
+                                <div class="metric-icon" style="font-size: 16px;">📄</div>
                             </div>
                             <div class="metric-details">
-                                <span class="metric-value" id="statLeaves" style="font-size: 0.95rem;">0/1</span>
-                                <span class="metric-label" style="font-size: 0.65rem;">Leaves</span>
+                                <span class="metric-value" id="statCL" style="font-size: 0.95rem;">0/1</span>
+                                <span class="metric-label" style="font-size: 0.65rem;">Leave</span>
                             </div>
                         </div>
 
                         <div class="vertical-divider"></div>
 
-                        <!-- Optional Holidays Section -->
-                        <div class="status-metric">
-                            <div class="progress-ring-container">
-                                <svg class="progress-ring" width="56" height="56">
-                                    <circle class="progress-ring-bg" stroke="rgba(0,0,0,0.05)" stroke-width="5"
-                                        fill="transparent" r="24" cx="28" cy="28" />
-                                    <circle class="progress-ring-fill" id="holidayRing" stroke="url(#gradientOptional)"
-                                        stroke-width="5" fill="transparent" r="24" cx="28" cy="28" />
-                                </svg>
-                                <div class="metric-icon" style="font-size: 16px;">🎊</div>
-                            </div>
-                            <div class="metric-details">
-                                <span class="metric-value" id="statOptional" style="font-size: 0.95rem;">0/2</span>
-                                <span class="metric-label" style="font-size: 0.65rem;">Holiday</span>
-                            </div>
-                        </div>
                     </div>
 
                     <div class="widget-resize-controls" onclick="event.stopPropagation()">
@@ -1010,7 +1011,6 @@
                     <div class="stat-card-title">📝 Task Mentor</div>
                     <div class="stat-card-value" id="activeTasks">0</div>
                     <div class="stat-card-timing">Active tasks</div>
-                    <div class="stat-card-subtext">Trello-style board</div>
                     <div class="widget-resize-controls" onclick="event.stopPropagation()">
                         <button class="resize-btn" onclick="resizeWidget('widget-admin-tasks', 'sm')">S</button>
                         <button class="resize-btn" onclick="resizeWidget('widget-admin-tasks', 'md')">M</button>
@@ -1145,10 +1145,23 @@
                     <div class="action-card-title">My Tasks</div>
                     <div class="action-card-description">View and manage your assigned tasks</div>
                     <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="btn btn-sm btn-primary" onclick="TaskManagerV2.open()" style="font-size: 0.6rem; padding: 2px 6px; margin-right: 4px;">V2</button>
                         <button class="resize-btn" onclick="resizeWidget('myTasksCard', 'sm')">S</button>
                         <button class="resize-btn" onclick="resizeWidget('myTasksCard', 'md')">M</button>
                         <button class="resize-btn" onclick="resizeWidget('myTasksCard', 'lg')">L</button>
                         <button class="resize-btn" onclick="resizeWidget('myTasksCard', 'xl')">XL</button>
+                    </div>
+                </div>
+
+                <div class="action-card" onclick="TaskManagerV2.open()" id="taskManagerV2Card" draggable="false" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none;">
+                    <span class="action-card-icon">⚡</span>
+                    <div class="action-card-title" style="color: white;">Task Manager Pro</div>
+                    <div class="action-card-description" style="color: rgba(255,255,255,0.8);">Enhanced full-screen experience</div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('taskManagerV2Card', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('taskManagerV2Card', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('taskManagerV2Card', 'lg')">L</button>
+                        <button class="resize-btn" onclick="resizeWidget('taskManagerV2Card', 'xl')">XL</button>
                     </div>
                 </div>
                 <div class="action-card" onclick="showScreen('recordsScreen')" id="recordsCard" draggable="false">
@@ -1189,23 +1202,14 @@
                     <div class="action-card-title">Team Tasks</div>
                     <div class="action-card-description">Manage tasks for your team</div>
                     <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="btn btn-sm btn-primary" onclick="TaskManagerV2.open()" style="font-size: 0.6rem; padding: 2px 6px; margin-right: 4px;">V2</button>
                         <button class="resize-btn" onclick="resizeWidget('taskMentorCard', 'sm')">S</button>
                         <button class="resize-btn" onclick="resizeWidget('taskMentorCard', 'md')">M</button>
                         <button class="resize-btn" onclick="resizeWidget('taskMentorCard', 'lg')">L</button>
                         <button class="resize-btn" onclick="resizeWidget('taskMentorCard', 'xl')">XL</button>
                     </div>
                 </div>
-                <div class="action-card hidden" onclick="openMeetingMomModal()" id="meetingMomCard" draggable="false">
-                    <span class="action-card-icon">🤝</span>
-                    <div class="action-card-title">Meeting / MoM</div>
-                    <div class="action-card-description">Conduct meetings and update tasks</div>
-                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
-                        <button class="resize-btn" onclick="resizeWidget('meetingMomCard', 'sm')">S</button>
-                        <button class="resize-btn" onclick="resizeWidget('meetingMomCard', 'md')">M</button>
-                        <button class="resize-btn" onclick="resizeWidget('meetingMomCard', 'lg')">L</button>
-                        <button class="resize-btn" onclick="resizeWidget('meetingMomCard', 'xl')">XL</button>
-                    </div>
-                </div>
+
                 <div class="action-card hidden" onclick="openProfile()" id="profileCard" draggable="false">
                     <span class="action-card-icon">🧑‍💻</span>
                     <div class="action-card-title">Edit Your Details</div>
@@ -1215,6 +1219,18 @@
                         <button class="resize-btn" onclick="resizeWidget('profileCard', 'md')">M</button>
                         <button class="resize-btn" onclick="resizeWidget('profileCard', 'lg')">L</button>
                         <button class="resize-btn" onclick="resizeWidget('profileCard', 'xl')">XL</button>
+                    </div>
+                </div>
+
+                <div class="action-card hidden" onclick="openMeetingMomModal()" id="meetingMomCard" draggable="false">
+                    <span class="action-card-icon">🤝</span>
+                    <div class="action-card-title">Meeting / MoM</div>
+                    <div class="action-card-description">Conduct meetings and update tasks</div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('meetingMomCard', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('meetingMomCard', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('meetingMomCard', 'lg')">L</button>
+                        <button class="resize-btn" onclick="resizeWidget('meetingMomCard', 'xl')">XL</button>
                     </div>
                 </div>
                 <div class="action-card" onclick="openExportModal()" id="exportCard" draggable="false">
@@ -1931,6 +1947,30 @@
                             <option value="none">No Mentor</option>
                         </select>
                     </div>
+                    <div class="form-group">
+                        <label class="form-label">Joining Date</label>
+                        <input id="newUserJoiningDate" type="date" class="form-control">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Total Casual Leaves (CL)</label>
+                            <input id="newUserTotalCL" type="number" class="form-control" value="12" placeholder="e.g., 12">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Taken Casual Leaves (CL)</label>
+                            <input id="newUserTakenCL" type="number" class="form-control" value="0" placeholder="e.g., 0">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" style="display: flex; align-items: center; gap: 8px;">
+                            Account Status: 
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="newUserIsActive" checked>
+                                <span class="slider round"></span>
+                            </label>
+                            <span id="newUserIsActiveLabel">Active</span>
+                        </label>
+                    </div>
                     <div style="display:flex; gap:8px;">
                         <button class="btn btn-success" onclick="submitNewUser()">➕ Add User</button>
                         <button class="btn" onclick="clearUserForm()">Reset</button>
@@ -1979,6 +2019,7 @@
                                     <th>Department</th>
                                     <th>Role</th>
                                     <th>Mentor</th>
+                                    <th>Status</th>
                                     <th>Current Tasks</th>
                                     <th style="width:160px">Actions</th>
                                 </tr>
@@ -2171,9 +2212,9 @@
                 </div>
 
                 <div class="export-filters-grid">
-                    <div class="export-checkbox-container">
+                    <div class="export-checkbox-container" style="display: none;">
                         <label class="export-checkbox-label">
-                            <input type="checkbox" id="exportIncludePhotos" checked>
+                            <input type="checkbox" id="exportIncludePhotos">
                             Photos
                         </label>
                     </div>
@@ -2305,418 +2346,58 @@
         </div>
     </div>
 
-    <!-- Task Mentor Modal -->
-    <div id="taskMentorModal" class="modal">
-        <div class="modal-content"
-            style="max-width: 1200px; max-height: 90vh; overflow-y: auto; padding: 0; border-radius: 24px;">
-            <div class="modal-header">
-                <div style="display: flex; flex-direction: column;">
-                    <h3 style="margin: 0; font-size: 1.8rem; color: #1e293b;">Task Mentor</h3>
-                    <p style="margin: 4px 0 0; color: var(--gray-500); font-size: 0.9rem; font-weight: 500;">Oversee and
-                        allocate team tasks</p>
-                </div>
-                <div class="modal-actions" id="taskMentorActions">
-                    <button class="btn btn-warning" id="btnEnterPriorityMode" onclick="enterPriorityMode()"
-                        style="background: #f59e0b; color: white; border: none; font-weight: 700; display: none;">⭐
-                        Prioritize</button>
-                    <button class="btn btn-success hidden" id="btnSavePriority" onclick="savePriorityOrder()"
-                        style="background: #10b981; color: white; border: none; font-weight: 700;">💾 Save
-                        Priority</button>
-                    <button class="btn btn-primary" onclick="addNewTask()">➕ Add Task</button>
-                    <button class="btn btn-secondary" onclick="exportTasksToExcel()">📤 Export</button>
-                    <button class="btn btn-secondary" onclick="refreshTasks()">🔄 Refresh</button>
-                    <button class="btn btn-secondary" onclick="closeModal('taskMentorModal')">✕ Close</button>
-                </div>
+
+
+    <!-- Admin Manage Date Modal -->
+    <div id="adminManageDateModal" class="modal">
+        <div class="modal-content" style="max-width: 400px; padding: 32px; border-radius: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h3 id="manageDateTitle" style="margin: 0; font-size: 1.25rem;">Manage Date</h3>
+                <span id="manageDateDisplay" style="font-weight: 700; color: var(--primary-color);"></span>
             </div>
-
-            <div class="premium-task-board">
-                <div class="premium-column" id="todoColumn">
-                    <div class="premium-column-header">
-                        <h4> To Do</h4>
-                        <span class="premium-task-count" id="todoCount">0</span>
-                    </div>
-                    <div class="premium-task-list" id="todoList">
-                        <div class="text-muted text-center p-3">No tasks</div>
-                    </div>
-                </div>
-
-                <div class="premium-column" id="inProgressColumn">
-                    <div class="premium-column-header">
-                        <h4> In Progress</h4>
-                        <span class="premium-task-count" id="inProgressCount">0</span>
-                    </div>
-                    <div class="premium-task-list" id="inProgressList">
-                        <div class="text-muted text-center p-3">No tasks</div>
-                    </div>
-                </div>
-
-                <div class="premium-column" id="completedColumn">
-                    <div class="premium-column-header">
-                        <h4> Completed</h4>
-                        <span class="premium-task-count" id="completedCount">0</span>
-                    </div>
-                    <div class="premium-task-list" id="completedList">
-                        <div class="text-muted text-center p-3">No tasks</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Redesigned Premium Task Export Filter Modal -->
-    <div id="taskExportModal" class="modal glass-modal">
-        <div class="modal-content premium-export-card">
-            <div class="modal-header export-header">
-                <div class="export-header-content">
-                    <div class="export-icon-wrapper">
-                        <span>📊</span>
-                    </div>
-                    <div>
-                        <h4 class="premium-export-title">Export Tasks</h4>
-                        <p class="premium-export-subtitle">Download detailed task reports</p>
-                    </div>
-                </div>
-                <button class="export-close-btn" onclick="closeModal('taskExportModal')" aria-label="Close">
-                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                </button>
-            </div>
-            <div class="modal-body export-body">
-                <div class="export-form-group">
-                    <label class="premium-export-label">
-                        <span class="label-icon">👤</span> Select Employee
+            
+            <div class="form-group">
+                <label class="form-label" style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--gray-500);">Type of Day</label>
+                <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 8px;">
+                    <label class="premium-radio-label" style="display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 12px; border: 1px solid var(--gray-200); border-radius: 12px; transition: all 0.2s;">
+                        <input type="radio" name="dateType" value="working" checked style="width: 18px; height: 18px;">
+                        <div>
+                            <div style="font-weight: 600; font-size: 0.9rem;">Regular Working</div>
+                            <div style="font-size: 0.75rem; color: var(--gray-500);">Standard attendance required</div>
+                        </div>
                     </label>
-                    <div class="premium-select-wrapper">
-                        <select id="exportTaskEmployeeSelect" class="premium-select">
-                            <option value="all">All Employees</option>
-                        </select>
-                        <div class="select-chevron">
-                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
-                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="6 9 12 15 18 9"></polyline>
-                            </svg>
+                    <label class="premium-radio-label" style="display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 12px; border: 1px solid var(--gray-200); border-radius: 12px; transition: all 0.2s;">
+                        <input type="radio" name="dateType" value="holiday" style="width: 18px; height: 18px;">
+                        <div>
+                            <div style="font-weight: 600; font-size: 0.9rem;">Mandatory Holiday</div>
+                            <div style="font-size: 0.75rem; color: var(--gray-500);">Public holiday for everyone</div>
                         </div>
-                    </div>
-                    <div class="premium-export-hint">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="12" y1="16" x2="12" y2="12"></line>
-                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                        </svg>
-                        Filter tasks by a specific team member or export everything.
-                    </div>
-                </div>
-
-                <div class="export-footer">
-                    <button class="premium-btn btn-export-now" onclick="confirmTaskExport()">
-                        <span>📥 Download Excel</span>
-                    </button>
-                    <button class="premium-btn btn-export-cancel" onclick="closeModal('taskExportModal')">
-                        Cancel
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-    <!-- My Tasks Modal (Employee Only) -->
-    <div id="myTasksModal" class="modal">
-        <div class="modal-content"
-            style="max-width: 1200px; max-height: 90vh; overflow-y: auto; padding: 0; border-radius: 24px;">
-            <div class="modal-header">
-                <div style="display: flex; flex-direction: column;">
-                    <h3 style="margin: 0; font-size: 1.8rem; color: #1e293b;">My Tasks</h3>
-                    <p style="margin: 4px 0 0; color: var(--gray-500); font-size: 0.9rem; font-weight: 500;">
-                        View and
-                        manage your assignments</p>
-                </div>
-                <div class="modal-actions">
-                    <button class="btn btn-warning" onclick="requestNewTaskFromMentor()"
-                        style="background: var(--warning-color); color: white; border: none; font-weight: 700;">🚀
-                        Request Task</button>
-                    <button class="btn btn-primary" onclick="addNewTask()">➕ Add Task</button>
-                    <button class="btn btn-secondary" onclick="refreshMyTasks()">🔄 Refresh</button>
-                    <button class="btn btn-secondary" onclick="closeModal('myTasksModal')">✕</button>
+                    </label>
+                    <label class="premium-radio-label" style="display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 12px; border: 1px solid var(--gray-200); border-radius: 12px; transition: all 0.2s;">
+                        <input type="radio" name="dateType" value="optional" style="width: 18px; height: 18px;">
+                        <div>
+                            <div style="font-weight: 600; font-size: 0.9rem;">Optional Holiday</div>
+                            <div style="font-size: 0.75rem; color: var(--gray-500);">Users can choose this holiday</div>
+                        </div>
+                    </label>
                 </div>
             </div>
 
-            <div class="premium-task-board">
-                <div class="premium-column" id="myTodoColumn">
-                    <div class="premium-column-header">
-                        <h4> To Do</h4>
-                        <span class="premium-task-count" id="myTodoCount">0</span>
-                    </div>
-                    <div class="premium-task-list" id="myTodoList">
-                        <div class="text-muted text-center p-3">No tasks</div>
-                    </div>
-                </div>
+            <div class="form-group" style="margin-top: 24px;">
+                <label class="form-label" style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--gray-500);">Label / Reason (Optional)</label>
+                <input type="text" id="manageDateReason" class="form-control" placeholder="e.g. Diwali, Independence Day..." style="margin-top: 8px;">
+            </div>
 
-                <div class="premium-column" id="myInProgressColumn">
-                    <div class="premium-column-header">
-                        <h4> In Progress</h4>
-                        <span class="premium-task-count" id="myInProgressCount">0</span>
-                    </div>
-                    <div class="premium-task-list" id="myInProgressList">
-                        <div class="text-muted text-center p-3">No tasks</div>
-                    </div>
-                </div>
-
-                <div class="premium-column" id="myCompletedColumn">
-                    <div class="premium-column-header">
-
-                        <h4> Completed</h4>
-                        <span class="premium-task-count" id="myCompletedCount">0</span>
-                    </div>
-                    <div class="premium-task-list" id="myCompletedList">
-                        <div class="text-muted text-center p-3">No tasks</div>
-                    </div>
-                </div>
+            <div style="display: flex; gap: 12px; margin-top: 32px;">
+                <button class="btn btn-secondary" style="flex: 1;" onclick="closeModal('adminManageDateModal')">Cancel</button>
+                <button class="btn btn-primary" style="flex: 2;" onclick="saveAdminDateManagement()">Update Date</button>
             </div>
         </div>
     </div>
 
-    <!-- Task Detail Modal (with Comments) -->
-    <div id="taskDetailModal" class="modal">
-        <div class="modal-content"
-            style="max-width: 600px; padding: 0; border-radius: 24px; display: flex; flex-direction: column; max-height: 90vh; overflow: hidden;">
-            <div class="modal-header premium-detail-header">
-                <div style="display: flex; flex-direction: column; gap: 12px; flex: 1;">
-                    <h3 id="detailTaskTitle" class="premium-task-title">-</h3>
-                    <div id="detailTaskMeta" class="premium-task-meta-container">
-                        <!-- Populate via JS -->
-                    </div>
-                </div>
-                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
-                    <button onclick="closeModal('taskDetailModal')"
-                        style="background: #f8fafc; border: none; font-size: 18px; width: 34px; height: 34px; border-radius: 10px; cursor: pointer; color: #94a3b8; display: flex; align-items: center; justify-content: center; transition: all 0.2s; margin-top: -4px; margin-right: -4px;"
-                        onmouseover="this.style.background='#f1f5f9'; this.style.color='#64748b';"
-                        onmouseout="this.style.background='#f8fafc'; this.style.color='#94a3b8';">✕</button>
-                    <div id="detailTaskPriorityBadge"></div>
-                </div>
 
-                <!-- Integrated Progress row (absolute positioned at the bottom border) -->
-                <div id="taskProgressSection"
-                    style="position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: #e2e8f0; overflow: hidden;">
-                    <div id="taskProgressBarInner"
-                        style="height: 100%; width: 0%; background: linear-gradient(90deg, #3b82f6, #60a5fa); transition: width 0.3s ease;">
-                    </div>
-                </div>
-            </div>
 
-            <!-- Optional Progress Percent Label above body -->
-            <div
-                style="background: #f8fafc; padding: 8px 24px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center;">
-                <span
-                    style="font-size: 0.65rem; font-weight: 850; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Completion
-                    Status</span>
-                <span id="taskProgressPercent"
-                    style="font-size: 0.72rem; font-weight: 800; color: var(--primary-color);">0%</span>
-            </div>
 
-            <div class="modal-body" style="padding: 24px; overflow-y: auto; flex: 1; scrollbar-width: thin;">
-                <div id="detailTaskDescription" class="premium-description-box">
-                    <!-- Populate via JS -->
-                </div>
-
-                <!-- STEPS SECTION -->
-                <div style="margin-bottom: 24px;">
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <h4
-                            style="margin: 0; font-size: 1rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
-                            <span>✅</span> Steps to Completion
-                        </h4>
-                        <button class="btn btn-sm btn-secondary" onclick="addNewStepUI()"
-                            style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px;">+ Add Step</button>
-                    </div>
-                    <div id="taskStepsList" style="display: flex; flex-direction: column; gap: 10px;">
-                        <!-- Populate via JS -->
-                    </div>
-                    <div id="addStepInputWrapper" class="hidden" style="margin-top: 10px; display: flex; gap: 8px;">
-                        <input type="text" id="newStepText" class="form-control" placeholder="Describe this step..."
-                            style="height: 36px; font-size: 0.9rem;">
-                        <button class="btn btn-primary btn-sm" onclick="saveNewStep()">Add</button>
-                    </div>
-                </div>
-
-                <!-- HISTORY SECTION -->
-                <div style="margin-bottom: 24px;">
-                    <h4
-                        style="margin: 0 0 12px; font-size: 1rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
-                        <span>📜</span> History Log
-                    </h4>
-                    <div id="taskHistoryLog"
-                        style="display: flex; flex-direction: column; gap: 8px; font-size: 0.85rem; color: var(--gray-600); background: #fcfcfc; padding: 12px; border-radius: 12px; border: 1px dashed #e2e8f0;">
-                        <!-- Populate via JS -->
-                    </div>
-                </div>
-
-                <!-- Team Overview Section (New) -->
-                <div id="teamOverviewSection" class="hidden premium-team-section">
-                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
-                        <span style="font-size: 1.2rem;">👥</span>
-                        <h4 style="margin: 0; font-size: 1.1rem; color: var(--primary-color); font-weight: 700;">Team
-                            Progress</h4>
-                    </div>
-                    <div id="teamMembersList" style="display: flex; flex-direction: column; gap: 12px;">
-                        <!-- Populate via JS -->
-                    </div>
-                </div>
-
-                <div style="border-top: 1px solid #f1f5f9; padding-top: 24px;">
-                    <h4 style="margin: 0 0 16px; font-size: 1.1rem; color: #1e293b;">Comments</h4>
-                    <div id="taskCommentsList"
-                        style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px; padding-right: 8px;">
-                        <!-- Populate via JS -->
-                    </div>
-
-                    <div class="comment-input-wrapper"
-                        style="display: flex; gap: 12px; align-items: flex-start; background: #f8fafc; padding: 12px; border-radius: 16px; border: 1px solid #e2e8f0;">
-                        <textarea id="newTaskComment" class="form-control" rows="2" placeholder="Add a comment..."
-                            style="border: none; background: transparent; padding: 4px; resize: none;"></textarea>
-                        <button class="btn btn-primary" onclick="submitTaskComment()"
-                            style="min-width: 80px; align-self: flex-end;">Post</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div id="addTaskModal" class="premium-modal-container">
-        <div class="premium-modal-backdrop" onclick="closeModal('addTaskModal')"></div>
-        <div class="premium-modal-content">
-            <div class="premium-modal-header">
-                <h3>Add New Task</h3>
-                <button class="btn-icon-sm" onclick="closeModal('addTaskModal')"
-                    style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">✕</button>
-            </div>
-
-            <div class="premium-modal-body">
-                <div class="premium-field-group">
-                    <label class="premium-label">Task Title <span style="color: var(--error-color);">*</span></label>
-                    <input type="text" id="taskTitle" class="form-control" placeholder="What needs to be done?" required
-                        style="height: 48px; font-size: 1rem; border-radius: 12px; border: 1px solid #e2e8f0;">
-                </div>
-
-                <div class="premium-field-group">
-                    <label class="premium-label">Priority Level</label>
-                    <select id="taskPriority" class="form-control" style="height: 48px; border-radius: 12px;">
-                        <option value="low">Low</option>
-                        <option value="medium" selected>Medium</option>
-                        <option value="high">High</option>
-                        <option value="urgent">Urgent</option>
-                        <option value="p1">P1 (Highest)</option>
-                        <option value="p2">P2</option>
-                        <option value="p3">P3</option>
-                        <option value="p4">P4</option>
-                    </select>
-                </div>
-
-                <div class="premium-grid">
-                    <div class="premium-field-group">
-                        <label class="premium-label">Start Date</label>
-                        <input type="date" id="taskStartDate" class="form-control"
-                            style="height: 48px; border-radius: 12px;">
-                    </div>
-                    <div class="premium-field-group">
-                        <label class="premium-label">Completion Deadline <span
-                                style="color: var(--error-color);">*</span></label>
-                        <input type="date" id="taskDueDate" class="form-control" required
-                            style="height: 48px; border-radius: 12px;">
-                    </div>
-                </div>
-
-                <div class="premium-field-group">
-                    <label class="premium-label">Assigned Mentor (Overseer)</label>
-                    <div class="multi-select-container">
-                        <div id="overseerDisplay" class="multi-select-display" onclick="toggleOverseerSelect()"
-                            style="min-height: 48px; border-radius: 12px;">
-                            <span class="text-muted" style="font-size:0.9rem;">Select Overseers...</span>
-                        </div>
-                        <div id="overseerDropdown" class="multi-select-dropdown" style="z-index: 105;">
-                            <div style="padding: 10px; border-bottom: 1px solid #f1f5f9;">
-                                <input type="text" id="overseerSearch" class="form-control"
-                                    placeholder="Search overseers..." style="height: 32px; font-size: 0.85rem;"
-                                    onkeyup="filterOverseerSelect(this.value)">
-                            </div>
-                            <div id="overseerOptionsList" style="max-height: 200px; overflow-y: auto;">
-                                <!-- Populated dynamically -->
-                            </div>
-                        </div>
-                    </div>
-                    <input type="hidden" id="taskOverseerIds" value="[]">
-                </div>
-
-                <div class="premium-card-section">
-                    <div class="team-action-row" style="flex-wrap: wrap; margin-bottom: 12px;">
-                        <label class="premium-label" style="margin-bottom:8px; flex: 1 0 100%;">Assign To
-                            Team/Individuals</label>
-                        <div style="display: flex; gap: 8px; width: 100%;">
-                            <select id="teamSelector" class="form-control"
-                                style="flex: 1; height: 40px; padding: 0 12px; font-size: 0.9rem; border-radius: 10px;"
-                                onchange="applyTeamSelection()">
-                                <option value="">Select Team...</option>
-                            </select>
-                            <button class="btn btn-secondary"
-                                style="padding: 0 16px; height: 40px; font-size: 0.85rem; border-radius: 10px;"
-                                onclick="openEditTeamModal()" id="editTeamBtn" disabled>Edit Team</button>
-                            <button class="btn btn-secondary"
-                                style="padding: 0 16px; height: 40px; font-size: 0.85rem; border-radius: 10px;"
-                                onclick="openCreateTeamModal()">+ New Team</button>
-                        </div>
-                    </div>
-
-                    <div id="teamInfoBox"
-                        style="display:none; margin-bottom: 12px; padding: 12px; border-radius: 10px; border: 1px solid #e2e8f0;">
-                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
-                            <span class="badge badge-success" style="font-size:0.65rem; text-transform:uppercase;">Team
-                                Task</span>
-                            <span id="teamMemberCountLabel"
-                                style="font-size:0.75rem; color: #64748b; font-weight:600;"></span>
-                        </div>
-                        <div id="teamMemberNamesList" style="font-size:0.8rem; color: #1e293b; line-height:1.4;"></div>
-                    </div>
-
-                    <div class="multi-select-container">
-                        <div id="multiSelectDisplay" class="multi-select-display" onclick="toggleMultiSelect()"
-                            style="min-height: 48px; border-radius: 12px;">
-                            <span class="text-muted" style="font-size:0.9rem;">Select Employees...</span>
-                        </div>
-                        <div id="multiSelectDropdown" class="multi-select-dropdown" style="z-index: 100;">
-                            <div style="padding: 10px; border-bottom: 1px solid #f1f5f9;">
-                                <input type="text" id="multiSelectSearch" class="form-control"
-                                    placeholder="Search employees..." style="height: 32px; font-size: 0.85rem;"
-                                    onkeyup="filterMultiSelect(this.value)">
-                            </div>
-                            <div id="multiSelectOptionsList" style="max-height: 200px; overflow-y: auto;">
-                                <!-- Populated dynamically -->
-                            </div>
-                        </div>
-                    </div>
-                    <input type="hidden" id="taskAssigneeIds" value="[]">
-                </div>
-
-                <div class="premium-field-group" style="margin-top: 24px;">
-                    <label class="premium-label">Detailed Description</label>
-                    <textarea id="taskDescription" class="form-control" rows="4"
-                        placeholder="Briefly describe the task objectives..."
-                        style="border-radius: 12px; padding: 14px; font-size: 0.95rem;"></textarea>
-                </div>
-            </div>
-
-            <div class="premium-modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('addTaskModal')"
-                    style="padding: 12px 24px; border-radius: 12px; font-weight: 500;">Cancel</button>
-                <button class="btn btn-primary" id="saveTaskBtn" onclick="saveNewTask()"
-                    style="padding: 12px 32px; border-radius: 12px; font-weight: 600;">
-                    <span id="saveTaskText">Create Task</span>
-                    <span id="saveTaskSpinner" class="loading-spinner hidden"></span>
-                </button>
-            </div>
-        </div>
-    </div>
 
     <!-- Meeting / MoM Modal -->
     <div id="meetingMomModal" class="premium-modal-container">
@@ -2865,11 +2546,13 @@
                     <div class="modal-title-group" style="display: flex; align-items: center; gap: 12px;">
                         <span class="modal-icon" style="font-size: 24px;"></span>
                         <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: var(--gray-900);">
-                            Monthly
-                            Overview</h3>
+                            Monthly Overview</h3>
                     </div>
-                    <span class="modal-date" id="modalDate"
-                        style="font-size: 13px; color: var(--gray-500); font-weight: 500;">-</span>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button onclick="changeOverviewMonth(-1)" style="background:none; border:none; cursor:pointer; font-size:1.2rem; color:var(--gray-500);">←</button>
+                        <span class="modal-date" id="modalDate" style="font-size: 13px; color: var(--gray-900); font-weight: 700; min-width:80px; text-align:center;">-</span>
+                        <button onclick="changeOverviewMonth(1)" style="background:none; border:none; cursor:pointer; font-size:1.2rem; color:var(--gray-500);">→</button>
+                    </div>
                 </div>
 
                 <!-- Hero Card -->
@@ -2939,11 +2622,23 @@
                         <div class="stat-icon-bg"
                             style="width: 40px; height: 40px; border-radius: 50%; background: #fee2e2; display: flex; align-items: center; justify-content: center; font-size: 18px;">
                             🏖️</div>
-                        <div class="stat-info">
+                        <div class="stat-info" onclick="showLeaveDatesModal()" style="cursor: pointer;">
                             <span class="stat-num" id="ovLeaves"
-                                style="display: block; font-size: 18px; font-weight: 700; color: var(--gray-900);">0</span>
-                            <span class="stat-label" style="font-size: 11px; color: var(--gray-500);">Leaves
-                                Taken</span>
+                                style="display: block; font-size: 18px; font-weight: 700; color: var(--gray-900);">0/0</span>
+                            <span class="stat-label" style="font-size: 11px; color: var(--gray-500);">Leaves (Taken/Total)</span>
+                        </div>
+                    </div>
+
+                    <!-- Leave Balance -->
+                    <div class="stat-box" onclick="showLeaveDatesModal('yearly')"
+                        style="background: white; padding: 16px; border-radius: 12px; display: flex; align-items: center; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); cursor: pointer;">
+                        <div class="stat-icon-bg"
+                            style="width: 40px; height: 40px; border-radius: 50%; background: #fdf2f8; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                            💰</div>
+                        <div class="stat-info">
+                            <span class="stat-num" id="ovLeaveBalance"
+                                style="display: block; font-size: 18px; font-weight: 700; color: var(--gray-900);">0/0</span>
+                            <span class="stat-label" style="font-size: 11px; color: var(--gray-500);">Yearly Leave Balance (Taken/Total)</span>
                         </div>
                     </div>
                     <!-- Optional Holidays -->
@@ -2954,9 +2649,8 @@
                             🎊</div>
                         <div class="stat-info">
                             <span class="stat-num" id="ovOptional"
-                                style="display: block; font-size: 18px; font-weight: 700; color: var(--gray-900);">0</span>
-                            <span class="stat-label" style="font-size: 11px; color: var(--gray-500);">Optional
-                                Holidays</span>
+                                style="display: block; font-size: 18px; font-weight: 700; color: var(--gray-900);">0/2</span>
+                            <span class="stat-label" style="font-size: 11px; color: var(--gray-500);">Optional Holidays</span>
                         </div>
                     </div>
                 </div>
@@ -3580,6 +3274,12 @@
 
             <div id="calendarGrid" class="calendar-grid"></div>
 
+            <div id="calendarDayDetails" class="calendar-day-details-panel">
+                <div class="placeholder-text">
+                    Hover over a day to view detailed check-in / check-out times
+                </div>
+            </div>
+
             <div id="multiSelectActions" class="multi-select-actions">
                 <button id="multiRequestBtn" class="btn btn-primary btn-full-width" onclick="openMultiRequestModal()">
                     Request for Selected Dates (0)
@@ -3683,8 +3383,9 @@
     <!-- External JavaScript -->
     <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     {% load static %}
-    <script src="{% static 'script.js' %}?v=1.1.0"></script>
-    <script src="{% static 'predictive_card.js' %}?v=1.1.0"></script>
+    <script src="{% static 'script.js' %}?v=1.1.6"></script>
+    <script src="{% static 'predictive_card.js' %}?v=1.1.1"></script>
+    <script src="{% static 'task_manager_v2.js' %}"></script>
 
     <!-- ═══════════════════════════════════════════════════════════════════
          HOLIDAY MANAGEMENT — CSS + JS
@@ -3782,6 +3483,41 @@
         }
 
         /* Holiday Upload Drop Zone hover */
+        .holiday-dot {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ef4444; /* Mandatory */
+            box-shadow: 0 0 0 2px white;
+        }
+        .holiday-dot.optional {
+            background: #f59e0b;
+        }
+        .holiday-dot.working {
+            background: #3b82f6;
+        }
+        
+        .fc-day.has-holiday {
+            background: #fef2f2;
+        }
+        .fc-day.has-optional-holiday {
+            background: #fffbeb;
+        }
+        .fc-day.is-working-day-holiday {
+            background: #eff6ff;
+        }
+
+        .premium-radio-label:hover {
+            border-color: var(--primary-color) !important;
+            background: var(--primary-light);
+        }
+        .premium-radio-label input:checked + div {
+            color: var(--primary-color);
+        }
+
         .holiday-drag-over {
             border-color: #6366f1 !important;
             background: #eef2ff !important;
@@ -3829,6 +3565,10 @@
             background: #f1f5f9;
         }
 
+        .hol-preview-working {
+            background: #f0f9ff;
+        }
+
         .table-title {
             background: #f1f5f9;
             border: 1px solid #cbd5e1;
@@ -3851,6 +3591,43 @@
         const MAX_OPTIONAL_HOLIDAYS = 2;
 
         /* ── Drag & Drop helpers ──────────────────────────────────────────── */
+        function showBirthdayDetails(day) {
+            const detailsPanel = document.getElementById('birthdayDetailsContent');
+            if (!detailsPanel) return;
+            
+            const calendarInfo = createBirthdayCalendarData(window.birthdayData, window.currentBirthdayYear, window.currentBirthdayMonth);
+            const dayData = calendarInfo.calendarData[day];
+
+            if (!dayData || !dayData.hasBirthday) {
+                detailsPanel.innerHTML = '<p class="text-muted">No birthdays on this date</p>';
+                return;
+            }
+
+            const birthdayList = dayData.birthdays.map(birthday => `
+                <div class="birthday-detail-item">
+                    <div class="birthday-detail-header">
+                        <strong>${birthday.name}</strong>
+                        <span class="birthday-age">${birthday.age} years old</span>
+                    </div>
+                    <div class="birthday-detail-info">
+                        <small>Username: ${birthday.username}</small>
+                        <small>Born: ${birthday.date_of_birth}</small>
+                        <small class="text-muted" style="margin-top:4px;">Days until birthday: ${birthday.days_until}</small>
+                    </div>
+                </div>
+            `).join('');
+
+            detailsPanel.innerHTML = `
+                <div class="birthday-details-list">
+                    ${birthdayList}
+                </div>
+            `;
+        }
+
+        function selectDay(day) {
+            showBirthdayDetails(day);
+        }
+
         function holidayDragOver(e) {
             e.preventDefault();
             document.getElementById('holidayDropZone').classList.add('holiday-drag-over');
@@ -3999,6 +3776,20 @@
             const btn = document.getElementById('holidaySaveBtn');
             const txt = document.getElementById('holidaySaveBtnText');
             const spin = document.getElementById('holidaySaveSpinner');
+
+            if (tooltipLines.length > 0) {
+                cell.removeAttribute('title');
+                const tooltipText = tooltipLines.join('\n');
+                cell.onmouseenter = (e) => {
+                    showCalendarTooltip(e, tooltipText);
+                    updateCalendarDayDetails(record, day);
+                };
+                cell.onmousemove = (e) => showCalendarTooltip(e, tooltipText);
+                cell.onmouseleave = () => {
+                    hideCalendarTooltip();
+                    resetCalendarDayDetails();
+                };
+            }
 
             // Collect only checked rows
             const checked = document.querySelectorAll('.holiday-row-check');
@@ -4181,7 +3972,9 @@
                         <td id="hol-date-${h.id}" data-raw-date="${h.date}">${formattedDate}</td>
                         <td id="hol-day-${h.id}">${h.day}</td>
                         <td class="text-left" id="hol-name-${h.id}">${h.name}</td>
-                        <td id="hol-type-${h.id}" data-optional="false" class="admin-only" style="font-size:10px; color:#64748b;">Holiday</td>
+                        <td id="hol-type-${h.id}" data-optional="false" data-working="${h.is_working_day}" class="admin-only" style="font-size:10px; color:#64748b;">
+                            ${h.is_working_day ? '<span style="color:#3b82f6;font-weight:700;">Working</span>' : 'Holiday'}
+                        </td>
                         ${adminActionHtml}
                     `;
                         mandatoryBody.appendChild(tr);
@@ -4197,7 +3990,9 @@
                             <span id="hol-name-${h.id}">${h.name}</span>
                             ${actionHtml}
                         </td>
-                        <td id="hol-type-${h.id}" data-optional="true" class="admin-only" style="font-size:10px; color:#f59e0b;">Optional</td>
+                        <td id="hol-type-${h.id}" data-optional="true" data-working="${h.is_working_day}" class="admin-only" style="font-size:10px; color:#f59e0b;">
+                            ${h.is_working_day ? '<span style="color:#3b82f6;font-weight:700;">Working</span>' : 'Optional'}
+                        </td>
                         ${adminActionHtml}
                     `;
                         optionalBody.appendChild(tr);
@@ -4265,7 +4060,8 @@
                             name: newName,
                             date: newDate,
                             day: newDay,
-                            is_optional: newOpt
+                            is_optional: newOpt,
+                            is_working_day: typeTd.querySelector('.working-select').value === 'true'
                         }),
                     });
                     const data = await res.json();
@@ -4291,6 +4087,11 @@
             <select style="font-size:10px; border:1px solid #ddd; border-radius:4px; background:white;">
                 <option value="false" ${!originalOpt ? 'selected' : ''}>Mandatory</option>
                 <option value="true"  ${originalOpt ? 'selected' : ''}>Optional</option>
+            </select>
+            <br>
+            <select class="working-select" style="font-size:10px; border:1px solid #ddd; border-radius:4px; background:white; margin-top:4px;">
+                <option value="false" ${typeTd.getAttribute('data-working') !== 'true' ? 'selected' : ''}>Not Working</option>
+                <option value="true"  ${typeTd.getAttribute('data-working') === 'true' ? 'selected' : ''}>Working Day</option>
             </select>
         `;
 
@@ -4378,6 +4179,8 @@
             <!-- Rendered by JS -->
         </div>
     </div>
+    {% include 'task_manager_v2.html' %}
+
     <!-- Gated Access Initialization -->
     {% if is_gated %}
     <!-- Gated token validated. Displaying login screen. -->

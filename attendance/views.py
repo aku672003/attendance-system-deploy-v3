@@ -26,8 +26,8 @@ import tempfile
 from datetime import datetime, date, time, timedelta
 from .models import (
     Employee, EmployeeProfile, OfficeLocation, DepartmentOfficeAccess,
-    AttendanceRecord, EmployeeRequest, EmployeeDocument, Task, BirthdayWish, TaskComment, Team,
-    TemporaryTag, TrainingLog, AvatarAsset, Memoji, Notification
+    AttendanceRecord, EmployeeRequest, EmployeeDocument, Task, BirthdayWish, TaskComment, TaskStep, TaskAttachment, Team,
+    TemporaryTag, TrainingLog, AvatarAsset, Memoji, Notification, TaskHistory
 )
 from .serializers import AvatarAssetSerializer, MemojiSerializer
 from django.contrib.auth.hashers import make_password, check_password
@@ -177,6 +177,8 @@ def login(request):
                 'avatar_url': profile.avatar_url if profile else None,
                 'theme_settings': profile.theme_settings if profile else {},
                 'mentors': [{'id': m.id, 'name': m.name} for m in employee.mentors.all()],
+                'total_cl': profile.total_cl if profile else 12,
+                'taken_cl': profile.taken_cl if profile else 0,
             }
             return Response({
                 'success': True,
@@ -190,7 +192,14 @@ def login(request):
                 'message': 'Invalid username or password'
             }, status=status.HTTP_401_UNAUTHORIZED)
     except Employee.DoesNotExist:
-        print(f"DEBUG LOGIN: User '{username}' not found or inactive")
+        # Check if the user exists but is inactive
+        if Employee.objects.filter(username=username, is_active=False).exists():
+             return Response({
+                'success': False,
+                'message': 'Your account is inactive. Please contact the administrator.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        print(f"DEBUG LOGIN: User '{username}' not found")
         return Response({
             'success': False,
             'message': 'Invalid username or password'
@@ -254,6 +263,29 @@ def register(request):
             
         if mentor_ids:
             employee.mentors.set(Employee.objects.filter(id__in=mentor_ids))
+
+        # Create Profile and set initial leaves
+        joining_date_str = data.get('date_of_joining')
+        total_cl = int(data.get('total_cl', 12))
+        
+        # If joining date provided and it's this year, calculate pro-rata CL
+        if joining_date_str:
+            try:
+                joining_date = datetime.strptime(joining_date_str, '%Y-%m-%d').date()
+                today = date.today()
+                if joining_date.year == today.year:
+                    # 1 CL per month remaining (including joining month)
+                    total_cl = 12 - joining_date.month + 1
+            except Exception as e:
+                print(f"Error calculating pro-rata CL: {e}")
+
+        profile = EmployeeProfile.objects.create(
+            employee=employee,
+            total_cl=total_cl,
+            taken_cl=0,
+            date_of_joining=joining_date_str
+        )
+
         return Response({
             'success': True,
             'message': 'Account created successfully',
@@ -469,6 +501,7 @@ def get_server_time(request):
 
 
 @api_view(['POST'])
+@require_gated_token_api
 def create_team(request):
     try:
         data = request.data
@@ -494,6 +527,7 @@ def create_team(request):
         return Response({'success': False, 'message': str(e)})
 
 @api_view(['POST'])
+@require_gated_token_api
 def update_team(request):
     try:
         data = request.data
@@ -518,6 +552,7 @@ def update_team(request):
         return Response({'success': False, 'message': str(e)})
 
 @api_view(['DELETE', 'POST']) # Support POST with method override for simplicity if needed
+@require_gated_token_api
 def delete_team(request):
     try:
         team_id = request.data.get('team_id') or request.query_params.get('team_id')
@@ -532,6 +567,7 @@ def delete_team(request):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 def get_teams(request):
     try:
         mentor_id = request.query_params.get('mentor_id')
@@ -769,6 +805,8 @@ def attendance_records(request):
     # Include de-facto mentors (any user who has subordinates)
     is_mentor = user and (user.role == 'mentor' or (user.role != 'admin' and user.subordinates.exists()))
 
+    search = request.GET.get('search', '').strip().lower()
+
     # Auto-mark absentees only after 6 PM (scheduler handles the main trigger)
     now = timezone.localtime(timezone.now())
     today = now.date()
@@ -777,6 +815,46 @@ def attendance_records(request):
 
     try:
         records_qs = AttendanceRecord.objects.select_related('employee', 'office').all()
+
+        # Apply global search if provided
+        if search:
+            from django.db.models import Q
+            
+            # Month mapping for searching by month name
+            months = {
+                'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
+                'apr': 4, 'april': 4, 'may': 5, 'jun': 6, 'june': 6, 'jul': 7, 'july': 7,
+                'aug': 8, 'august': 8, 'sep': 9, 'september': 9, 'oct': 10, 'october': 10,
+                'nov': 11, 'november': 11, 'dec': 12, 'december': 12
+            }
+            
+            # Check if search term is a month name
+            month_val = months.get(search)
+            
+            search_filter = Q(employee__name__icontains=search) | \
+                            Q(employee__username__icontains=search) | \
+                            Q(employee__department__icontains=search) | \
+                            Q(office__name__icontains=search) | \
+                            Q(status__icontains=search) | \
+                            Q(type__icontains=search)
+            
+            if month_val:
+                search_filter |= Q(date__month=month_val)
+                
+            # Handle specific date formats (e.g. 23-04-2026 or 2026-04-23)
+            import re
+            if re.match(r'^\d{2}-\d{2}-\d{4}$', search):
+                try:
+                    from datetime import datetime
+                    d_obj = datetime.strptime(search, '%d-%m-%Y').date()
+                    search_filter |= Q(date=d_obj)
+                except: pass
+            elif re.match(r'^\d{4}-\d{2}-\d{2}$', search):
+                search_filter |= Q(date=search)
+            elif search.isdigit() and len(search) == 4:
+                search_filter |= Q(date__year=int(search))
+            
+            records_qs = records_qs.filter(search_filter)
 
         if is_mentor:
             from django.db.models import Q
@@ -788,9 +866,11 @@ def attendance_records(request):
             records_qs = records_qs.filter(date__gte=start_date)
         if end_date:
             records_qs = records_qs.filter(date__lte=end_date)
-        else:
+        elif not search:
             # Default: only show records up to today (hide future-dated records)
+            # But if searching, don't restrict to today by default unless requested
             records_qs = records_qs.filter(date__lte=today)
+
         if att_type:
             records_qs = records_qs.filter(type=att_type)
 
@@ -799,6 +879,7 @@ def attendance_records(request):
             days_limit = int(days_limit)
             # Get unique dates in DESC order
             unique_dates = records_qs.values_list('date', flat=True).distinct().order_by('-date')
+            total_days = unique_dates.count()
             total_days = unique_dates.count()
 
             target_dates = unique_dates[days_offset : days_offset + days_limit]
@@ -831,6 +912,7 @@ def attendance_records(request):
                 'total_hours': float(record.total_hours),
                 'is_half_day': record.is_half_day,
                 'role': record.employee.role,
+                'date_of_joining': str(record.employee.profile.date_of_joining) if hasattr(record.employee, 'profile') and record.employee.profile.date_of_joining else None,
             })
 
         return Response({
@@ -881,6 +963,7 @@ def mark_absentees_for_date(target_date):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 def monthly_stats(request):
     """Get monthly attendance statistics"""
     employee_id = request.GET.get('employee_id')
@@ -900,25 +983,89 @@ def monthly_stats(request):
             date__month=month
         )
 
-        # Count approved leave requests from EmployeeRequest table
-        leave_requests = EmployeeRequest.objects.filter(
+        # Get employee profile for joining date and leave settings
+        from attendance.models import EmployeeProfile
+        profile = EmployeeProfile.objects.filter(employee_id=employee_id).first()
+        joining_date = profile.date_of_joining if profile else None
+        
+        # Calculate monthly allowance and rollover
+        # Logic: 1 CL per month. Jan-Dec cycle.
+        current_year = int(year)
+        current_month = int(month)
+        
+        # Determine start month (either January or joining month if in the same year)
+        start_month = 1
+        if joining_date and joining_date.year == current_year:
+            start_month = joining_date.month
+        elif joining_date and joining_date.year > current_year:
+            # Not yet joined in the requested year
+            start_month = 13 # Impossible month to show 0 balance
+            
+        # Total allowed leaves up to current viewed month
+        # If viewed month < start_month, allowed = 0
+        months_active_ytd = max(0, current_month - start_month + 1) if current_month >= start_month else 0
+        total_allowed_upto_now = months_active_ytd # 1 per month
+        
+        # Yearly allowance (total for the year based on joining date)
+        yearly_allowance = max(0, 12 - start_month + 1) if start_month <= 12 else 0
+        
+        # Total taken leaves in the WHOLE year (Full = 1, Half = 0.5)
+        yearly_leaves_qs = EmployeeRequest.objects.filter(
             employee_id=employee_id,
-            request_type='full_day',
+            request_type__in=['full_day', 'half_day'],
             status='approved',
-            start_date__year=year,
-            start_date__month=month
-        ).count()
+            start_date__year=current_year
+        ).order_by('start_date')
+        
+        yearly_taken = 0.0
+        yearly_leave_dates = []
+        for req in yearly_leaves_qs:
+            val = 1.0 if req.request_type == 'full_day' else 0.5
+            yearly_taken += val
+            yearly_leave_dates.append({
+                'date': req.start_date.strftime('%Y-%m-%d'),
+                'type': req.request_type
+            })
 
-        half_day_requests = EmployeeRequest.objects.filter(
-            employee_id=employee_id,
-            request_type='half_day',
-            status='approved',
-            start_date__year=year,
-            start_date__month=month
+        # Total taken leaves in this year up to the viewed month
+        # ... and so on
+        full_ytd = EmployeeRequest.objects.filter(
+            employee_id=employee_id, request_type='full_day', status='approved',
+            start_date__year=current_year, start_date__month__lte=current_month
         ).count()
+        half_ytd = EmployeeRequest.objects.filter(
+            employee_id=employee_id, request_type='half_day', status='approved',
+            start_date__year=current_year, start_date__month__lte=current_month
+        ).count()
+        taken_leaves_ytd = float(full_ytd) + (float(half_ytd) * 0.5)
+        
+        # Taken in the current viewed month
+        leaves_qs = EmployeeRequest.objects.filter(
+            employee_id=employee_id,
+            request_type__in=['full_day', 'half_day'],
+            status='approved',
+            start_date__year=current_year,
+            start_date__month=current_month
+        ).order_by('start_date')
+        
+        taken_this_month = 0.0
+        leave_dates = []
+        for req in leaves_qs:
+            val = 1.0 if req.request_type == 'full_day' else 0.5
+            taken_this_month += val
+            leave_dates.append({
+                'date': req.start_date.strftime('%Y-%m-%d'),
+                'type': req.request_type
+            })
+        
+        # Rollover from previous months in the same year
+        allowance_this_month = 1 if current_month >= start_month else 0
+        rollover = max(0, (total_allowed_upto_now - allowance_this_month) - (taken_leaves_ytd - taken_this_month))
+        
+        total_left_ytd = max(0, float(total_allowed_upto_now) - taken_leaves_ytd)
+        yearly_left = max(0, float(yearly_allowance) - yearly_taken)
 
         from django.db.models import Count, Case, When, Sum, Q
-
         stats_data = records.aggregate(
             total_working_days=Count(Case(When(status__in=['present', 'half_day', 'wfh', 'client'], then=1))),
             weekday_present_days=Count(Case(When(Q(status__in=['present', 'half_day', 'wfh', 'client']) & Q(date__week_day__in=[2, 3, 4, 5, 6, 7]), then=1))),
@@ -930,22 +1077,20 @@ def monthly_stats(request):
             leave_records=Count(Case(When(status='leave', then=1))),
         )
 
-        total_leave_days = max(stats_data['leave_records'], leave_requests)
+        half_day_requests = EmployeeRequest.objects.filter(
+            employee_id=employee_id,
+            request_type='half_day',
+            status='approved',
+            start_date__year=year,
+            start_date__month=month
+        ).count()
+
         total_half_days = max(stats_data['half_day_records'], half_day_requests)
 
-        # Count optional holidays for the year
+        # Count optional holidays for the year (Max 2)
         optional_holidays_count = UserHoliday.objects.filter(
             user_id=employee_id,
             holiday__year=year
-        ).count()
-
-        # Also count approved optional_holiday requests for the year that are not yet in UserHoliday
-        # (Though selecting via calendar is the primary way, this handles the generic request)
-        optional_requests = EmployeeRequest.objects.filter(
-            employee_id=employee_id,
-            request_type='optional_holiday',
-            status='approved',
-            start_date__year=year
         ).count()
 
         stats = {
@@ -956,8 +1101,17 @@ def monthly_stats(request):
             'wfh_days': stats_data['wfh_days'],
             'office_days': stats_data['office_days'],
             'client_days': stats_data['client_days'],
-            'leave_days': total_leave_days,
-            'optional_holidays': max(optional_holidays_count, optional_requests),
+            'leave_days': taken_this_month,
+            'leave_allowance': allowance_this_month,
+            'leave_rollover': rollover,
+            'leave_total_left': total_left_ytd,
+            'yearly_taken': yearly_taken,
+            'yearly_allowance': yearly_allowance,
+            'yearly_left': yearly_left,
+            'optional_holidays': optional_holidays_count,
+            'max_optional': 2,
+            'leave_dates': leave_dates,
+            'yearly_leave_dates': yearly_leave_dates,
         }
 
         return Response({
@@ -1215,6 +1369,8 @@ def employee_profile(request, employee_id=None):
             'avatar_url': profile.avatar_url,
             'theme_settings': profile.theme_settings,
             'documents': docs_data,
+            'total_cl': profile.total_cl,
+            'taken_cl': profile.taken_cl,
         }
 
         return Response({
@@ -1429,6 +1585,9 @@ def admin_user_detail(request, user_id):
                 'mentor_id': employee.mentors.all()[0].id if employee.mentors.exists() else None,
                 'Mentor_name': employee.mentors.all()[0].name if employee.mentors.exists() else None,
                 'is_active': employee.is_active,
+                'total_cl': employee.profile.total_cl if hasattr(employee, 'profile') else 12,
+                'taken_cl': employee.profile.taken_cl if hasattr(employee, 'profile') else 0,
+                'date_of_joining': str(employee.profile.date_of_joining) if hasattr(employee, 'profile') and employee.profile.date_of_joining else None,
             }
         })
 
@@ -1475,6 +1634,17 @@ def admin_user_detail(request, user_id):
 
         if 'is_active' in data:
             employee.is_active = bool(data['is_active'])
+        
+        # Update Profile fields
+        profile, created = EmployeeProfile.objects.get_or_create(employee=employee)
+        if 'total_cl' in data:
+            profile.total_cl = int(data['total_cl'])
+        if 'taken_cl' in data:
+            profile.taken_cl = int(data['taken_cl'])
+        if 'date_of_joining' in data:
+            profile.date_of_joining = data['date_of_joining'] if data['date_of_joining'] else None
+        profile.save()
+
         if data.get('primary_office'):
             employee.primary_office = data['primary_office']
         if data.get('password'):
@@ -2402,13 +2572,13 @@ def employee_performance_analysis(request, employee_id):
             target_date_str = target_date.strftime('%Y-%m-%d')
             current_org_forecast = org_forecast_map.get(target_date_str, 85.0)
             
-            base_pred = individual_engine.predict(employee, current_org_forecast, target_date=target_date)
+            base_prob = individual_engine.predict(employee, current_org_forecast, target_date=target_date)
             
             if target_date.weekday() >= 5:
                 pred_hours = 0.0
             else:
-                # Dynamic scaling based on user's actual capacity
-                pred_hours = (base_pred / 100) * limit_hours
+                # Real-time logic: Predict hours based on DOW historical pattern + attendance probability
+                pred_hours = individual_engine.predict_hours(employee, base_prob, target_date)
             
             graph_data.append({
                 'date': target_date_str,
@@ -2554,6 +2724,13 @@ def employee_performance_analysis(request, employee_id):
         day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
         peak_day_individual = day_names[best_dow]
 
+        # Advanced Predictions from Engine
+        from .attendance_prediction import AttendancePredictionEngine
+        engine = AttendancePredictionEngine(employee.id)
+        leave_probs = engine.predict_leaves()
+        tomorrow_leave_prob = leave_probs.get(tomorrow.weekday(), 0)
+        predicted_hrs = engine.predict_working_hours()
+
         return Response({
             'success': True,
             'employee_name': employee.name,
@@ -2593,7 +2770,9 @@ def employee_performance_analysis(request, employee_id):
                 'tomorrow_day': tomorrow.strftime('%A'),
                 'peak_day': peak_day_individual,
                 'habit_summary': f"Usually present on {tomorrow.strftime('%A')}s" if prediction_score > 70 else f"Irregular pattern on {tomorrow.strftime('%A')}s",
-                'graph_data': graph_data
+                'graph_data': graph_data,
+                'leave_probability': tomorrow_leave_prob,
+                'predicted_daily_hours': predicted_hrs
             }
         })
     except Employee.DoesNotExist:
@@ -3201,6 +3380,15 @@ def _serialize_tasks(tasks):
                 'at': h.changed_at.isoformat()
             })
 
+        # Get attachments
+        attachments = []
+        for a in task.attachments.all():
+            attachments.append({
+                'id': a.id,
+                'name': a.file.name.split('/')[-1],
+                'url': a.file.url
+            })
+
         data.append({
             'id': task.id,
             'title': task.title,
@@ -3223,22 +3411,35 @@ def _serialize_tasks(tasks):
             'updated_at': task.updated_at.isoformat(),
             'comments': comments,
             'steps': steps,
-            'history': history_log
+            'history': history_log,
+            'attachments': attachments
         })
     return data
 
-def _create_task_admin(data, creator):
+def _create_task_admin(data, creator, files=None):
     """Helper: Admin creates a task"""
     required_fields = ['title'] # assignees handled below
     for field in required_fields:
         if not data.get(field):
             raise ValueError(f'{field} is required')
 
+    import json
     assigned_input = data.get('assignees') or data.get('assigned_to')
+    if isinstance(assigned_input, str):
+        try:
+            assigned_input = json.loads(assigned_input)
+        except json.JSONDecodeError:
+            assigned_input = [assigned_input]
     assigned_ids = assigned_input if isinstance(assigned_input, list) else [assigned_input] if assigned_input else []
     
     mentor_id = data.get('mentor_id')
     overseer_ids = data.get('overseer_ids') or []
+    if isinstance(overseer_ids, str):
+        try:
+            overseer_ids = json.loads(overseer_ids)
+        except json.JSONDecodeError:
+            overseer_ids = [overseer_ids]
+            
     if not overseer_ids and mentor_id and mentor_id != 'none':
         overseer_ids = [mentor_id]
 
@@ -3254,6 +3455,14 @@ def _create_task_admin(data, creator):
         except:
             pass
 
+    start_date = data.get('start_date')
+    if not start_date:
+        start_date = None
+
+    due_date = data.get('due_date')
+    if not due_date:
+        due_date = None
+
     task = Task.objects.create(
         title=data['title'],
         description=data.get('description', ''),
@@ -3261,8 +3470,8 @@ def _create_task_admin(data, creator):
         priority=data.get('priority', 'medium'),
         mentor=Mentor_employee,
         created_by=creator,
-        start_date=data.get('start_date'),
-        due_date=data.get('due_date')
+        start_date=start_date,
+        due_date=due_date
     )
     
     task.assignees.set(Employee.objects.filter(id__in=assigned_ids))
@@ -3274,6 +3483,11 @@ def _create_task_admin(data, creator):
         request_type='task_request',
         status='pending'
     ).update(status='approved', admin_response=f'Task "{task.title}" assigned.')
+
+    if files:
+        attachments = files.getlist('attachments')
+        for f in attachments:
+            TaskAttachment.objects.create(task=task, file=f)
 
     # Notification Logic (Consolidated)
     task_title = str(task.title or "Untitled Task")
@@ -3299,7 +3513,7 @@ def _create_task_admin(data, creator):
 
 @api_view(['GET', 'POST'])
 @require_gated_token_api
-@parser_classes([JSONParser])
+@parser_classes([JSONParser, MultiPartParser, FormParser])
 def tasks_api(request):
     """Get all tasks or create a new task (Separated Admin/Employee Logic)"""
     if request.method == 'GET':
@@ -3370,11 +3584,11 @@ def tasks_api(request):
 
             # Dispatch creation logic
             if creator.role == 'admin':
-                task = _create_task_admin(data, creator)
+                task = _create_task_admin(data, creator, request.FILES)
             else:
                 # Re-use admin logic for now as employee creation wasn't strictly defined different yet, 
                 # but valid separation point.
-                task = _create_task_admin(data, creator) 
+                task = _create_task_admin(data, creator, request.FILES) 
 
             return Response({
                 'success': True,
@@ -3445,9 +3659,31 @@ def _update_task_admin(task, data, user=None):
                 )
         task.priority = new_priority
     if 'title' in data:
-        task.title = data['title']
+        old_title = str(task.title) if task.title else ''
+        new_title = str(data['title'])
+        if old_title != new_title:
+            from .models import TaskHistory
+            TaskHistory.objects.create(
+                task=task,
+                field_changed='title',
+                old_value=old_title,
+                new_value=new_title,
+                changed_by=user
+            )
+        task.title = new_title
     if 'description' in data:
-        task.description = data['description']
+        old_desc = str(task.description) if task.description else ''
+        new_desc = str(data['description'])
+        if old_desc != new_desc:
+            from .models import TaskHistory
+            TaskHistory.objects.create(
+                task=task,
+                field_changed='description',
+                old_value=old_desc,
+                new_value=new_desc,
+                changed_by=user
+            )
+        task.description = new_desc
     if 'start_date' in data:
         old_start = str(task.start_date) if task.start_date else 'None'
         new_start = str(data['start_date'])
@@ -3497,13 +3733,24 @@ def _update_task_admin(task, data, user=None):
                 current_step_ids.append(new_step.id)
         # Remove steps not in incoming data? For now keep them simple unless requested.
         
+    import json
     if 'assignees' in data or 'assigned_to' in data:
         assigned_input = data.get('assignees') or data.get('assigned_to')
+        if isinstance(assigned_input, str):
+            try:
+                assigned_input = json.loads(assigned_input)
+            except json.JSONDecodeError:
+                assigned_input = [assigned_input]
         assigned_ids = assigned_input if isinstance(assigned_input, list) else [assigned_input] if assigned_input else []
         task.assignees.set(Employee.objects.filter(id__in=assigned_ids))
 
     if 'mentor_id' in data or 'overseer_ids' in data:
         overseer_ids = data.get('overseer_ids')
+        if isinstance(overseer_ids, str):
+            try:
+                overseer_ids = json.loads(overseer_ids)
+            except json.JSONDecodeError:
+                overseer_ids = [overseer_ids]
         mentor_id = data.get('mentor_id')
         
         if overseer_ids is not None:
@@ -3539,6 +3786,34 @@ def _update_task_employee(task, data, user=None):
         # Exception: If user is trying to reopen? "it can't be changed" implies NO.
         # return False - REMOVED to allow raising exception
         raise ValueError(f"Cannot modify a completed task (ReqID: {user.id if user else '?'})")
+
+    if 'title' in data:
+        old_title = str(task.title) if task.title else ''
+        new_title = str(data['title'])
+        if old_title != new_title:
+            from .models import TaskHistory
+            TaskHistory.objects.create(
+                task=task,
+                field_changed='title',
+                old_value=old_title,
+                new_value=new_title,
+                changed_by=user
+            )
+        task.title = new_title
+
+    if 'description' in data:
+        old_desc = str(task.description) if task.description else ''
+        new_desc = str(data['description'])
+        if old_desc != new_desc:
+            from .models import TaskHistory
+            TaskHistory.objects.create(
+                task=task,
+                field_changed='description',
+                old_value=old_desc,
+                new_value=new_desc,
+                changed_by=user
+            )
+        task.description = new_desc
 
     if 'due_date' in data:
         old_due = str(task.due_date) if task.due_date else 'None'
@@ -3731,9 +4006,9 @@ def meeting_detail_api(request, meeting_id):
         return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(['GET', 'POST'])
+@api_view(['GET', 'POST', 'PATCH'])
 @require_gated_token_api
-@parser_classes([JSONParser])
+@parser_classes([JSONParser, MultiPartParser, FormParser])
 def task_detail_api(request, task_id):
     """Update, delete or fetch a task (Separated Admin/Employee Logic)"""
     try:
@@ -3762,7 +4037,7 @@ def task_detail_api(request, task_id):
         requesting_user = Employee.objects.get(id=requesting_user_id)
 
         # Check permissions and dispatch
-        if request.method == 'POST':
+        if request.method in ['POST', 'PATCH']:
             # Check for DELETE method simulation
             if data.get('_method') == 'DELETE':
                 is_task_mentor = task.mentor and task.mentor.id == requesting_user.id
@@ -3808,24 +4083,137 @@ def task_detail_api(request, task_id):
 @require_gated_token_api
 @parser_classes([JSONParser])
 def bulk_update_tasks(request):
-    """Update multiple tasks at once (primarily for priority ranking)"""
+    """Update multiple tasks at once (primarily for priority ranking or step toggling)"""
     data = request.data
     updates = data.get('updates', [])
     user_id = data.get('user_id')
+    task_ids = data.get('task_ids', [])
 
     if not user_id:
         return Response({'success': False, 'message': 'User ID required'}, status=status.HTTP_403_FORBIDDEN)
 
     try:
         user = Employee.objects.get(id=user_id)
+        
+        # If it's a dictionary, it's a special V2 single-task update (steps, etc.)
+        if isinstance(updates, dict):
+            if not task_ids:
+                return Response({'success': False, 'message': 'task_ids required for this update type'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            tasks = Task.objects.filter(id__in=task_ids)
+            if not tasks.exists():
+                return Response({'success': False, 'message': 'Tasks not found'}, status=status.HTTP_404_NOT_FOUND)
+
+            for task in tasks:
+                try:
+                    # Permission check: Admin, Mentor, or Assignee
+                    is_assignee = task.assignees.filter(id=user.id).exists()
+                    is_admin_mentor = str(user.role).lower() in ['admin', 'mentor'] or user.subordinates.exists()
+                    
+                    if not (is_assignee or is_admin_mentor):
+                        continue  # Skip tasks user has no permission for
+
+                    # Handle Step Toggles
+                    if 'steps_toggle' in updates:
+                        for step_data in updates['steps_toggle']:
+                            step = TaskStep.objects.filter(id=step_data['id'], task=task).first()
+                            if step:
+                                old_val = "Completed" if step.is_completed else "Pending"
+                                new_val = "Completed" if step_data['is_completed'] else "Pending"
+                                if step.is_completed != step_data['is_completed']:
+                                    step.is_completed = step_data['is_completed']
+                                    step.save()
+                                    TaskHistory.objects.create(
+                                        task=task,
+                                        field_changed=f"Step: {step.text[:30]}",
+                                        old_value=old_val,
+                                        new_value=new_val,
+                                        changed_by=user
+                                    )
+
+                    # Handle Add Step
+                    if 'add_step' in updates:
+                        new_step = TaskStep.objects.create(task=task, text=updates['add_step'])
+                        TaskHistory.objects.create(
+                            task=task,
+                            field_changed="Added Step",
+                            old_value="",
+                            new_value=new_step.text,
+                            changed_by=user
+                        )
+
+                    # Handle Status Update
+                    if 'status' in updates:
+                        new_status = updates['status']
+                        old_status = task.status
+                        if old_status != new_status:
+                            task.status = new_status
+                            # Set timestamps on transition
+                            if new_status == 'in_progress' and not task.started_at:
+                                task.started_at = timezone.now()
+                            elif new_status == 'completed' and not task.completed_at:
+                                task.completed_at = timezone.now()
+                            task.save()
+                            TaskHistory.objects.create(
+                                task=task,
+                                field_changed="status",
+                                old_value=old_status,
+                                new_value=new_status,
+                                changed_by=user
+                            )
+
+                    # Auto Status Transitions from step changes (only if status not manually set)
+                    elif 'steps_toggle' in updates or 'add_step' in updates:
+                        all_steps = list(task.steps.all())
+                        if all_steps:
+                            total_steps = len(all_steps)
+                            completed_steps = sum(1 for s in all_steps if s.is_completed)
+                            old_status = task.status
+                            if completed_steps == total_steps:
+                                task.status = 'completed'
+                                if not task.completed_at:
+                                    task.completed_at = timezone.now()
+                            elif completed_steps > 0:
+                                task.status = 'in_progress'
+                                if not task.started_at:
+                                    task.started_at = timezone.now()
+                            if task.status != old_status:
+                                task.save()
+                                TaskHistory.objects.create(
+                                    task=task,
+                                    field_changed="status",
+                                    old_value=old_status,
+                                    new_value=task.status,
+                                    changed_by=user
+                                )
+
+                except Exception as task_err:
+                    return Response({'success': False, 'message': f'Error updating task {task.id}: {str(task_err)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+            return Response({'success': True, 'message': 'Task(s) updated successfully'})
+
+        # Legacy list-based updates (Priority ranking)
+        # Only allow Admin/Mentor for this
         if user.role != 'admin' and user.role != 'Mentor':
-            return Response({'success': False, 'message': 'Admin or Mentor access required'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'success': False, 'message': 'Admin or Mentor access required for priority updates'}, status=status.HTTP_403_FORBIDDEN)
 
         for item in updates:
             task_id = item.get('id')
             priority = item.get('priority')
             if task_id and priority:
-                Task.objects.filter(id=task_id).update(priority=priority)
+                task = Task.objects.filter(id=task_id).first()
+                if task and task.priority != priority:
+                    old_p = task.priority
+                    task.priority = priority
+                    task.save()
+                    TaskHistory.objects.create(
+                        task=task,
+                        field_changed="priority",
+                        old_value=old_p,
+                        new_value=priority,
+                        changed_by=user
+                    )
         
         return Response({'success': True, 'message': f'Updated {len(updates)} tasks'})
     except Exception as e:
@@ -3839,7 +4227,7 @@ def task_comment_api(request):
     """Add a comment to a task"""
     data = request.data
     task_id = data.get('task_id')
-    author_id = data.get('author_id')
+    author_id = data.get('user_id') or data.get('author_id')
     content = data.get('content')
 
     if not all([task_id, author_id, content]):
@@ -3915,11 +4303,31 @@ def task_comment_api(request):
     except Exception as e:
         return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+@api_view(['POST'])
+@require_gated_token_api
+def task_attach_api(request):
+    """Attach files to an existing task"""
+    task_id = request.data.get('task_id')
+    if not task_id:
+        return Response({'success': False, 'message': 'task_id required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        task = Task.objects.get(id=task_id)
+        files = request.FILES.getlist('attachments')
+        for f in files:
+            TaskAttachment.objects.create(task=task, file=f)
+        return Response({'success': True, 'message': f'Attached {len(files)} files'})
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 
 
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def wfh_request_reject(request):
     """Reject WFH request"""
@@ -3968,6 +4376,7 @@ def wfh_request_reject(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
+@require_gated_token_api
 def employees_simple_list(request):
     """Get simple list of employees for dropdowns"""
     try:
@@ -3993,6 +4402,7 @@ def employees_simple_list(request):
 
 
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def wfh_request_approve(request):
     """Approve or reject a Request (WFH or Leave)"""
@@ -4302,6 +4712,18 @@ def leave_request_approve(request):
                     )
                     current_date += timedelta(days=1)
 
+                # Update Leave Balance for CL
+                if req_type in ['full_day', 'half_day']:
+                    try:
+                        profile = req.employee.profile
+                        increment = 1.0 if req_type == 'full_day' else 0.5
+                        # Calculate total days in request
+                        num_days = (req.end_date - req.start_date).days + 1
+                        profile.taken_cl += (increment * num_days)
+                        profile.save()
+                    except Exception as e:
+                        print(f"Error updating leave balance: {e}")
+
         return Response({'success': True, 'message': f'Request {status_val}'})
     except Exception as e:
         return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -4470,6 +4892,14 @@ def company_predictive_report(request):
             company_leave   += leave
             company_half    += half_day
 
+            # Advanced Predictions from Engine
+            from .attendance_prediction import AttendancePredictionEngine
+            engine = AttendancePredictionEngine(emp.id)
+            leave_probs = engine.predict_leaves()
+            # Average leave probability for this employee
+            avg_leave_prob = round(sum(leave_probs.values()) / 7, 2)
+            predicted_hrs_val = engine.predict_working_hours()
+
             per_employee.append({
                 'id':          emp.id,
                 'name':        emp.name,
@@ -4488,6 +4918,8 @@ def company_predictive_report(request):
                 'trend':       trend,
                 'likelihood':  likelihood,
                 'day_series':  day_series,
+                'leave_probability': avg_leave_prob,
+                'predicted_hours': predicted_hrs_val
             })
 
         total_emp  = len(per_employee)
@@ -4885,6 +5317,7 @@ def intelligence_hub_train(request):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 def intelligence_hub_training_history(request):
     """Fetch recent model training history"""
     try:
@@ -4910,6 +5343,7 @@ def intelligence_hub_training_history(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
+@require_gated_token_api
 @parser_classes([JSONParser])
 def clear_training_history(request):
     """Clear all model training history"""
@@ -5008,24 +5442,55 @@ def temporary_tags_api(request):
 @api_view(['POST'])
 @parser_classes([JSONParser])
 def verify_token(request):
-    """Verify attendance token from portal (supports both HMAC and itsdangerous)"""
+    """Verify attendance token from portal and return user data if valid"""
     token = request.data.get('token')
     if not token:
         return Response({'success': False, 'message': 'Token is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # 1. Try HMAC verification (The legacy way)
+    # 1. Try Gated Access verification (itsdangerous) - Priority for auto-login
+    from .security import validate_gated_token
+    success, result = validate_gated_token(token)
+    if success:
+        user_id = result.get('user_id')
+        try:
+            employee = Employee.objects.get(id=user_id, is_active=True)
+            profile = EmployeeProfile.objects.filter(employee=employee).first()
+            assignment = employee.get_current_assignment()
+            user_data = {
+                'id': employee.id,
+                'username': employee.username,
+                'name': employee.name,
+                'email': employee.email,
+                'phone': employee.phone,
+                'department': assignment['department'],
+                'primary_office': employee.primary_office,
+                'role': assignment['role'],
+                'is_temporary': assignment['is_temporary'],
+                'has_subordinates': employee.subordinates.exists(),
+                'gender': profile.gender if profile else None,
+                'date_of_birth': str(profile.date_of_birth) if profile and profile.date_of_birth else None,
+                'avatar_emoji': profile.avatar_emoji if profile else "👤",
+                'avatar_url': profile.avatar_url if profile else None,
+                'theme_settings': profile.theme_settings if profile else {},
+                'mentors': [{'id': m.id, 'name': m.name} for m in employee.mentors.all()],
+                'total_cl': profile.total_cl if profile else 12,
+                'taken_cl': profile.taken_cl if profile else 0,
+            }
+            return Response({
+                'success': True, 
+                'message': 'Token verified (Gated)',
+                'user': user_data
+            })
+        except Employee.DoesNotExist:
+            return Response({'success': False, 'message': 'User associated with token not found'}, status=404)
+
+    # 2. Try HMAC verification (The legacy way)
     secret = getattr(settings, "ATTENDANCE_SECRET_KEY", "hanuai-attendance-secret-shared-key").encode()
     message = timezone.localtime(timezone.now()).strftime("%Y-%m-%d").encode()
     expected_hmac = hmac.new(secret, message, hashlib.sha256).hexdigest()
     
     if hmac.compare_digest(token, expected_hmac):
         return Response({'success': True, 'message': 'Token verified (HMAC)'})
-
-    # 2. Try Gated Access verification (itsdangerous)
-    from .security import validate_gated_token
-    success, result = validate_gated_token(token)
-    if success:
-        return Response({'success': True, 'message': 'Token verified (Gated)'})
     
     return Response({'success': False, 'message': f'Invalid token: {result}'}, status=status.HTTP_401_UNAUTHORIZED)
 
@@ -5053,9 +5518,14 @@ def error_500_view(request):
 @require_valid_token
 def spa_view(request):
     """Protected view to serve the SPA index.html."""
+    host = request.get_host()
+    # Check if we are running in development (localhost/127.0.0.1)
+    is_development = '127.0.0.1' in host or 'localhost' in host
+    
     context = {
         'maps_api_key': settings.MAPS_API_KEY,
-        'gated_token': request.GET.get('token')
+        'gated_token': request.GET.get('token'),
+        'is_development': is_development
     }
     return render(request, 'index.html', context)
 
@@ -5079,6 +5549,7 @@ def gated_dashboard(request):
 
 
 @api_view(['GET'])
+@require_gated_token_api
 def employee_list_summary(request):
     """
     Returns a simplified list of active employees including:
@@ -5266,6 +5737,7 @@ def mentor_status(request):
             mentor_data.append({
                 'id': mentor.id,
                 'name': mentor.name,
+                'role': mentor.role,
                 'status': status,
                 'avatar': avatar,
                 'bg': bg
@@ -5610,6 +6082,7 @@ def _normalize_rows(raw_rows):
             name = None
             date_val = None
             is_optional = context_is_optional or any(w in row_text for w in ['optional', 'restricted', 'rh'])
+            is_working = any(w in row_text for w in ['working day', 'non-holiday', 'work day'])
             
             # Step 1: Specific Column Mapping
             col_map = {str(h).lower().strip(): i for i, h in enumerate(header)}
@@ -5688,6 +6161,7 @@ def _normalize_rows(raw_rows):
                 'date': str(date_val),
                 'day': day_str,
                 'is_optional': is_optional,
+                'is_working_day': is_working,
                 'year': date_val.year,
             })
 
@@ -5805,6 +6279,7 @@ def holiday_save(request):
                     'name': h.get('name', 'Holiday')[:200],
                     'day': h.get('day', ''),
                     'is_optional': bool(h.get('is_optional', False)),
+                    'is_working_day': bool(h.get('is_working_day', False)),
                     'year': date_val.year,
                     'description': h.get('description', ''),
                 }
@@ -5884,6 +6359,10 @@ def update_holiday(request):
         if is_optional is not None:
             holiday.is_optional = bool(is_optional)
         
+        is_working_day = request.data.get('is_working_day')
+        if is_working_day is not None:
+            holiday.is_working_day = bool(is_working_day)
+        
         holiday.description = description
         holiday.save()
 
@@ -5956,12 +6435,85 @@ def get_holidays(request):
             'date': str(h.date),
             'day': h.day,
             'is_optional': h.is_optional,
+            'is_working_day': h.is_working_day,
             'year': h.year,
             'description': h.description or '',
             'user_selected': h.id in selected_ids,
         })
 
     return Response({'success': True, 'holidays': data, 'year': year})
+
+
+@api_view(['POST'])
+@require_gated_token_api
+def manage_date(request):
+    """
+    Directly manage a date's holiday/working status.
+    Admin only.
+    """
+    user_id = request.data.get('user_id')
+    employee = Employee.objects.filter(id=user_id, role='admin').first()
+    if not employee:
+        return Response({'success': False, 'message': 'Admin access required.'}, status=403)
+
+    date_str = request.data.get('date')
+    date_type = request.data.get('type') # 'working', 'holiday', 'optional'
+    reason = request.data.get('reason', '')
+
+    if not date_str:
+        return Response({'success': False, 'message': 'Date is required.'}, status=400)
+
+    try:
+        from datetime import datetime
+        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        
+        # Determine status flags
+        is_optional = (date_type == 'optional')
+        is_working = (date_type == 'working')
+        
+        existing_holiday = Holiday.objects.filter(date=target_date).first()
+        
+        msg = ""
+        if date_type == 'working':
+            if existing_holiday:
+                existing_holiday.is_working_day = True
+                existing_holiday.name = reason or "Working Day"
+                existing_holiday.save()
+                msg = f"marked as Working Day: {reason}"
+            else:
+                msg = "set as Regular Working Day"
+        else:
+            # Set as Holiday or Optional
+            import calendar as cal_mod
+            day_name = cal_mod.day_name[target_date.weekday()]
+            
+            Holiday.objects.update_or_create(
+                date=target_date,
+                defaults={
+                    'name': reason or ('Optional Holiday' if is_optional else 'Public Holiday'),
+                    'is_optional': is_optional,
+                    'is_working_day': False,
+                    'day': day_name,
+                    'year': target_date.year
+                }
+            )
+            type_label = "Optional Holiday" if is_optional else "Mandatory Holiday"
+            msg = f"set as {type_label}: {reason}"
+
+        # Notify EVERYONE
+        all_employees = Employee.objects.filter(is_active=True)
+        notifications = []
+        for emp in all_employees:
+            notifications.append(Notification(
+                user=emp,
+                type='holiday_update',
+                message=f"Admin updated calendar for {date_str}: Now {msg}."
+            ))
+        Notification.objects.bulk_create(notifications)
+
+        return Response({'success': True, 'message': f"Date {date_str} {msg}."})
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=500)
 
 
 @api_view(['POST'])

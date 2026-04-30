@@ -28,6 +28,9 @@ let serverTimeOffset = 0; // Milliseconds between server and local time
 let isExportAllCancelled = false; // Flag for cancellation
 let dashboardLocationWatchId = null; // Background watcher for dashboard
 let currentSummaryDate = null; // Tracks date for Daily Overview modal
+let currentLeaveDates = []; // Store leave dates for the currently viewed month in Status Overview
+let dashboardLeaveDates = []; // Store leave dates for the current month on Dashboard
+let yearlyLeaveDates = []; // Store all leave dates for the year
 
 /**
  * Returns a new Date object reflecting the current Indian Standard Time (IST),
@@ -111,14 +114,86 @@ document.addEventListener('DOMContentLoaded', async function () {
         } catch (e) {
             sessionStorage.removeItem('attendanceUser');
         }
+    } else if (window.GATED_TOKEN && !window.IS_DEVELOPMENT) {
+        // PRODUCTION AUTO-LOGIN: If a token exists and we are NOT on local development,
+        // hide the login screen immediately and attempt auto-login.
+        console.log('Production instance detected with token. Attempting auto-login...');
+        const loginScreen = document.getElementById('loginScreen');
+        if (loginScreen) loginScreen.classList.remove('active');
+        showLoading('Authenticating with HanuAI Portal...');
+
+        try {
+            const verifyRes = await fetch(`${apiBaseUrl}/verify-token`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: window.GATED_TOKEN })
+            });
+            const result = await verifyRes.json();
+
+            if (result.success && result.user) {
+                console.log('Auto-login successful!');
+                currentUser = result.user;
+                sessionStorage.setItem('attendanceUser', JSON.stringify(currentUser));
+                sessionStorage.setItem('attendanceLoginTime', Date.now().toString());
+                
+                // Initialize session
+                if (currentUser.theme_settings) applyUserTheme(currentUser.theme_settings);
+                showScreen('dashboardScreen');
+                await syncServerTime();
+                const istNow = getCurrentISTDate();
+                currentCalendarMonth = istNow.getMonth();
+                currentCalendarYear = istNow.getFullYear();
+                loadDashboardData();
+                updateDashboardVisibility();
+                startDashboardLocationWatch();
+                checkAndUpdateLocationStatus(true);
+                setupPushNotifications(currentUser.id);
+                hideLoading();
+            } else {
+                console.warn('Auto-login failed:', result.message);
+                if (loginScreen) loginScreen.classList.add('active');
+                hideLoading();
+                showNotification('Session expired. Please login through HanuAI portal again.', 'warning');
+            }
+        } catch (err) {
+            console.error('Auto-login error:', err);
+            if (loginScreen) loginScreen.classList.add('active');
+            hideLoading();
+        }
     } else {
-        // Since the server-side @require_valid_token decorator handles the initial request,
-        // we only reach this point if a valid token was provided.
-        // The user is not yet logged in, so they stay on the login screen.
+        // NORMAL LOGIN: In development or if no token provided.
+        console.log('Normal login mode active.');
     }
 
     // Load face detection models
     loadFaceDetectionModels();
+
+    // Account Status Toggle Listener
+    const activeToggle = document.getElementById('newUserIsActive');
+    const activeLabel = document.getElementById('newUserIsActiveLabel');
+    if (activeToggle && activeLabel) {
+        activeToggle.addEventListener('change', function() {
+            activeLabel.textContent = this.checked ? 'Active' : 'Inactive';
+        });
+    }
+
+    // Joining Date Listener for Auto-CL calculation
+    const joiningDateInput = document.getElementById('newUserJoiningDate');
+    const totalClInput = document.getElementById('newUserTotalCL');
+    if (joiningDateInput && totalClInput) {
+        joiningDateInput.addEventListener('change', function() {
+            if (!this.value) return;
+            const joiningDate = new Date(this.value);
+            const today = getCurrentISTDate();
+            if (joiningDate.getFullYear() === today.getFullYear()) {
+                const monthsLeft = 12 - joiningDate.getMonth(); // getMonth() is 0-11
+                totalClInput.value = monthsLeft;
+                showNotification(`Auto-filled CL for ${monthsLeft} months remaining in ${today.getFullYear()}`, 'info');
+            } else {
+                totalClInput.value = 12;
+            }
+        });
+    }
 
     // Background session timeout check (every minute)
     setInterval(() => {
@@ -1068,9 +1143,8 @@ function logout() {
     sessionStorage.removeItem('attendanceTokenVerified');
     sessionStorage.removeItem('attendanceLoginTime');
 
-    // Reload the current page. This preserves the gated token in the URL
-    // if it's present, ensuring the user stays on the gated login screen.
-    window.location.reload();
+    // Redirect to root without query params to prevent auto-login loop
+    window.location.href = window.location.origin + window.location.pathname;
 }
 
 // Dashboard Functions
@@ -1290,6 +1364,7 @@ async function loadDashboardData() {
         document.getElementById('adminStatsGrid')?.classList.remove('hidden');
         document.getElementById('checkInCard')?.classList.add('hidden');
         document.getElementById('checkOutCard')?.classList.add('hidden');
+        document.getElementById('recordsCard')?.classList.add('hidden');
         document.getElementById('adminCard')?.classList.remove('hidden');
         document.getElementById('assignMentorDashboardCard')?.classList.remove('hidden');
         document.getElementById('exportCard')?.classList.remove('hidden');
@@ -1355,6 +1430,7 @@ async function loadDashboardData() {
 
         // Load data
         const promises = [
+            (async () => { try { await loadEmployeeProfile(); } catch (e) { console.error(e); } })(),
             (async () => { try { await loadTodayAttendance(); } catch (e) { console.error(e); } })(),
             (async () => { try { await loadMonthlyStats(); } catch (e) { console.error(e); } })(),
             (async () => { try { await loadWFHEligibility(); } catch (e) { console.error(e); } })(),
@@ -1371,6 +1447,11 @@ async function loadDashboardData() {
 
         await Promise.all(promises);
         await checkProfileCompleteness();
+    }
+
+    // Auto-load Task Manager V2 data in background
+    if (window.TaskManagerV2) {
+        TaskManagerV2.refresh();
     }
 
     try {
@@ -1822,6 +1903,11 @@ async function openBirthdayCalendar() {
         const res = await apiCall(`upcoming-birthdays?month=${monthToSend}&year=${yearToSend}`, 'GET');
         if (res && res.success) {
             const birthdays = res.birthdays || [];
+            
+            // Also fetch holidays for the current view
+            const holidaysRes = await apiCall(`holidays?year=${yearToSend}`, 'GET');
+            window.viewingHolidays = (holidaysRes && holidaysRes.success) ? holidaysRes.holidays : [];
+            
             const total = birthdays.length;
             const currentDate = getCurrentISTDate();
             const upcoming = birthdays.filter(b => {
@@ -2413,9 +2499,15 @@ function createBirthdayCalendarHTML(calendarInfo, year, month) {
 
         const isSunday = dateObj.getDay() === 0;
 
+        // Check for holiday in this day
+        const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const holiday = window.viewingHolidays ? window.viewingHolidays.find(h => h.date === dateKey) : null;
+
         const classes = [
             'fc-day',
             dayData.hasBirthday ? 'has-birthday' : '',
+            holiday ? (holiday.is_optional ? 'has-optional-holiday' : 'has-holiday') : '',
+            holiday && holiday.is_working_day ? 'is-working-day-holiday' : '',
             isToday ? 'today' : '',
             isSunday ? 'sunday' : ''
         ].filter(Boolean).join(' ');
@@ -2425,14 +2517,21 @@ function createBirthdayCalendarHTML(calendarInfo, year, month) {
         const indicator = count > 1 ? `<span style="font-size:0.65rem; position:absolute; bottom:8px; background:#ec4899; color:white; width:16px; height:16px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 4px rgba(236, 72, 153, 0.3);">${count}</span>` : '';
 
         // Add hover events only if there are birthdays
-        const hoverAttrs = dayData.hasBirthday ?
+        let hoverAttrs = dayData.hasBirthday ?
             `onmouseenter="showBirthdayTooltip(event, ${day})"` : '';
+        
+        if (holiday) {
+             hoverAttrs += ` title="Holiday: ${holiday.name}${holiday.is_working_day ? ' (Working)' : ''}"`;
+        }
 
-        // Note: keeping onclick to show details in panel if they click, but tooltip handles hover
+        const clickAttr = (currentUser && currentUser.role === 'admin') ? 
+            `onclick="adminManageDate('${dateKey}')"` : `onclick="selectDay(${day})"`;
+
         html += `
-            <div class="${classes}" ${hoverAttrs} onmouseleave="hideBirthdayTooltip()">
+            <div class="${classes}" ${hoverAttrs} ${clickAttr} onmouseleave="hideBirthdayTooltip()">
                 <span class="day-number">${day}</span>
                 ${indicator}
+                ${holiday ? `<div class="holiday-dot ${holiday.is_optional ? 'optional' : ''} ${holiday.is_working_day ? 'working' : ''}"></div>` : ''}
             </div>
         `;
     }
@@ -2467,6 +2566,8 @@ function changeBirthdayMonth(direction) {
 
 function showBirthdayDetails(day) {
     const detailsPanel = document.getElementById('birthdayDetailsContent');
+    if (!detailsPanel) return;
+    
     const calendarInfo = createBirthdayCalendarData(window.birthdayData, window.currentBirthdayYear, window.currentBirthdayMonth);
     const dayData = calendarInfo.calendarData[day];
 
@@ -2497,6 +2598,75 @@ function showBirthdayDetails(day) {
             ${birthdayList}
         </div>
     `;
+}
+
+function selectDay(day) {
+    showBirthdayDetails(day);
+}
+
+/* --- Admin Date Management Logic --- */
+let activeManageDate = null;
+
+function adminManageDate(dateStr) {
+    if (!currentUser || currentUser.role !== 'admin') return;
+    
+    activeManageDate = dateStr;
+    const display = document.getElementById('manageDateDisplay');
+    if (display) display.textContent = dateStr;
+    
+    // Reset form
+    const reasonInput = document.getElementById('manageDateReason');
+    if (reasonInput) reasonInput.value = '';
+    
+    // Find existing holiday
+    const holiday = window.viewingHolidays ? window.viewingHolidays.find(h => h.date === dateStr) : null;
+    const radios = document.getElementsByName('dateType');
+    
+    if (holiday) {
+        if (holiday.is_working_day) {
+            radios.forEach(r => r.checked = (r.value === 'working'));
+        } else if (holiday.is_optional) {
+            radios.forEach(r => r.checked = (r.value === 'optional'));
+        } else {
+            radios.forEach(r => r.checked = (r.value === 'holiday'));
+        }
+        if (reasonInput) reasonInput.value = holiday.name;
+    } else {
+        radios.forEach(r => r.checked = (r.value === 'working'));
+    }
+    
+    openModal('adminManageDateModal');
+}
+
+async function saveAdminDateManagement() {
+    if (!activeManageDate) return;
+    
+    const type = document.querySelector('input[name="dateType"]:checked').value;
+    const reason = document.getElementById('manageDateReason').value.trim();
+    
+    showLoading("Updating date status...");
+    try {
+        const res = await apiCall('manage-date', 'POST', {
+            date: activeManageDate,
+            type: type,
+            reason: reason,
+            user_id: currentUser.id
+        });
+        
+        if (res && res.success) {
+            showNotification(res.message || "Date updated successfully", "success");
+            closeModal('adminManageDateModal');
+            // Refresh the calendar
+            openBirthdayCalendar(); 
+        } else {
+            showNotification(res.message || "Update failed", "error");
+        }
+    } catch (e) {
+        console.error("Manage date error:", e);
+        showNotification("Network error", "error");
+    } finally {
+        hideLoading();
+    }
 }
 
 async function openRequestsModal() {
@@ -2768,35 +2938,11 @@ function applyRequestFilters() {
 }
 
 async function openTaskMentor(autoAssigneeId = null) {
-    try {
-        await refreshTasks();
-        await populateTaskExportEmployeeFilter();
-
-        // If autoAssigneeId is provided (from a notification), trigger addNewTask with it
-        if (autoAssigneeId) {
-            setTimeout(() => {
-                addNewTask(autoAssigneeId);
-            }, 500);
-        }
-
-        // Hide Add Task button for non-admins
-        const addTaskBtn = document.querySelector('#taskMentorModal .modal-actions .btn-primary');
-        if (addTaskBtn) {
-            if (typeof currentUser !== 'undefined' && currentUser && currentUser.role !== 'admin' && currentUser.role !== 'Mentor' && !currentUser.has_subordinates) {
-                addTaskBtn.style.display = 'none';
-            } else {
-                addTaskBtn.style.display = 'inline-block';
-            }
-        }
-
-        const priorityBtn = document.getElementById('btnEnterPriorityMode');
-        if (priorityBtn) {
-            priorityBtn.style.display = 'inline-block';
-        }
-
-        openModal('taskMentorModal');
-    } finally {
-        hideLoading();
+    TaskManagerV2.open();
+    if (autoAssigneeId) {
+        setTimeout(() => {
+            TaskManagerV2.openNewTaskModal(autoAssigneeId);
+        }, 800);
     }
 }
 
@@ -2843,31 +2989,54 @@ async function refreshTasks() {
 }
 
 async function exportTasksToExcel() {
-    // Open the filter modal instead of exporting immediately
-    await populateTaskExportModalEmployees();
-    openModal('taskExportModal');
-}
-
-async function populateTaskExportModalEmployees() {
-    const select = document.getElementById('exportTaskEmployeeSelect');
-    if (!select) return;
-
-    // Keep the "All Employees" option
-    select.innerHTML = '<option value="all">All Employees</option>';
-
-    try {
-        const res = await apiCall('admin-profiles', 'GET', { user_id: currentUser.id });
-        const profiles = (res && res.success && Array.isArray(res.profiles)) ? res.profiles : [];
-
-        profiles.forEach(p => {
-            const option = document.createElement('option');
-            option.value = p.id;
-            option.textContent = p.name || p.username;
-            select.appendChild(option);
-        });
-    } catch (e) {
-        console.error('Failed to populate employee export filter', e);
+    const employees = window.allEmployeesSimple || [];
+    if (!employees.length) {
+        try {
+            const res = await apiCall('employees-simple', 'GET');
+            if (res && res.success) window.allEmployeesSimple = res.employees;
+        } catch(e) {}
     }
+
+    const content = `
+        <div class="names-list-container" style="padding: 24px;">
+            <button class="modal-close-btn" onclick="safeRemoveModal(this.closest('.modal'))" style="position: absolute; right: 20px; top: 20px; width: 36px; height: 36px; background: #f1f5f9; border: none; border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #64748b; transition: all 0.2s; z-index: 100;">✕</button>
+            <div style="margin-bottom: 20px; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">
+                <h3 style="margin: 0; font-size: 1.25rem; color: #1e293b; display: flex; align-items: center; gap: 12px;">
+                    <span style="background: #eef2ff; padding: 8px; border-radius: 12px;">📊</span>
+                    Export Tasks to Excel
+                </h3>
+                <p style="margin: 6px 0 0; color: #64748b; font-size: 0.85rem;">Filter by employee or export all active tasks.</p>
+            </div>
+            
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+                <div class="form-group">
+                    <label style="font-weight: 700; color: #475569; margin-bottom: 8px; display: block;">Select Employee</label>
+                    <select id="exportTaskEmployeeSelect" class="form-control" style="border-radius: 12px; border: 1.5px solid #e2e8f0; height: 48px; font-weight: 600;">
+                        <option value="all">All Employees</option>
+                        ${(window.allEmployeesSimple || []).map(e => `<option value="${e.id}">${e.name}</option>`).join('')}
+                    </select>
+                </div>
+                
+                <button onclick="confirmTaskExport(); safeRemoveModal(this.closest('.modal'));" class="btn btn-primary" style="height: 52px; border-radius: 16px; font-weight: 700; font-size: 1rem; box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3);">
+                    <i class="fas fa-file-download" style="margin-right: 8px;"></i> Generate Report
+                </button>
+            </div>
+        </div>
+    `;
+
+    const modal = document.createElement('div');
+    modal.className = 'modal active';
+    modal.style.display = 'flex';
+    modal.style.alignItems = 'center';
+    modal.style.justifyContent = 'center';
+    modal.style.zIndex = '15000';
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 400px; width: 90%; padding: 0; border-radius: 28px; border: none; box-shadow: 0 40px 80px -15px rgba(0,0,0,0.5); animation: modalPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);">
+            ${content}
+        </div>
+    `;
+    document.body.appendChild(modal);
+    updateScrollLock();
 }
 
 async function confirmTaskExport() {
@@ -2876,17 +3045,22 @@ async function confirmTaskExport() {
         return;
     }
 
-    if (!tasks || tasks.length === 0) {
+    // Use V2 tasks if available, fallback to legacy tasks
+    let sourceTasks = (typeof TaskManagerV2 !== 'undefined' && TaskManagerV2.tasks && TaskManagerV2.tasks.length) 
+        ? TaskManagerV2.tasks 
+        : (tasks || []);
+
+    if (!sourceTasks || sourceTasks.length === 0) {
         showNotification('No tasks to export.', 'warning');
         return;
     }
 
     const filterId = document.getElementById('exportTaskEmployeeSelect')?.value || 'all';
-    let tasksToExport = tasks;
+    let tasksToExport = sourceTasks;
 
     if (filterId !== 'all') {
         const empId = parseInt(filterId);
-        tasksToExport = tasks.filter(t => (t.assignees || []).some(a => a.id === empId));
+        tasksToExport = sourceTasks.filter(t => (t.assignees || []).some(a => a.id === empId));
     }
 
     if (tasksToExport.length === 0) {
@@ -2985,6 +3159,8 @@ function renderTaskBoard() {
     const todoList = document.getElementById('todoList');
     const inProgressList = document.getElementById('inProgressList');
     const completedList = document.getElementById('completedList');
+
+    if (!todoList || !inProgressList || !completedList) return;
 
     const getPriorityWeight = (p) => {
         if (!p) return 99;
@@ -3153,10 +3329,7 @@ function renderTaskBoard() {
 let myTasks = [];
 
 async function openMyTasks() {
-    showLoading("Fetching your tasks...");
-    await refreshMyTasks();
-    openModal('myTasksModal');
-    hideLoading();
+    TaskManagerV2.open();
 }
 
 async function refreshMyTasks() {
@@ -3191,6 +3364,8 @@ function renderMyTaskBoard() {
     const todoList = document.getElementById('myTodoList');
     const inProgressList = document.getElementById('myInProgressList');
     const completedList = document.getElementById('myCompletedList');
+
+    if (!todoList || !inProgressList || !completedList) return;
 
     const getPriorityWeight = (p) => {
         if (!p) return 99;
@@ -3311,11 +3486,15 @@ function updateDashboardVisibility() {
     const taskMentorCard = document.getElementById('taskMentorCard');
     const meetingMomCard = document.getElementById('meetingMomCard');
     const myTasksCard = document.getElementById('myTasksCard');
+    const taskManagerV2Card = document.getElementById('taskManagerV2Card');
     const intelligenceHubCard = document.getElementById('intelligenceHubCard');
     const intelligenceHubCardEmployee = document.getElementById('intelligenceHubCardEmployee');
     const hubMyStatsBtn = document.getElementById('hubMyStatsBtn');
     const adminStatsGrid = document.getElementById('adminStatsGrid');
     const employeeStatsGrid = document.getElementById('employeeStatsGrid');
+
+    // Task Manager V2 Card is visible for everyone
+    if (taskManagerV2Card) taskManagerV2Card.classList.remove('hidden');
 
     if (currentUser.role === 'admin') {
         // Admin sees Admin Stats Grid and intelligenceHubCard
@@ -3718,140 +3897,14 @@ function editMeeting(m) {
 
 
 function addNewTask(autoAssigneeId = null) {
-    // Reset form
-    document.getElementById('taskTitle').value = '';
-    document.getElementById('taskDescription').value = '';
-    document.getElementById('taskPriority').value = 'medium';
-    document.getElementById('taskDueDate').value = '';
-    const startDateField = document.getElementById('taskStartDate');
-    if (startDateField) startDateField.value = '';
-
-    // Multi-Select Reset
-    selectedEmployeeIds = autoAssigneeId ? [parseInt(autoAssigneeId)] : (currentUser ? [currentUser.id] : []);
-    
-    // Auto-fill overseer with Current User's Mentors
-    selectedOverseerIds = [];
-    if (currentUser) {
-        if (currentUser.mentors && currentUser.mentors.length > 0) {
-            selectedOverseerIds = currentUser.mentors.map(m => m.id);
-        } else if (currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.has_subordinates) {
-            // If they are a mentor/admin themselves, auto-assign as overseer as fallback
-            selectedOverseerIds = [currentUser.id];
-        }
-    }
-
-    // Use a small delay to ensure popcorn/dropdowns are ready if calling from notification
-    const syncTags = () => {
-        const employees = window.allEmployeesSimple || [];
-        updateSelectedTags('multiSelectDisplay', selectedEmployeeIds, employees, 'taskAssigneeIds');
-        updateSelectedTags('overseerDisplay', selectedOverseerIds, employees, 'taskOverseerIds');
-
-        // Auto-fill title with name if possible
-        if (autoAssigneeId && employees.length > 0) {
-            const emp = employees.find(e => e.id == autoAssigneeId);
-            if (emp) {
-                document.getElementById('taskTitle').value = `New Assignment: ${emp.name}`;
-            }
-        }
-    };
-
-    if (autoAssigneeId || !window.allEmployeesSimple) {
-        // Ensure dropdown is populated before syncing tags
-        populateTaskAssigneeDropdown().then(syncTags);
-    } else {
-        syncTags();
-    }
-
-    if (document.getElementById('teamSelector')) document.getElementById('teamSelector').value = '';
-
-    // Reset button text and state
-    document.getElementById('saveTaskText').textContent = 'Save Task';
-    window.currentEditingTaskId = null;
-
-    // Populate teams
-    loadTeams();
-
-    const prioritySelect = document.getElementById('taskPriority');
-    if (prioritySelect) {
-        ['p1', 'p2', 'p3', 'p4'].forEach(pVal => {
-            const pOption = prioritySelect.querySelector(`option[value="${pVal}"]`);
-            if (pOption) {
-                if (currentUser && currentUser.role !== 'admin' && currentUser.role !== 'Mentor') {
-                    const hasP = myTasks.some(t => t.status !== 'completed' && String(t.priority).toLowerCase() === pVal);
-                    pOption.disabled = hasP;
-                    if (hasP) pOption.title = `You already have an active ${pVal.toUpperCase()}`;
-                    else pOption.title = "";
-                } else {
-                    pOption.disabled = false;
-                    pOption.title = "";
-                }
-            }
-        });
-    }
-
-    openModal('addTaskModal');
+    TaskManagerV2.openNewTaskModal(autoAssigneeId);
 }
 
 /**
  * Populate Edit Task Modal
  */
 async function editTask(taskId) {
-    showLoading("Fetching task details...");
-    // Check both global task arrays (Task Mentor and My Tasks)
-    const task = (tasks && Array.isArray(tasks) ? tasks.find(t => t.id === taskId) : null) ||
-        (myTasks && Array.isArray(myTasks) ? myTasks.find(t => t.id === taskId) : null);
-
-    if (!task) {
-        showNotification('Task not found', 'error');
-        return;
-    }
-
-    // Change title and button text
-    document.getElementById('saveTaskText').textContent = 'Update Task';
-    window.currentEditingTaskId = taskId;
-
-    // Populate form
-    document.getElementById('taskTitle').value = task.title;
-    document.getElementById('taskDescription').value = task.description || '';
-
-    // Map priority if needed
-    const priority = (task.priority || 'medium').toLowerCase();
-    document.getElementById('taskPriority').value = priority;
-    document.getElementById('taskStartDate').value = task.start_date || '';
-    document.getElementById('taskDueDate').value = task.due_date || '';
-
-    // For assignee multi-select
-    await populateTaskAssigneeDropdown();
-    selectedEmployeeIds = task.assignees ? task.assignees.map(a => a.id) : [];
-    updateSelectedTags('multiSelectDisplay', selectedEmployeeIds, window.allEmployeesSimple || [], 'taskAssigneeIds');
-
-    // For overseer multi-select
-    selectedOverseerIds = task.overseers ? task.overseers.map(o => o.id) : [];
-    if (selectedOverseerIds.length === 0 && task.Mentor_id) {
-        selectedOverseerIds = [task.Mentor_id];
-    }
-    updateSelectedTags('overseerDisplay', selectedOverseerIds, window.allEmployeesSimple || [], 'taskOverseerIds');
-
-    const prioritySelect = document.getElementById('taskPriority');
-    if (prioritySelect) {
-        ['p1', 'p2', 'p3', 'p4'].forEach(pVal => {
-            const pOption = prioritySelect.querySelector(`option[value="${pVal}"]`);
-            if (pOption) {
-                if (currentUser && currentUser.role !== 'admin' && currentUser.role !== 'Mentor') {
-                    const hasOtherP = myTasks.some(t => t.id !== taskId && t.status !== 'completed' && String(t.priority).toLowerCase() === pVal);
-                    pOption.disabled = hasOtherP;
-                    if (hasOtherP) pOption.title = `You already have an active ${pVal.toUpperCase()}`;
-                    else pOption.title = "";
-                } else {
-                    pOption.disabled = false;
-                    pOption.title = "";
-                }
-            }
-        });
-    }
-
-    hideLoading();
-    openModal('addTaskModal');
+    TaskManagerV2.openDetail(taskId);
 }
 
 // Task state variables are further down near multi-select logic
@@ -4006,149 +4059,7 @@ async function requestNewTaskFromMentor() {
 let currentSelectedTaskId = null;
 
 async function openTaskDetail(taskId) {
-    showLoading("Loading task details...");
-    let task = [...tasks, ...myTasks].find(t => t.id === taskId);
-
-    // If task not in memory (e.g. from Manage Employees list), fetch it
-    if (!task) {
-        try {
-            const res = await apiCall(`tasks/${taskId}`, 'GET', { user_id: currentUser.id });
-            if (res && res.success && res.task) {
-                task = res.task;
-            }
-        } catch (e) {
-            console.error('Failed to fetch task from server', e);
-        }
-    }
-
-    if (!task) {
-        hideLoading();
-        showNotification('Task not found', 'error');
-        return;
-    }
-
-    currentSelectedTaskId = taskId;
-    document.getElementById('detailTaskTitle').textContent = task.title;
-    document.getElementById('detailTaskDescription').textContent = task.description || 'No description provided.';
-
-    const assignees = task.assignees || [];
-    const assigneeNames = assignees.map(a => a.name).join(', ') || 'Unassigned';
-
-    const overseers = task.overseers || [];
-    const overseerNames = overseers.map(o => o.name).join(', ') || 'None';
-
-    const p = (task.priority || 'Medium').toLowerCase();
-    const priorityClass = p === 'high' ? 'priority-high' :
-        (p === 'medium' ? 'priority-medium' : 
-        (p === 'urgent' ? 'priority-urgent' : 
-        (['p1','p2','p3','p4'].includes(p)) ? `priority-${p}` : 'priority-low'));
-
-    const canEditDate = typeof currentUser !== 'undefined' && currentUser && (
-        currentUser.role === 'admin' || 
-        overseers.some(o => o.id === currentUser.id) || 
-        assignees.some(a => a.id === currentUser.id)
-    );
-
-    document.getElementById('detailTaskMeta').innerHTML = `
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                <div class="premium-task-meta-pill">
-                    <span class="premium-task-meta-label">Assignees</span>
-                    <span>${assigneeNames}</span>
-                </div>
-                ${overseerNames !== 'None' ? `
-                <div class="premium-task-meta-pill">
-                    <span class="premium-task-meta-label">Mentor</span>
-                    <span>${overseerNames}</span>
-                </div>
-                ` : ''}
-            </div>
-            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                <div class="premium-task-meta-pill" style="position:relative;">
-                    <span style="font-size: 0.9rem;">📅</span> Due ${formatDateDMY(task.due_date)}
-                    ${canEditDate ? `<button onclick="showDateEditor(${task.id}, '${task.due_date || ''}')" style="background:none; border:none; cursor:pointer; padding:0; color:var(--primary-color); font-size:10px; margin-left:8px; font-weight:800; text-decoration:underline;">✎ Change</button>` : ''}
-                </div>
-                <div id="dateEditorContainer" class="hidden" style="display:flex; gap:6px; align-items:center;">
-                    <input type="date" id="newDueDateInput" class="form-control" style="height:32px; font-size:0.85rem; width:140px; border-radius:8px;">
-                    <button class="btn btn-primary btn-sm" onclick="saveNewDueDate(${task.id})" style="padding:4px 10px; font-size:0.75rem; border-radius:8px;">Save</button>
-                    <button class="btn btn-secondary btn-sm" onclick="toggleDateEditor(false)" style="padding:4px 10px; font-size:0.75rem; border-radius:8px;">Cancel</button>
-                </div>
-            </div>
-        </div>
-    `;
-
-    // Render Priority Badge on Top
-    const badgeContainer = document.getElementById('detailTaskPriorityBadge');
-    if (badgeContainer) {
-        badgeContainer.innerHTML = `<span class="premium-priority-badge ${priorityClass}" style="padding: 6px 14px; border-radius: 10px; font-size: 0.75rem; font-weight: 900; box-shadow: 0 4px 10px -2px rgba(0,0,0,0.1);">${task.priority.toUpperCase()}</span>`;
-    }
-
-    // Progress
-    const steps = task.steps || [];
-    const completedCount = steps.filter(s => s.is_completed).length;
-    const progressPercent = steps.length > 0 ? Math.round((completedCount / steps.length) * 100) : 0;
-    
-    document.getElementById('taskProgressPercent').textContent = `${progressPercent}%`;
-    document.getElementById('taskProgressBarInner').style.width = `${progressPercent}%`;
-
-    // Render Steps
-    const stepsList = document.getElementById('taskStepsList');
-    if (steps.length === 0) {
-        stepsList.innerHTML = '<p style="font-size: 0.9rem; color: #94a3b8; font-style: italic;">No steps defined for this task.</p>';
-    } else {
-        stepsList.innerHTML = steps.map(s => `
-            <div class="premium-step-item ${s.is_completed ? 'completed' : ''}">
-                <input type="checkbox" ${s.is_completed ? 'checked' : ''} onclick="toggleTaskStep(${task.id}, ${s.id}, !${s.is_completed})" class="premium-checkbox">
-                <span class="step-text">${s.text}</span>
-            </div>
-        `).join('');
-    }
-
-    // Render History
-    const historyLog = document.getElementById('taskHistoryLog');
-    const history = task.history || [];
-    if (history.length === 0) {
-        historyLog.innerHTML = '<p style="margin: 0; opacity: 0.7;">No history logs available.</p>';
-    } else {
-        historyLog.innerHTML = history.map(h => `
-            <div style="border-left: 2px solid #e2e8f0; padding-left: 12px; position: relative;">
-                <div style="position: absolute; left: -6px; top: 6px; width: 10px; height: 10px; background: #cbd5e1; border-radius: 50%;"></div>
-                <div style="font-weight: 700; color: #1e293b;">${h.field === 'due_date' ? '📅 Deadline Changed' : (h.field === 'priority' ? '⭐ Priority Changed' : h.field)}</div>
-                <div style="font-size: 0.8rem; margin: 2px 0;">From ${h.field === 'due_date' ? formatDateDMY(h.old) : (h.field === 'priority' ? (h.old||'').toUpperCase() : h.old)} to <strong>${h.field === 'due_date' ? formatDateDMY(h.new) : (h.field === 'priority' ? (h.new||'').toUpperCase() : h.new)}</strong></div>
-                <div style="font-size: 0.75rem; color: #94a3b8;">${h.by} • ${formatDateDMY(h.at)} ${formatTimeOnly(h.at)}</div>
-            </div>
-        `).join('');
-    }
-
-    // Handle Team Progress (Static list of assignees for shared task)
-    const teamSection = document.getElementById('teamOverviewSection');
-    const teamList = document.getElementById('teamMembersList');
-
-    if (assignees.length > 1) {
-        teamSection.classList.remove('hidden');
-        teamList.innerHTML = assignees.map(m => {
-            const isMe = typeof currentUser !== 'undefined' && currentUser && m.id === currentUser.id;
-            return `
-                <div class="premium-team-member-card">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <div class="member-avatar">
-                            ${m.name.charAt(0).toUpperCase()}
-                        </div>
-                        <span class="member-name">${m.name} ${isMe ? '<span class="is-me-badge">(You)</span>' : ''}</span>
-                    </div>
-                    <span class="member-role-badge">Assignee</span>
-                </div>
-            `;
-        }).join('');
-    } else {
-        teamSection.classList.add('hidden');
-    }
-
-    renderTaskComments(task.comments || []);
-    document.getElementById('newTaskComment').value = '';
-
-    openModal('taskDetailModal');
-    hideLoading();
+    TaskManagerV2.openDetail(taskId);
 }
 
 function renderTaskComments(comments) {
@@ -4465,8 +4376,17 @@ function openMyRequests(initialView = 'overview') {
     hideLoading();
 }
 
+let viewingOverviewMonth = null;
+let viewingOverviewYear = null;
+
 async function loadStatusOverview() {
     if (!currentUser) return;
+
+    if (viewingOverviewMonth === null) {
+        const today = getCurrentISTDate();
+        viewingOverviewMonth = today.getMonth() + 1; // 1-12
+        viewingOverviewYear = today.getFullYear();
+    }
 
     // Reset View
     const ovContainer = document.querySelector('.overview-container');
@@ -4474,47 +4394,57 @@ async function loadStatusOverview() {
     if (ovContainer) ovContainer.classList.remove('hidden');
     if (histView) histView.classList.add('hidden');
 
-    // 1. Set Date
-    const today = getCurrentISTDate();
-    const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    const dateStr = today.toLocaleDateString('en-IN', { ...dateOptions, timeZone: 'Asia/Kolkata' });
+    // 1. Set Date Label
+    const dateStr = new Date(viewingOverviewYear, viewingOverviewMonth - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     const modalDate = document.getElementById('modalDate');
     if (modalDate) modalDate.textContent = dateStr;
 
     // 2. Fetch Monthly Stats
     try {
         const result = await apiCall('monthly-stats', 'GET', {
-            employee_id: currentUser.id
+            employee_id: currentUser.id,
+            month: viewingOverviewMonth,
+            year: viewingOverviewYear
         });
 
         if (result && result.success && result.stats) {
             const stats = result.stats;
-
-            // Populate Hero Card
-            const totalDaysEl = document.getElementById('ovTotalDays');
-            // Backend returns: office_days, wfh_days, half_days, client_days
-            const officeCount = stats.office_days || 0;
-            const wfhCount = stats.wfh_days || 0;
-            const halfCount = stats.half_days || 0;
-
-            // Total Days calculation
-            const total = officeCount + wfhCount + halfCount;
-            if (totalDaysEl) totalDaysEl.textContent = stats.total_working_days || total;
 
             // Populate Grid
             const officeEl = document.getElementById('ovOffice');
             const wfhEl = document.getElementById('ovWFH');
             const halfDayEl = document.getElementById('ovHalfDay');
             const leavesEl = document.getElementById('ovLeaves');
+            const balanceEl = document.getElementById('ovLeaveBalance');
             const optionalEl = document.getElementById('ovOptional');
+            const totalDaysEl = document.getElementById('ovTotalDays');
+            
+            if (totalDaysEl) totalDaysEl.textContent = stats.total_working_days || 0;
+            if (officeEl) officeEl.textContent = stats.office_days || 0;
+            if (wfhEl) wfhEl.textContent = stats.wfh_days || 0;
+            if (halfDayEl) halfDayEl.textContent = stats.half_days || 0;
 
-            if (officeEl) officeEl.textContent = officeCount;
-            if (wfhEl) wfhEl.textContent = wfhCount;
-            if (halfDayEl) halfDayEl.textContent = halfCount;
-            if (optionalEl) optionalEl.textContent = stats.optional_holidays || 0;
+            // Leaves format: taken / allowance
+            if (leavesEl) {
+                const allowance = stats.leave_allowance || 0;
+                leavesEl.textContent = `${stats.leave_days || 0}/${allowance}`;
+            }
+            
+            // Balance format: taken / total in year
+            if (balanceEl) {
+                const yearlyTaken = stats.yearly_taken || 0;
+                const yearlyTotal = stats.yearly_allowance || 0;
+                balanceEl.textContent = `${yearlyTaken}/${yearlyTotal}`;
+                balanceEl.title = `Total Yearly Allowance: ${yearlyTotal}`;
+            }
 
-            // Leaves are fetched from profile separately, but if present in stats use them, else ignored here (handle in profile fetch if needed)
-            if (leavesEl) leavesEl.textContent = stats.leave_days || 0;
+            if (optionalEl) {
+                optionalEl.textContent = `${stats.optional_holidays || 0}/2`;
+            }
+
+            // Save leave dates for this viewed month and year
+            currentLeaveDates = stats.leave_dates || [];
+            yearlyLeaveDates = stats.yearly_leave_dates || [];
 
             // Apply Premium Animations
             const heroCard = document.querySelector('.overview-hero-card');
@@ -4552,6 +4482,25 @@ function toggleHistoryView() {
             overview.classList.remove('hidden');
         }
     }
+}
+
+function changeOverviewMonth(direction) {
+    if (viewingOverviewMonth === null) {
+        const today = getCurrentISTDate();
+        viewingOverviewMonth = today.getMonth() + 1;
+        viewingOverviewYear = today.getFullYear();
+    }
+
+    viewingOverviewMonth += direction;
+    if (viewingOverviewMonth > 12) {
+        viewingOverviewMonth = 1;
+        viewingOverviewYear++;
+    } else if (viewingOverviewMonth < 1) {
+        viewingOverviewMonth = 12;
+        viewingOverviewYear--;
+    }
+
+    loadStatusOverview();
 }
 
 async function loadMyRequests() {
@@ -4683,6 +4632,99 @@ function hideCalendarTooltip() {
     if (tooltip) {
         tooltip.classList.remove('visible');
     }
+}
+
+function updateCalendarDayDetails(record, day) {
+    const panel = document.getElementById('calendarDayDetails');
+    if (!panel) return;
+
+    if (!record) {
+        resetCalendarDayDetails();
+        return;
+    }
+
+    let html = '';
+    const monthLabel = document.getElementById('calendarMonthLabel')?.textContent || '';
+    const dateStr = `${day} ${monthLabel}`;
+    
+    if (record.source === 'request') {
+        const typeLabel = record.status === 'wfh' ? 'WFH' : (record.is_half_day ? 'Half Day' : 'Full Day');
+        html = `
+            <div style="width: 100%;">
+                <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                    <span>${dateStr}</span>
+                    <span style="color: #6366f1;">REQUEST</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div style="background: #f1f5f9; padding: 10px; border-radius: 10px;">
+                        <div style="font-size: 9px; color: #94a3b8; font-weight: 700; text-transform: uppercase;">Type</div>
+                        <div style="font-size: 14px; font-weight: 700; color: #1e293b;">${typeLabel}</div>
+                    </div>
+                    <div style="background: #f1f5f9; padding: 10px; border-radius: 10px;">
+                        <div style="font-size: 9px; color: #94a3b8; font-weight: 700; text-transform: uppercase;">Status</div>
+                        <div style="font-size: 14px; font-weight: 700; color: ${record.request_status === 'approved' ? '#10b981' : '#f59e0b'};">${record.request_status || 'Pending'}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else if (record.source === 'holiday') {
+        html = `
+            <div style="width: 100%; text-align: center;">
+                <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 4px;">${dateStr}</div>
+                <div style="font-size: 18px; font-weight: 800; color: #ef4444; margin-bottom: 2px;">🎉 ${record.name || record.holidayName}</div>
+                <div style="font-size: 11px; color: #94a3b8; font-weight: 600;">Public Holiday</div>
+            </div>
+        `;
+    } else {
+        // Regular attendance
+        const checkIn = record.check_in_time || '--:--';
+        const checkOut = record.check_out_time || '--:--';
+        let hrs = '--';
+        if (record.total_hours) {
+            const h = Number(record.total_hours);
+            if (!isNaN(h) && h > 0) {
+                hrs = `${Math.floor(h)}h ${Math.round((h % 1) * 60)}m`;
+            }
+        }
+
+        html = `
+            <div style="width: 100%;">
+                <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">${dateStr}</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 10px;">
+                    <div style="background: #f0fdf4; padding: 8px 12px; border-radius: 12px; border: 1px solid #dcfce7;">
+                        <div style="font-size: 9px; color: #15803d; font-weight: 700; text-transform: uppercase;">Check In</div>
+                        <div style="font-size: 15px; font-weight: 800; color: #166534;">${checkIn}</div>
+                    </div>
+                    <div style="background: #fff1f2; padding: 8px 12px; border-radius: 12px; border: 1px solid #ffe4e6;">
+                        <div style="font-size: 9px; color: #be123c; font-weight: 700; text-transform: uppercase;">Check Out</div>
+                        <div style="font-size: 15px; font-weight: 800; color: #9f1239;">${checkOut}</div>
+                    </div>
+                    <div style="background: #eef2ff; padding: 8px 12px; border-radius: 12px; border: 1px solid #e0e7ff;">
+                        <div style="font-size: 9px; color: #4338ca; font-weight: 700; text-transform: uppercase;">Working Hrs</div>
+                        <div style="font-size: 15px; font-weight: 800; color: #3730a3;">${hrs}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    panel.innerHTML = html;
+    panel.style.background = 'white';
+    panel.style.boxShadow = '0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.05)';
+    panel.style.borderColor = '#e2e8f0';
+}
+
+function resetCalendarDayDetails() {
+    const panel = document.getElementById('calendarDayDetails');
+    if (!panel) return;
+    panel.innerHTML = `
+        <div class="placeholder-text" style="color: #94a3b8; font-style: italic; font-size: 13px; font-weight: 500;">
+            Hover over a day to view detailed check-in / check-out times
+        </div>
+    `;
+    panel.style.background = '#f8fafc';
+    panel.style.boxShadow = 'none';
+    panel.style.borderColor = '#e2e8f0';
 }
 
 let isCalendarBuilding = false;
@@ -4839,7 +4881,7 @@ async function buildAttendanceCalendar(year, month) {
             const isUserSelected = !!h.user_selected;
             const isRegular = !h.is_optional;
 
-            if (isRegular || isUserSelected) {
+            if ((isRegular || isUserSelected) && !h.is_working_day) {
                 // If there's no attendance record, or if it's 'absent', mark as holiday
                 if (!byDay[dayNum] || byDay[dayNum].status === 'absent') {
                     byDay[dayNum] = {
@@ -4849,31 +4891,41 @@ async function buildAttendanceCalendar(year, month) {
                         isHoliday: true,
                         holidayName: h.name,
                         isOptional: h.is_optional,
-                        isSelected: isUserSelected
+                        isSelected: isUserSelected,
+                        isWorkingDay: h.is_working_day
                     };
                 } else if (byDay[dayNum]) {
                     byDay[dayNum].isHoliday = true;
                     byDay[dayNum].holidayName = h.name;
                     byDay[dayNum].isOptional = h.is_optional;
                     byDay[dayNum].isSelected = isUserSelected;
+                    byDay[dayNum].isWorkingDay = h.is_working_day;
                 }
-            } else if (h.is_optional && !isUserSelected) {
-                // Highlight as optional but unselected
-                if (!byDay[dayNum] || byDay[dayNum].status === 'absent') {
+            } else {
+                // If it's a working day or unselected optional, just add metadata without changing status
+                if (byDay[dayNum]) {
+                    byDay[dayNum].isHoliday = true;
+                    byDay[dayNum].holidayName = h.name;
+                    byDay[dayNum].isOptional = h.is_optional;
+                    byDay[dayNum].isSelected = isUserSelected;
+                    byDay[dayNum].isWorkingDay = h.is_working_day;
+                    if (h.is_optional && !isUserSelected) {
+                         // Keep optional status if it was already set or is absent
+                         if (!byDay[dayNum].status || byDay[dayNum].status === 'absent') {
+                             byDay[dayNum].status = 'optional_holiday';
+                         }
+                    }
+                } else {
                     byDay[dayNum] = {
                         ...h,
-                        status: 'optional_holiday',
+                        status: (h.is_optional && !isUserSelected) ? 'optional_holiday' : null,
                         source: 'holiday',
                         isHoliday: true,
                         holidayName: h.name,
-                        isOptional: true,
-                        isSelected: false
+                        isOptional: h.is_optional,
+                        isSelected: isUserSelected,
+                        isWorkingDay: h.is_working_day
                     };
-                } else if (byDay[dayNum]) {
-                    byDay[dayNum].isHoliday = true;
-                    byDay[dayNum].holidayName = h.name;
-                    byDay[dayNum].isOptional = true;
-                    byDay[dayNum].isSelected = false;
                 }
             }
         }
@@ -4955,9 +5007,15 @@ async function buildAttendanceCalendar(year, month) {
             if (tooltipLines.length > 0) {
                 cell.removeAttribute('title');
                 const tooltipText = tooltipLines.join('\n');
-                cell.onmouseenter = (e) => showCalendarTooltip(e, tooltipText);
+                cell.onmouseenter = (e) => {
+                    showCalendarTooltip(e, tooltipText);
+                    updateCalendarDayDetails(record, day);
+                };
                 cell.onmousemove = (e) => showCalendarTooltip(e, tooltipText);
-                cell.onmouseleave = () => hideCalendarTooltip();
+                cell.onmouseleave = () => {
+                    hideCalendarTooltip();
+                    resetCalendarDayDetails();
+                };
             }
         }
 
@@ -5264,104 +5322,57 @@ async function loadMonthlyStats() {
 
 async function loadWFHEligibility() {
     try {
-        const result = await apiCall('wfh-eligibility', 'GET', {
+        const today = getCurrentISTDate();
+        const year = today.getFullYear();
+        const month = today.getMonth() + 1;
+
+        // Fetch monthly stats for current month
+        const result = await apiCall('monthly-stats', 'GET', {
             employee_id: currentUser.id,
-            date: getCurrentDateTime().date
+            month: month,
+            year: year
         });
 
-        const statWFH = document.getElementById('statWFH');
-        const statLeaves = document.getElementById('statLeaves');
-        const wfhRing = document.getElementById('wfhRing');
-        const leavesRing = document.getElementById('leavesRing');
+        if (result && result.success && result.stats) {
+            const stats = result.stats;
 
-        if (result) {
-            const currentCount = result.current_count || 0;
-            const maxWfhLimit = 2; // Monthly WFH limit
+            // Update WFH Widget
+            const statWFH = document.getElementById('statWFH');
+            const wfhRing = document.getElementById('wfhRing');
+            const maxWfhLimit = 2; // Per month
+            const currentWfh = stats.wfh_days || 0;
 
-            // Fetch approved leave requests for current month
-            const now = getCurrentISTDate();
-            const year = now.getFullYear();
-            const month = now.getMonth() + 1;
-
-            const leaveRequestsResult = await apiCall('my-requests', 'GET', {
-                employee_id: currentUser.id
-            });
-
-            console.log('DEBUG: Leave requests result:', leaveRequestsResult);
-
-            let leavesUsed = 0;
-            if (leaveRequestsResult && leaveRequestsResult.success && leaveRequestsResult.requests) {
-                console.log('DEBUG: All requests:', leaveRequestsResult.requests);
-
-                // Use safe date parser to avoid UTC shifts (same as calendar logic)
-                const parseDate = (s) => {
-                    const parts = s.split('-');
-                    return new Date(parts[0], parts[1] - 1, parts[2]);
-                };
-
-                const filteredLeaves = leaveRequestsResult.requests.filter(req => {
-                    console.log('DEBUG: Checking request:', req);
-                    if (req.type !== 'full_day' || req.status !== 'approved') {
-                        console.log('DEBUG: Rejected - type or status mismatch', { type: req.type, status: req.status });
-                        return false;
-                    }
-                    const reqDate = parseDate(req.start_date);
-                    const matches = reqDate.getFullYear() === year && (reqDate.getMonth() + 1) === month;
-                    console.log(`DEBUG: Date check - reqDate: ${reqDate}, year: ${year}, month: ${month}, matches: ${matches}`);
-                    return matches;
-                });
-                console.log('DEBUG: Filtered leaves for current month:', filteredLeaves);
-                leavesUsed = filteredLeaves.length;
-            }
-
-            const maxLeaveLimit = 1; // Monthly leave limit
-
-            // Fetch optional stats
-            const optionalStatsRes = await apiCall('monthly-stats', 'GET', {
-                employee_id: currentUser.id,
-                year: year
-            });
-            let optionalCount = optionalStatsRes && optionalStatsRes.stats ? optionalStatsRes.stats.optional_holidays || 0 : 0;
-            const maxOptional = 2;
-
-            // Update WFH
             if (statWFH) {
-                statWFH.textContent = `${currentCount}/${maxWfhLimit}`;
-                statWFH.style.color = currentCount >= maxWfhLimit ? '#ef4444' : '#10b981';
+                statWFH.textContent = `${currentWfh}/${maxWfhLimit}`;
+                statWFH.style.color = currentWfh >= maxWfhLimit ? '#ef4444' : '#10b981';
 
-                // Animate Ring (Circumference ~ 150 for r=24)
                 if (wfhRing) {
-                    const wfhPercent = Math.min((currentCount / maxWfhLimit), 1);
+                    const wfhPercent = Math.min((currentWfh / maxWfhLimit), 1);
                     const wfhOffset = 150 - (wfhPercent * 150);
                     wfhRing.style.strokeDashoffset = wfhOffset;
                 }
             }
 
-            // Update Leaves
-            if (statLeaves) {
-                statLeaves.textContent = `${leavesUsed}/${maxLeaveLimit}`;
-                statLeaves.style.color = leavesUsed >= maxLeaveLimit ? '#ef4444' : '#10b981';
+            // Update Leave Widget (Dashboard)
+            const statCL = document.getElementById('statCL');
+            const clRing = document.getElementById('clRing');
+            const monthlyLeaveAllowance = stats.leave_allowance || 1;
+            const takenThisMonth = stats.leave_days || 0;
 
-                if (leavesRing) {
-                    const leavesPercent = Math.min((leavesUsed / maxLeaveLimit), 1);
-                    const leavesOffset = 150 - (leavesPercent * 150);
-                    leavesRing.style.strokeDashoffset = leavesOffset;
+            if (statCL) {
+                statCL.textContent = `${takenThisMonth}/${monthlyLeaveAllowance}`;
+                statCL.style.color = takenThisMonth >= monthlyLeaveAllowance ? '#ef4444' : '#10b981';
+                dashboardLeaveDates = stats.leave_dates || [];
+
+                if (clRing) {
+                    const clPercent = monthlyLeaveAllowance > 0 ? Math.min((takenThisMonth / monthlyLeaveAllowance), 1) : 0;
+                    const clOffset = 150 - (clPercent * 150);
+                    clRing.style.strokeDashoffset = clOffset;
                 }
             }
 
-            // Update Optional Holidays
-            const statOptional = document.getElementById('statOptional');
-            const holidayRing = document.getElementById('holidayRing');
-            if (statOptional) {
-                statOptional.textContent = `${optionalCount}/${maxOptional}`;
-                statOptional.style.color = optionalCount >= maxOptional ? '#10b981' : '#f59e0b';
+            // Update Optional Holidays removed from dashboard
 
-                if (holidayRing) {
-                    const holidayPercent = Math.min((optionalCount / maxOptional), 1);
-                    const holidayOffset = 150 - (holidayPercent * 150);
-                    holidayRing.style.strokeDashoffset = holidayOffset;
-                }
-            }
         }
 
     } catch (error) {
@@ -5778,6 +5789,10 @@ function selectType(type, e) {
 
 /* Entry point when user clicks "Check In" */
 async function startAttendanceFlow() {
+    if (currentUser && currentUser.role === 'admin') {
+        showNotification('Admin accounts do not require check-in/check-out.', 'info');
+        return;
+    }
     // --- MANDATORY LOCATION GATE ---
     // Use cached dashboard location if it's fresh (< 2 mins) and accurate (<= 200m)
     const isLocationFresh = currentPhotoLocation &&
@@ -7423,19 +7438,21 @@ function viewEmployeeRecords(empId, empName) {
     showScreen('recordsScreen');
 }
 
-async function loadAttendanceRecords(isMore = false) {
+async function loadAttendanceRecords(isMore = false, searchTerm = '') {
     try {
         const recordsContent = document.getElementById('recordsContent');
 
         if (!isMore) {
             attendanceDaysOffset = 0;
             allAttendanceRecords = [];
-            recordsContent.innerHTML = `
-                <div class="text-center" style="padding: 40px;">
-                    <div class="loading-spinner" style="margin: 0 auto 16px; width: 24px; height: 24px;"></div>
-                    <p>Loading attendance records.</p>
-                </div>
-            `;
+            if (!searchTerm) {
+                recordsContent.innerHTML = `
+                    <div class="text-center" style="padding: 40px;">
+                        <div class="loading-spinner" style="margin: 0 auto 16px; width: 24px; height: 24px;"></div>
+                        <p>Loading attendance records.</p>
+                    </div>
+                `;
+            }
         } else {
             const btn = document.getElementById('loadMoreAttendanceBtn');
             if (btn) {
@@ -7445,11 +7462,13 @@ async function loadAttendanceRecords(isMore = false) {
         }
 
         const isAdminOrMentor = currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.has_subordinates;
-        const batchSize = isAdminOrMentor ? 1 : 10;
+        // Increase batch size for admin to 5 days for better visibility
+        const batchSize = isAdminOrMentor ? 5 : 10;
 
         const params = {
             days_limit: batchSize,
-            days_offset: attendanceDaysOffset
+            days_offset: attendanceDaysOffset,
+            search: searchTerm
         };
 
         // For non-admin, non-Mentor, non-de-facto-Mentor employees, fetch only their last 6 months of data
@@ -7481,7 +7500,13 @@ async function loadAttendanceRecords(isMore = false) {
             applyAttendanceSearch();
         } else {
             if (!isMore) {
-                recordsContent.innerHTML = '<div class="text-center" style="padding: 40px;"><p>No records found.</p></div>';
+                // Keep the toolbar if it exists, otherwise render it with empty state
+                if (!document.getElementById('attendanceSearchInput')) {
+                    renderAttendanceTable([]);
+                } else {
+                    const listContainer = document.getElementById('attendanceListContainer');
+                    if (listContainer) listContainer.innerHTML = '<div class="text-center" style="padding: 40px;"><p>No records found.</p></div>';
+                }
             } else {
                 showNotification('No more records to load', 'info');
                 const btn = document.getElementById('loadMoreAttendanceBtn');
@@ -7502,9 +7527,10 @@ async function loadAttendanceRecords(isMore = false) {
 
 async function loadMoreAttendanceRecords() {
     const isAdminOrMentor = currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.has_subordinates;
-    const batchSize = isAdminOrMentor ? 1 : 10;
+    const batchSize = isAdminOrMentor ? 5 : 10;
     attendanceDaysOffset += batchSize;
-    await loadAttendanceRecords(true);
+    const searchVal = document.getElementById('attendanceSearchInput')?.value || '';
+    await loadAttendanceRecords(true, searchVal);
 }
 
 // 2) Render table with search toolbar
@@ -7512,24 +7538,24 @@ function renderAttendanceTable(records) {
     const recordsContent = document.getElementById('recordsContent');
     const oldSearchVal = document.getElementById('attendanceSearchInput')?.value || '';
 
-    if (!records || records.length === 0) {
-        recordsContent.innerHTML = `
-            <div class="text-center" style="padding: 40px;">
-                <p style="color: var(--gray-500);">No attendance records found.</p>
-            </div>
-        `;
-        return;
-    }
-
+    // Render the toolbar with a dedicated Search button
     recordsContent.innerHTML = `
         <div class="records-toolbar">
             <div class="records-toolbar-left">Attendance Records</div>
-            <input id="attendanceSearchInput"
-                    class="form-control records-search-input"
-                    placeholder="Search: name, Apr, April, 22-04-2026, 04/22/2026, Monday, wfh…"
-                    value="${oldSearchVal}"
-                    onkeyup="applyAttendanceSearch();">
-            <button class="btn" onclick="clearAttendanceSearch()">Clear</button>
+            <div class="records-search-group" style="display: flex; gap: 8px; flex: 1; max-width: 600px;">
+                <input id="attendanceSearchInput"
+                        class="form-control records-search-input"
+                        placeholder="Search: name, Mar, 22-04-2026, wfh…"
+                        value="${oldSearchVal}"
+                        onkeydown="if(event.key === 'Enter') applyAttendanceSearch();"
+                        style="flex: 1;">
+                <button class="btn btn-primary" onclick="applyAttendanceSearch()" style="border-radius: 12px; padding: 0 20px;">
+                    <i class="fas fa-search"></i> Search
+                </button>
+                <button class="btn btn-secondary" onclick="clearAttendanceSearch()" style="border-radius: 12px; padding: 0 20px; background: var(--gray-100); color: var(--gray-700);">
+                    Clear
+                </button>
+            </div>
         </div>
         <div id="attendanceListContainer"></div>
         ${attendanceHasMore ? `
@@ -7542,6 +7568,15 @@ function renderAttendanceTable(records) {
     `;
 
     const listContainer = document.getElementById('attendanceListContainer');
+
+    if (!records || records.length === 0) {
+        listContainer.innerHTML = `
+            <div class="text-center" style="padding: 40px;">
+                <p style="color: var(--gray-500);">No attendance records found.</p>
+            </div>
+        `;
+        return;
+    }
 
     if (currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.has_subordinates) {
         renderAdminDayWiseView(records, listContainer);
@@ -7720,13 +7755,18 @@ function _buildDateSearchTokens(dateStr) {
     ];
 }
 
+let attendanceSearchTimeout = null;
 function applyAttendanceSearch() {
     const input = document.getElementById('attendanceSearchInput');
     if (!input) return;
 
     const term = input.value.trim().toLowerCase();
-    let filtered = allAttendanceRecords || [];
+    
+    // Clear any pending timeouts
+    if (attendanceSearchTimeout) clearTimeout(attendanceSearchTimeout);
 
+    // 1. Local filtering (instant)
+    let filtered = allAttendanceRecords || [];
     if (term) {
         filtered = filtered.filter(r => {
             const name     = (r.employee_name || r.name || '').toLowerCase();
@@ -7735,11 +7775,7 @@ function applyAttendanceSearch() {
             const status   = (r.status || '').toLowerCase().replace('_', ' ');
             const type     = (r.type || '').toLowerCase();
             const office   = (r.office_name || '').toLowerCase();
-
-            // All date format variants
             const dateTokens = _buildDateSearchTokens(r.date);
-
-            // Check-in / check-out time tokens (e.g. "09:30")
             const checkIn  = (r.check_in_time  || '').toLowerCase();
             const checkOut = (r.check_out_time || '').toLowerCase();
 
@@ -7757,15 +7793,31 @@ function applyAttendanceSearch() {
         });
     }
 
+    // 2. Trigger server-side load if no local matches or if specifically requested by button click
+    // We now only do this explicitly on button click or Enter key (handled by the caller)
+    // But if lo cal records don't have it, we must fetch.
+    if (term && filtered.length === 0) {
+        loadAttendanceRecords(false, term);
+        return;
+    }
+
     const listContainer = document.getElementById('attendanceListContainer');
     if (!listContainer) return;
 
     if (!filtered.length) {
-        listContainer.innerHTML = `
-            <div class="text-center" style="padding: 40px;">
-                <p style="color: var(--gray-500);">No records matched your search.</p>
-            </div>
-        `;
+        if (!term) {
+            listContainer.innerHTML = `
+                <div class="text-center" style="padding: 40px;">
+                    <p style="color: var(--gray-500);">No records found.</p>
+                </div>
+            `;
+        } else {
+            listContainer.innerHTML = `
+                <div class="text-center" style="padding: 40px;">
+                    <p style="color: var(--gray-500);">No local records matched "${term}". Click Search to check all history.</p>
+                </div>
+            `;
+        }
         return;
     }
 
@@ -7777,6 +7829,8 @@ function applyAttendanceSearch() {
 }
 
 function clearAttendanceSearch() {
+    const input = document.getElementById('attendanceSearchInput');
+    if (input) input.value = '';
     loadAttendanceRecords();
 }
 
@@ -8357,8 +8411,7 @@ async function startEditOffice(id) {
 
 async function deleteOffice(id) {
     if (!(await showConfirm('Delete this office?', 'Delete Office', '🏢'))) return;
-    let res = await fetch(`${apiBaseUrl}/office/${id}`, { method: 'DELETE' })
-        .then(r => r.json()).catch(() => null);
+    let res = await apiCall(`office/${id}`, 'DELETE');
     if (res && res.success) {
         showNotification('Office deleted');
         await refreshAdminOffices();
@@ -8432,6 +8485,11 @@ function renderAdminUsers(users) {
                 <td><span class="badge" style="background:#f1f5f9; color:#475569;">${u.department || ''}</span></td>
                 <td><span class="badge" style="background:#f8fafc; border:1px solid #e2e8f0;">${u.role || ''}</span></td>
                 <td><div style="font-size:12px; color:#64748b;">${u.Mentor_name || '<small class="text-muted">None</small>'}</div></td>
+                <td>
+                    <span class="status-badge ${u.is_active !== false ? 'status-present' : 'status-absent'}" style="padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">
+                        ${u.is_active !== false ? 'Active' : 'Inactive'}
+                    </span>
+                </td>
                 <td style="max-width:250px;">${tasksHtml}</td>
                 <td style="white-space:nowrap;">
                     <div style="display:flex; gap:6px;">
@@ -8457,7 +8515,8 @@ function filterAdminUsers() {
         (u.username && u.username.toLowerCase().includes(query)) ||
         (u.department && u.department.toLowerCase().includes(query)) ||
         (u.id && u.id.toString().includes(query)) ||
-        (u.phone && u.phone.includes(query))
+        (u.phone && u.phone.includes(query)) ||
+        (u.is_active ? 'active' : 'inactive').includes(query)
     );
     renderAdminUsers(filtered);
 }
@@ -8710,7 +8769,11 @@ async function submitNewUser() {
         department: document.getElementById('newUserDepartment').value,
         primary_office: document.getElementById('newUserPrimaryOffice').value,
         role: document.getElementById('newUserRole').value,
-        Mentor_id: document.getElementById('newUserReportingMentor').value,
+        mentor_id: document.getElementById('newUserReportingMentor').value,
+        total_cl: document.getElementById('newUserTotalCL').value,
+        taken_cl: document.getElementById('newUserTakenCL').value,
+        is_active: document.getElementById('newUserIsActive').checked,
+        date_of_joining: document.getElementById('newUserJoiningDate').value,
     };
 
     const passwordVal = document.getElementById('newUserPassword').value.trim();
@@ -8762,6 +8825,12 @@ function clearUserForm() {
     document.getElementById('newUserPrimaryOffice').value = '';
     document.getElementById('newUserRole').value = 'employee';
     document.getElementById('newUserReportingMentor').value = 'none';
+    document.getElementById('newUserTotalCL').value = '12';
+    document.getElementById('newUserTakenCL').value = '0';
+    document.getElementById('newUserJoiningDate').value = '';
+    document.getElementById('newUserIsActive').checked = true;
+    const activeLabel = document.getElementById('newUserIsActiveLabel');
+    if (activeLabel) activeLabel.textContent = 'Active';
     document.getElementById('addUserMsg').textContent = '';
 }
 
@@ -8785,7 +8854,13 @@ async function startEditUser(id) {
         document.getElementById('newUserDepartment').value = u.department || '';
         document.getElementById('newUserPrimaryOffice').value = u.primary_office || '';
         document.getElementById('newUserRole').value = u.role || 'employee';
-        document.getElementById('newUserReportingMentor').value = u.Mentor_id || 'none';
+        document.getElementById('newUserReportingMentor').value = u.mentor_id || 'none';
+        document.getElementById('newUserTotalCL').value = u.total_cl !== undefined ? u.total_cl : 12;
+        document.getElementById('newUserTakenCL').value = u.taken_cl !== undefined ? u.taken_cl : 0;
+        document.getElementById('newUserJoiningDate').value = u.date_of_joining || '';
+        document.getElementById('newUserIsActive').checked = u.is_active !== false;
+        const activeLabel = document.getElementById('newUserIsActiveLabel');
+        if (activeLabel) activeLabel.textContent = u.is_active !== false ? 'Active' : 'Inactive';
         document.getElementById('newUserPassword').value = ''; // don't prefill password
 
         document.getElementById('addUserMsg').textContent = 'Editing user #' + u.id;
@@ -8802,17 +8877,12 @@ async function startEditUser(id) {
 async function deleteUser(id) {
     if (!(await showConfirm('Delete this user?', 'Delete User', '👤'))) return;
 
-    // Try real DELETE
-    let res = await fetch(`${apiBaseUrl}/admin-user/${id}`, { method: 'DELETE' })
-        .then(r => r.json()).catch(() => null);
+    // Use apiCall which automatically handles the token
+    let res = await apiCall(`admin-user/${id}`, 'DELETE');
 
     if (!res || res.success !== true) {
         // Fallback: POST with _method=DELETE in body
-        res = await fetch(`${apiBaseUrl}/admin-user/${id}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ _method: 'DELETE' })
-        }).then(r => r.json()).catch(() => null);
+        res = await apiCall(`admin-user/${id}`, 'POST', { _method: 'DELETE' });
     }
 
     if (res && res.success) {
@@ -8901,6 +8971,9 @@ async function loadEmployeeProfile() {
             currentUser.theme_settings = p.theme_settings;
             applyUserTheme(p.theme_settings);
         }
+        if (p.total_cl !== undefined) currentUser.total_cl = p.total_cl;
+        if (p.taken_cl !== undefined) currentUser.taken_cl = p.taken_cl;
+        
         sessionStorage.setItem('attendanceUser', JSON.stringify(currentUser));
         setFieldValue('profileProfessionalTraining', p.professional_training);
         setFieldValue('profileBankAccount', p.bank_account_number);
@@ -9486,6 +9559,7 @@ async function confirmExport() {
                     department: r.department || '',
                     type: (r.type || '').toUpperCase(),
                     office: r.office_name || '',
+                    date_of_joining: r.date_of_joining,
                     attendance: {}
                 };
             }
@@ -9574,8 +9648,14 @@ async function confirmExport() {
             dateRange.forEach(d => {
                 const att = emp.attendance[d];
                 let val = att ? att.code : (weekendMap[d] || defaultStatus);
-                // Override weekday A with weekend label if applicable
-                if (val === 'A' && weekendMap[d]) val = weekendMap[d];
+
+                // If date is before Joining Date, show as '-' (Not Hired)
+                if (emp.date_of_joining && d < emp.date_of_joining) {
+                    val = '-';
+                } else if (val === 'A' && weekendMap[d]) {
+                    // Override weekday A with weekend label if applicable
+                    val = weekendMap[d];
+                }
                 rowData[d] = val;
             });
 
@@ -9613,13 +9693,13 @@ async function confirmExport() {
                 }
             });
 
-            // Update progress and yield thread every 10 employees
-            if (idx % 10 === 0 || idx === totalEmployees - 1) {
+            // Update progress and yield thread every 50 employees for much faster execution
+            if (idx % 50 === 0 || idx === totalEmployees - 1) {
                 const rowProgress = 50 + Math.round((idx / totalEmployees) * 40);
                 if (progressBar) progressBar.style.width = `${rowProgress}%`;
                 if (progressCount) progressCount.innerText = `${rowProgress}% complete`;
                 // Non-blocking delay
-                await new Promise(resolve => setTimeout(resolve, 0));
+                await new Promise(resolve => requestAnimationFrame(resolve));
             }
         }
 
@@ -9873,9 +9953,7 @@ function downloadSelectedDocs() {
 async function adminDeleteProfile(id) {
     if (!(await showConfirm('Delete extended profile details for this user?', 'Delete Profile', '👤'))) return;
 
-    const res = await fetch(`${apiBaseUrl}/admin-profile/${id}`, {
-        method: 'DELETE'
-    }).then(r => r.json()).catch(() => null);
+    const res = await apiCall(`admin-profile/${id}`, 'DELETE');
 
     if (res && res.success) {
         showNotification('Profile deleted', 'success');
@@ -10422,8 +10500,8 @@ async function generateMiniCalendar() {
 
             if (holidaysRes && holidaysRes.success && Array.isArray(holidaysRes.holidays)) {
                 holidaysRes.holidays.forEach(h => {
-                    // Only show mandatory or user-selected optional holidays
-                    if (!h.is_optional || h.user_selected) {
+                    // Only show mandatory or user-selected optional holidays, but EXCLUDE working days
+                    if ((!h.is_optional || h.user_selected) && !h.is_working_day) {
                         holidayMap[h.date] = h.name;
                     }
                 });
@@ -13176,13 +13254,15 @@ async function loadMentorStatus() {
                         avatarHtml = `<span style="background:${mentor.bg}; width:100%; height:100%; display:flex; align-items:center; justify-content:center;">${mentor.avatar}</span>`;
                     }
 
+                    const isMentorAdmin = mentor.role === 'admin';
+                    
                     html += `
                         <div class="mentor-status-card">
                             <div class="mentor-avatar">${avatarHtml}</div>
                             <div class="mentor-details">
                                 <span style="font-size: 0.85rem; color: var(--gray-500); text-transform: uppercase; font-weight: 800; margin-right: 6px;">Your Mentor:</span>
                                 <span class="mentor-name">${mentor.name}</span>
-                                <span class="mentor-status-badge ${statusClass}">${mentor.status}</span>
+                                ${isMentorAdmin ? '' : `<span class="mentor-status-badge ${statusClass}">${mentor.status}</span>`}
                             </div>
                         </div>
                     `;
@@ -13312,4 +13392,95 @@ async function saveNewDueDate(taskId) {
     } finally {
         hideLoading();
     }
+}
+/**
+ * Shows a modal with the list of dates leaves were taken
+ */
+function showLeaveDatesModal(mode = 'overview') {
+    let dates = [];
+    let titlePrefix = "Leaves Taken";
+    let periodName = "";
+
+    if (mode === 'dashboard') {
+        dates = dashboardLeaveDates;
+        periodName = getCurrentISTDate().toLocaleDateString('en-US', { month: 'long' });
+    } else if (mode === 'yearly') {
+        dates = yearlyLeaveDates;
+        periodName = viewingOverviewYear || getCurrentISTDate().getFullYear();
+        titlePrefix = "Yearly Leaves";
+    } else {
+        dates = currentLeaveDates;
+        periodName = new Date(viewingOverviewYear, viewingOverviewMonth - 1).toLocaleDateString('en-US', { month: 'long' });
+    }
+
+    if (!dates || dates.length === 0) {
+        showNotification(`No leaves taken in ${periodName}`, 'info');
+        return;
+    }
+
+    // Calculate total count (Half counts as 0.5)
+    const totalCount = dates.reduce((acc, item) => acc + (item.type === 'full_day' ? 1.0 : 0.5), 0);
+
+    const content = `
+        <div class="names-list-container" style="padding: 24px;">
+            <button class="modal-close-btn" onclick="safeRemoveModal(this.closest('.modal'))">✕</button>
+            <div style="margin-bottom: 20px; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">
+                <h3 style="margin: 0; font-size: 1.25rem; color: #1e293b; display: flex; align-items: center; gap: 12px;">
+                    <span style="background: #fef2f2; padding: 8px; border-radius: 12px;">🏖️</span>
+                    ${titlePrefix} - ${periodName}
+                </h3>
+                <p style="margin: 6px 0 0; color: #64748b; font-size: 0.85rem; font-weight: 600;">
+                    ${totalCount} day${totalCount === 1 ? '' : 's'} total
+                </p>
+            </div>
+            <div class="names-scroll-area" style="max-height: 400px; overflow-y: auto;">
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    ${dates.sort((a,b) => new Date(a.date) - new Date(b.date)).map((item, idx) => {
+                        const d = new Date(item.date);
+                        const dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
+                        const formattedDate = formatDateDMY(item.date);
+                        const isHalf = item.type === 'half_day';
+                        return `
+                            <div class="name-item" style="background: #f8fafc; padding: 14px 18px; border-radius: 14px; border: 1px solid #e2e8f0; font-weight: 700; color: #334155; font-size: 0.95rem; display: flex; align-items: center; justify-content: space-between; transition: all 0.2s ease;">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <span style="color: #94a3b8; font-size: 0.75rem;">${idx + 1}.</span>
+                                    <div style="display: flex; flex-direction: column;">
+                                        <span>${formattedDate}</span>
+                                        <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 500;">${dayName}</span>
+                                    </div>
+                                </div>
+                                <span style="font-size: 0.72rem; ${isHalf ? 'color: #f59e0b; background: #fffbeb;' : 'color: #6366f1; background: #eef2ff;'} padding: 4px 10px; border-radius: 20px; font-weight: 800;">
+                                    ${isHalf ? '0.5 - HALF DAY' : '1.0 - FULL DAY'}
+                                </span>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        </div>
+    `;
+
+    const modal = document.createElement('div');
+    modal.className = 'modal sub-modal-active';
+    modal.style.display = 'flex';
+    modal.style.alignItems = 'center';
+    modal.style.justifyContent = 'center';
+    modal.style.zIndex = '13000'; // Higher than status overview modal
+
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 440px; width: 90%; padding: 0; border-radius: 28px; border: none; box-shadow: 0 40px 80px -15px rgba(0,0,0,0.5); animation: modalPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);">
+            ${content}
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    requestAnimationFrame(() => {
+        modal.classList.add('active');
+        updateScrollLock();
+    });
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) safeRemoveModal(modal);
+    });
 }

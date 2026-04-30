@@ -117,6 +117,8 @@ class EmployeeProfile(models.Model):
     reporting_mentor = models.CharField(max_length=100, null=True, blank=True)
     planned_leaves = models.IntegerField(default=0)
     unplanned_leaves = models.IntegerField(default=0)
+    total_cl = models.IntegerField(default=12) # Total Casual Leaves allowed
+    taken_cl = models.IntegerField(default=0)  # Taken Casual Leaves
     professional_training = models.TextField(null=True, blank=True)
     family_details = models.TextField(null=True, blank=True)
     marital_status = models.CharField(max_length=20, choices=MARITAL_STATUS_CHOICES, null=True, blank=True)
@@ -347,6 +349,14 @@ class Task(models.Model):
     def __str__(self):
         return f"{self.title} (Team Task)"
 
+class TaskAttachment(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to='task_attachments/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'task_attachments'
+
 
 class TaskStep(models.Model):
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='steps')
@@ -564,12 +574,14 @@ class Holiday(models.Model):
     HOLIDAY_TYPE_CHOICES = [
         ('mandatory', 'Holiday'),
         ('optional', 'Optional'),
+        ('working', 'Working Day'),
     ]
 
     name = models.CharField(max_length=200)
     date = models.DateField(unique=True)
     day = models.CharField(max_length=20, blank=True)   # e.g. "Monday"
     is_optional = models.BooleanField(default=False)    # False = Mandatory
+    is_working_day = models.BooleanField(default=False) # True = Working Day (overrides holiday status)
     year = models.IntegerField()
     description = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

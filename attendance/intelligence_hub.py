@@ -126,12 +126,42 @@ def calculate_forecast():
 
     # Confidence calculation (Stability based)
     try:
-        std_dev = statistics.stdev(valid_rates) if len(valid_rates) > 1 else 5.0
-        consistency = max(0.0, 100.0 - (std_dev * 3.0))
-        # ML model presence increases confidence
-        confidence_bonus = 1.1 if ml_engine.model else 1.0
+        # NEW: De-seasonalized confidence. If we know the DOW patterns, 
+        # we check variance against those patterns rather than raw mean.
+        state = ml_engine.engine.state
+        dow_patterns = state.get('dow_patterns', {})
+        
+        if dow_patterns and len(valid_rates) > 5:
+            # Calculate residuals (difference from expected DOW rate)
+            residuals = []
+            for d in daily_data:
+                rate = float(d['rate'])
+                if rate <= 0: continue
+                
+                dow_str = str(d['date'].weekday())
+                expected = float(dow_patterns.get(dow_str, rate))
+                residuals.append(abs(rate - expected))
+            
+            # Confidence is high if residuals are low
+            avg_error = statistics.mean(residuals) if residuals else 5.0
+            consistency = max(0.0, 100.0 - (avg_error * 4.0)) # error of 10% -> 60% confidence
+        else:
+            # Fallback to raw stability if no patterns
+            std_dev = statistics.stdev(valid_rates) if len(valid_rates) > 1 else 5.0
+            consistency = max(0.0, 100.0 - (std_dev * 3.0))
+            
+        # ML model presence and training freshness increases confidence
+        is_fresh = ml_engine.engine._is_state_fresh()
+        confidence_bonus = 1.15 if (ml_engine.model and is_fresh) else 1.0
+        
         confidence = min(round(consistency * confidence_bonus, 0), 99)
-    except:
+        
+        # Minimum baseline if model is active and data is sufficient
+        if ml_engine.model and is_fresh and len(valid_rates) > 14:
+            confidence = max(confidence, 70)
+            
+    except Exception as e:
+        print(f"Confidence calculation error: {e}")
         confidence = 65
     
     trend = detect_trend(valid_rates)
@@ -182,16 +212,17 @@ def calculate_multi_day_forecast(days=7):
 def calculate_hybrid_forecast(predict_days=3, history_days=3):
     """
     Returns a list of points: history_days calendar days before today, Today, and the next predict_days days.
-    ALL calendar days (including weekends) are included in history — weekends show real attendance
-    (e.g. Surveyors who work on Saturdays), or naturally 0% if nobody was present.
+    - history_days=3 + Today + predict_days=3 => 7 points total
+    - history_days=3 + Today + predict_days=7 => 11 points total
     """
     total_employees = Employee.objects.filter(role='employee').count()
     if total_employees == 0:
         return []
 
     today = datetime.now().date()
+    ml_engine = AttendanceMLModel()
 
-    # 1. History: all calendar days (including weekends) + Today — sourced from live DB
+    # 1. History: Source real data from the database
     dates = []
     for i in range(history_days, 0, -1):
         dates.append(today - timedelta(days=i))
@@ -219,43 +250,43 @@ def calculate_hybrid_forecast(predict_days=3, history_days=3):
             'is_prediction': False
         })
 
-    # 2. Get 30-day history for ML prediction context (live DB)
+    # 2. Context for Prediction: Get recent 30-day weekday rates
     daily_rates = calculate_daily_attendance_rates(30)
-    history = [d['rate'] for d in daily_rates]
+    history = [float(d['rate']) for d in daily_rates if d['rate'] > 0]
+    
+    # Fallback context if no recent records
+    if not history:
+        history = [actual_data[-1]['rate']] if actual_data[-1]['rate'] > 0 else [65.0]
 
-    # 3. Predict next N days — weekends included if weekend attendance exists in DB
-    ml_engine = AttendanceMLModel()
+    # 3. Predict next N days
     predictions = []
     temp_history = history.copy()
 
     for i in range(1, predict_days + 1):
         target_date = today + timedelta(days=i)
-        is_weekend = target_date.weekday() >= 5
-
-        # ML Prediction
+        
+        # ML Prediction using OrganizationSTLM
         pred = ml_engine.predict(target_date, temp_history)
 
-        if is_weekend:
-            # Only predict non-zero on weekends if real weekend attendance exists in DB
-            weekend_history = AttendanceRecord.objects.filter(
-                Q(date__week_day=1) | Q(date__week_day=7),
-                status__in=['present', 'wfh', 'client']
-            ).exists()
-            if not weekend_history:
-                pred = 0.0
-
-        # Fallback to Moving Average if ML unavailable
-        if pred is None:
+        # Robust Fallback to Moving Average
+        if pred is None or pred < 1.0:
             recent_count = min(7, len(temp_history))
-            pred = sum(list(temp_history)[-recent_count:]) / recent_count
+            window = temp_history[-recent_count:]
+            pred = sum(window) / len(window) if window else 65.0
+            
+            # If it's a weekend and we have no model, naturally dampen it
+            if target_date.weekday() >= 5:
+                pred *= 0.6 
 
-        pred = round(float(pred), 1)
+        pred = round(float(max(0, min(100, pred))), 1)
+        
         predictions.append({
             'date': target_date.strftime('%Y-%m-%d'),
             'day_name': target_date.strftime('%A'),
             'rate': pred,
             'is_prediction': True
         })
+        # Feed prediction back into history for iterative forecasting
         temp_history.append(pred)
 
     return actual_data + predictions
@@ -437,73 +468,17 @@ class IndividualPredictor:
             except: return None
         return None
 
-    def _get_historical_features(self, employee, target_date=None):
-        """Fetch and normalize individual historical metrics"""
-        from .models import AttendanceRecord, EmployeeRequest, Task
-        from datetime import datetime
-        import statistics
-        
-        if target_date is None:
-            target_date = datetime.now().date()
-            
-        records = list(AttendanceRecord.objects.filter(
-            employee=employee,
-            date__lt=target_date
-        ).order_by('-date')[:14])
-        
-        if not records:
-            return 0.75, 0.6, 1.0, 0, 0.75
-
-        scores = [STATUS_WEIGHTS.get(r.status, 0.0) for r in records]
-        avg_score = sum(scores) / len(scores)
-
-        # Normalize working hours (0-12 range capped)
-        hours = [float(r.total_hours) for r in records if r.total_hours]
-        avg_hours = sum(hours) / len(hours) if hours else 8.0
-        normalized_hours = min(1.0, avg_hours / MAX_NORMALIZED_HOURS)
-        
-        # New pattern: Consistency
-        consistency = max(0.0, 1.0 - statistics.stdev(scores)) if len(scores) > 1 else 1.0
-        
-        # New pattern: Leave behavior predictor
-        recent_leaves = sum(1 for r in records if r.status == 'leave')
-        has_approved_leave = EmployeeRequest.objects.filter(
-            employee=employee,
-            request_type__in=['full_day', 'half_day'],
-            status='approved',
-            start_date__lte=target_date,
-            end_date__gte=target_date
-        ).exists()
-        
-        if has_approved_leave:
-            recent_leaves += 5  # Add weight for upcoming known absence
-            
-        # New pattern: Work Efficiency Context
-        tasks = Task.objects.filter(
-            assignees=employee,
-            status='completed',
-            completed_at__date__lt=target_date,
-            accuracy__isnull=False
-        ).order_by('-completed_at')[:10]
-        
-        if tasks:
-            avg_accuracy = sum(t.accuracy for t in tasks) / len(tasks)
-            efficiency = avg_accuracy / 100.0
-        else:
-            efficiency = 0.75
-
-        return avg_score, normalized_hours, consistency, recent_leaves, efficiency
-
     def predict(self, employee, org_forecast, target_date=None):
         """Predict individual attendance probability with weighted features"""
         avg_score, normalized_hours, consistency, recent_leaves, efficiency = self._get_historical_features(employee, target_date=target_date)
         
         if not self.model:
             # Hybrid heuristic: Weight individual score, hours, efficiency, logic against org forecast
+            # Uses 14-day leave window for penalty scaling
             leave_penalty = (recent_leaves / 14.0) * 100 if recent_leaves > 0 else 0
             weighted_score = (avg_score * 0.5 + normalized_hours * 0.1 + consistency * 0.1 + efficiency * 0.1 + (org_forecast/100) * 0.2) * 100
             weighted_score -= leave_penalty
-            if recent_leaves >= 5: # Critical leave indicator
+            if recent_leaves >= 5: # Critical leave indicator (or upcoming approved leave)
                 weighted_score = 5.0
             return round(min(99.0, max(5.0, weighted_score)), 1)
 
@@ -523,6 +498,87 @@ class IndividualPredictor:
             return round(float(self.model.predict(X)[0]), 1)
         except: 
             return round(avg_score * 100, 1)
+
+    def predict_hours(self, employee, probability, target_date):
+        """Predict expected working hours based on DOW patterns and attendance likelihood"""
+        from .models import AttendanceRecord
+        from django.db.models import Avg
+        from datetime import timedelta
+        
+        # 1. Get historical average for THIS specific day of week (last 90 days)
+        dow = (target_date.weekday() + 2) % 7 or 7 # Python Mon=0 -> Django Mon=2
+        
+        history = AttendanceRecord.objects.filter(
+            employee=employee,
+            date__week_day=dow,
+            status__in=['present', 'wfh', 'client', 'half_day']
+        ).aggregate(avg_h=Avg('total_hours'))
+        
+        base_hours = float(history['avg_h'] or 8.5)
+        
+        # 2. Apply likelihood scaling (if 50% likely to attend, we expect 50% of the usual volume)
+        predicted_h = (probability / 100.0) * base_hours
+        
+        # 3. Cap and Floor
+        return round(max(0.0, min(14.0, predicted_h)), 1)
+
+    def _get_historical_features(self, employee, target_date=None):
+        """Fetch and normalize individual historical metrics (Min 30-60 days)"""
+        from .models import AttendanceRecord, EmployeeRequest, Task
+        from datetime import datetime
+        import statistics
+        
+        if target_date is None:
+            target_date = datetime.now().date()
+            
+        # Increased to 45 records to ensure we get at least 30 working days
+        records = list(AttendanceRecord.objects.filter(
+            employee=employee,
+            date__lt=target_date
+        ).order_by('-date')[:45])
+        
+        if not records:
+            return 0.75, 0.6, 1.0, 0, 0.75
+
+        scores = [STATUS_WEIGHTS.get(r.status, 0.0) for r in records]
+        avg_score = sum(scores) / len(scores)
+
+        # Normalize working hours (0-12 range capped)
+        hours = [float(r.total_hours) for r in records if r.total_hours and r.status != 'absent']
+        avg_hours = sum(hours) / len(hours) if hours else 8.0
+        normalized_hours = min(1.0, avg_hours / MAX_NORMALIZED_HOURS)
+        
+        # Consistency
+        consistency = max(0.0, 1.0 - statistics.stdev(scores)) if len(scores) > 1 else 1.0
+        
+        # Leave behavior predictor (last 30 days focus)
+        recent_leaves = sum(1 for r in records[:30] if r.status == 'leave')
+        has_approved_leave = EmployeeRequest.objects.filter(
+            employee=employee,
+            request_type__in=['full_day', 'half_day'],
+            status='approved',
+            start_date__lte=target_date,
+            end_date__gte=target_date
+        ).exists()
+        
+        if has_approved_leave:
+            recent_leaves += 5
+            
+        # Work Efficiency Context
+        tasks = Task.objects.filter(
+            assignees=employee,
+            status='completed',
+            completed_at__date__lt=target_date,
+            accuracy__isnull=False
+        ).order_by('-completed_at')[:10]
+        
+        if tasks:
+            avg_accuracy = sum(t.accuracy for t in tasks) / len(tasks)
+            efficiency = avg_accuracy / 100.0
+        else:
+            efficiency = 0.75
+
+        return avg_score, normalized_hours, consistency, recent_leaves, efficiency
 
     def train(self):
         import pandas as pd

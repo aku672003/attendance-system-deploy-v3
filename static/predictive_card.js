@@ -729,6 +729,14 @@ function renderCompanyReportModal(data) {
                 <div style="font-size:9px;color:#94a3b8;">${e.avg_checkin || '-'} check-in</div>
             </td>
             <td style="padding:12px 14px;text-align:center;">
+                <div style="font-size:13px;font-weight:800;color:${e.leave_probability > 0.3 ? '#ef4444' : '#10b981'};">${Math.round(e.leave_probability * 100)}%</div>
+                <div style="font-size:9px;color:#94a3b8;">Leave Prob</div>
+            </td>
+            <td style="padding:12px 14px;text-align:center;">
+                <div style="font-size:13px;font-weight:800;color:#6366f1;">${e.predicted_hours}h</div>
+                <div style="font-size:9px;color:#94a3b8;">Exp. Hours</div>
+            </td>
+            <td style="padding:12px 14px;text-align:center;">
                 <button onclick="closeCompanyReportModal();showEmployeePerformanceAnalysis(${e.id})"
                     style="padding:6px 12px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;color:#475569;font-size:11px;font-weight:700;cursor:pointer;transition:all 0.2s;white-space:nowrap;"
                     onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#fff'">
@@ -810,6 +818,8 @@ function renderCompanyReportModal(data) {
                                     <th style="padding:11px 14px;text-align:center;font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Tier</th>
                                     <th style="padding:11px 14px;text-align:left;font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Breakdown &amp; Daily Trend</th>
                                     <th style="padding:11px 14px;text-align:center;font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Avg Hours</th>
+                                    <th style="padding:11px 14px;text-align:center;font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Leave Prob</th>
+                                    <th style="padding:11px 14px;text-align:center;font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Exp. Hours</th>
                                     <th style="padding:11px 14px;text-align:center;font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Action</th>
                                 </tr>
                             </thead>
@@ -1122,9 +1132,8 @@ function openPredictiveAnalysisModal(data, predictDays = 3) {
                                 <span style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">Attendance Rate</span>
                             </div>
                             <div style="display: flex; gap: 4px;">
+                                <button onclick="changePredictiveDays(3)" style="padding: 5px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; border: 1px solid ${predictDays === 3 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 3 ? '#eef2ff' : 'white'}; color: ${predictDays === 3 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">3 Days</button>
                                 <button onclick="changePredictiveDays(7)" style="padding: 5px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; border: 1px solid ${predictDays === 7 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 7 ? '#eef2ff' : 'white'}; color: ${predictDays === 7 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">7 Days</button>
-                                <button onclick="changePredictiveDays(14)" style="padding: 5px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; border: 1px solid ${predictDays === 14 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 14 ? '#eef2ff' : 'white'}; color: ${predictDays === 14 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">14 Days</button>
-                                <button onclick="changePredictiveDays(30)" style="padding: 5px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; border: 1px solid ${predictDays === 30 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 30 ? '#eef2ff' : 'white'}; color: ${predictDays === 30 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">30 Days</button>
                             </div>
                         </div>
                     </div>
@@ -1538,6 +1547,14 @@ function renderEmployeePerformanceModal(data, employeeId, predictDays = 3) {
                                 <div style="font-size: 18px; font-weight: 900; color: #0f172a;">${(p.peak_day || 'N/A').substring(0,3)}</div>
                                 <div style="font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Best Day</div>
                             </div>
+                            <div>
+                                <div style="font-size: 18px; font-weight: 900; color: ${p.leave_probability > 0.3 ? '#ef4444' : '#0f172a'};">${Math.round(p.leave_probability * 100)}%</div>
+                                <div style="font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Leave Prob</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 18px; font-weight: 900; color: #0f172a;">${p.predicted_daily_hours || '0'}h</div>
+                                <div style="font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Exp. Daily Hrs</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1556,9 +1573,8 @@ function renderEmployeePerformanceModal(data, employeeId, predictDays = 3) {
                                 </div>
                             </div>
                             <div style="display: flex; gap: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase;">
+                                <button onclick="changePredictiveDays(3)" style="padding: 6px 12px; border-radius: 8px; border: 1px solid ${predictDays === 3 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 3 ? '#eef2ff' : 'white'}; color: ${predictDays === 3 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">3 Days</button>
                                 <button onclick="changePredictiveDays(7)" style="padding: 6px 12px; border-radius: 8px; border: 1px solid ${predictDays === 7 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 7 ? '#eef2ff' : 'white'}; color: ${predictDays === 7 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">7 Days</button>
-                                <button onclick="changePredictiveDays(14)" style="padding: 6px 12px; border-radius: 8px; border: 1px solid ${predictDays === 14 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 14 ? '#eef2ff' : 'white'}; color: ${predictDays === 14 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">14 Days</button>
-                                <button onclick="changePredictiveDays(30)" style="padding: 6px 12px; border-radius: 8px; border: 1px solid ${predictDays === 30 ? '#6366f1' : '#e2e8f0'}; background: ${predictDays === 30 ? '#eef2ff' : 'white'}; color: ${predictDays === 30 ? '#4f46e5' : '#64748b'}; cursor: pointer; transition: all 0.2s;">30 Days</button>
                             </div>
                         </div>
                     </div>

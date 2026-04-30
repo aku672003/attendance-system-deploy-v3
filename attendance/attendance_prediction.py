@@ -109,9 +109,50 @@ class AttendancePredictionEngine:
         
         return day_probabilities
     
+    def predict_leaves(self):
+        """Analyze leave patterns and return probability of leave for each day of week."""
+        # Look at last 90 days for better pattern detection
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=90)
+        
+        leaves = EmployeeRequest.objects.filter(
+            employee_id=self.employee_id,
+            status='approved',
+            request_type__in=['full_day', 'half_day'],
+            start_date__gte=start_date,
+            start_date__lte=end_date
+        )
+        
+        day_patterns = {i: 0 for i in range(7)}
+        for leave in leaves:
+            day_patterns[leave.start_date.weekday()] += 1
+            
+        # Probability based on frequency in last 12 weeks
+        day_probs = {}
+        for day, count in day_patterns.items():
+            day_probs[day] = round(min(count / 12, 1.0), 2)
+            
+        return day_probs
+
+    def predict_working_hours(self):
+        """Predict average daily working hours based on last 30 days."""
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=30)
+        
+        stats = AttendanceRecord.objects.filter(
+            employee_id=self.employee_id,
+            date__gte=start_date,
+            date__lte=end_date,
+            total_hours__gt=0
+        ).aggregate(avg_hrs=Avg('total_hours'))
+        
+        avg_hrs = stats['avg_hrs'] or 0.0
+        return round(float(avg_hrs), 2)
+    
     def predict_next_days(self, days=7):
-        """Predict attendance for the next N days."""
+        """Predict attendance for the next N days including leave probabilities."""
         day_probabilities = self.calculate_weekly_pattern()
+        leave_probabilities = self.predict_leaves()
         recent_summary = self.get_historical_summary(days=7)
         
         # Recent behavior weight (70% recent, 30% pattern)
@@ -151,8 +192,14 @@ class AttendancePredictionEngine:
                 pattern_prob = day_probabilities.get(day_of_week, 0.7)
                 combined_prob = (pattern_prob * 0.3) + (recent_attendance_rate * 0.7)
                 
+                # Adjust for predicted leave probability
+                leave_prob = leave_probabilities.get(day_of_week, 0)
+                
                 # Predict based on probability threshold
-                if combined_prob >= 0.6:
+                if leave_prob > 0.5:
+                    prediction = 'likely_leave'
+                    confidence = round(leave_prob * 100, 1)
+                elif combined_prob >= 0.6:
                     prediction = 'present'
                     confidence = round(combined_prob * 100, 1)
                 else:
@@ -163,11 +210,12 @@ class AttendancePredictionEngine:
                 'date': str(future_date),
                 'day_of_week': ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][day_of_week],
                 'prediction': prediction,
-                'confidence': confidence
+                'confidence': confidence,
+                'leave_probability': leave_probabilities.get(day_of_week, 0)
             })
         
         return predictions
-    
+
     def calculate_performance_score(self):
         """Calculate overall performance score (0-100%)."""
         # Look at last 30 days
@@ -217,13 +265,9 @@ class AttendancePredictionEngine:
     
     def calculate_prediction_accuracy(self):
         """Calculate accuracy of past predictions vs actual attendance."""
-        # For now, return a simulated accuracy based on data consistency
-        # In production, you'd store predictions and compare with actual results
-        
         summary = self.get_historical_summary(days=30)
         attendance_rate = summary['attendance_rate']
         
-        # Higher attendance rate = more predictable = higher accuracy
         if attendance_rate >= 90:
             base_accuracy = 85
         elif attendance_rate >= 75:
@@ -233,7 +277,6 @@ class AttendancePredictionEngine:
         else:
             base_accuracy = 55
         
-        # Add some variance
         import random
         accuracy = base_accuracy + random.randint(-5, 5)
         return min(max(accuracy, 0), 100)
@@ -253,6 +296,7 @@ def get_all_employees_predictions():
             predicted_record = engine.predict_next_days(days=7)
             performance_score = engine.calculate_performance_score()
             accuracy_rate = engine.calculate_prediction_accuracy()
+            predicted_hours = engine.predict_working_hours()
             
             predictions_data.append({
                 'employee_id': employee.id,
@@ -263,10 +307,10 @@ def get_all_employees_predictions():
                 'predicted_record': predicted_record,
                 'performance_score': performance_score,
                 'accuracy_rate': accuracy_rate,
+                'predicted_daily_hours': predicted_hours,
                 'work_status': 'Active' if current_status['is_active'] else 'Inactive'
             })
         except Exception as e:
-            # Skip employees with errors
             print(f"Error processing employee {employee.id}: {e}")
             continue
     
