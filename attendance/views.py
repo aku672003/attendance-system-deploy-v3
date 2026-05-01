@@ -860,7 +860,7 @@ def attendance_records(request):
 
         if is_mentor:
             from django.db.models import Q
-            records_qs = records_qs.filter(Q(employee__mentors=user) | Q(employee=user))
+            records_qs = records_qs.filter(Q(employee__mentors=user) | Q(employee=user)).distinct()
 
         if employee_id:
             records_qs = records_qs.filter(employee_id=employee_id)
@@ -875,6 +875,8 @@ def attendance_records(request):
 
         if att_type:
             records_qs = records_qs.filter(type=att_type)
+
+        records_qs = records_qs.distinct()
 
         has_more = False
         if days_limit:
@@ -5575,8 +5577,8 @@ def error_500_view(request):
 def spa_view(request):
     """Protected view to serve the SPA index.html."""
     host = request.get_host()
-    # Check if we are running in development (localhost/127.0.0.1)
-    is_development = '127.0.0.1' in host or 'localhost' in host
+    # Broad detection for development/instance environments
+    is_development = any(x in host for x in ['127.0.0.1', 'localhost', '8000', '65.1.191.126']) or settings.DEBUG
     
     context = {
         'maps_api_key': settings.MAPS_API_KEY,
@@ -5595,7 +5597,7 @@ def gated_dashboard(request):
     success, data = validate_gated_token(token_str)
     
     host = request.get_host()
-    is_development = '127.0.0.1' in host or 'localhost' in host
+    is_development = any(x in host for x in ['127.0.0.1', 'localhost', '8000', '65.1.191.126']) or settings.DEBUG
     
     context = {
         'maps_api_key': settings.MAPS_API_KEY,

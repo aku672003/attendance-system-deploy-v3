@@ -1293,7 +1293,11 @@ async function handleNotificationClick(notif) {
 
 function openTaskMentor(employeeId) {
     if (typeof TaskManagerV2 !== 'undefined') {
-        TaskManagerV2.openNewTaskModal(employeeId);
+        if (employeeId) {
+            TaskManagerV2.openNewTaskModal(employeeId);
+        } else {
+            TaskManagerV2.open('team');
+        }
     } else {
         console.error("TaskManagerV2 is not defined");
         showNotification("Task Manager is not loaded. Please refresh.", "error");
@@ -1386,13 +1390,13 @@ async function loadDashboardData() {
         document.getElementById('adminStatsGrid')?.classList.remove('hidden');
         document.getElementById('checkInCard')?.classList.add('hidden');
         document.getElementById('checkOutCard')?.classList.add('hidden');
-        document.getElementById('recordsCard')?.classList.add('hidden');
+        document.getElementById('recordsCard')?.classList.remove('hidden');
         document.getElementById('adminCard')?.classList.remove('hidden');
         document.getElementById('assignMentorDashboardCard')?.classList.remove('hidden');
         document.getElementById('exportCard')?.classList.remove('hidden');
         document.getElementById('trainModelCard')?.classList.remove('hidden');
         document.getElementById('profileCard')?.classList.add('hidden');
-        document.getElementById('myTasksCard')?.classList.remove('hidden');
+        document.getElementById('myTasksCard')?.classList.add('hidden');
         document.getElementById('myStatsCard')?.classList.remove('hidden');
         document.getElementById('temporaryTagsCard')?.classList.remove('hidden');
         document.getElementById('manageEmployeesCard')?.classList.add('hidden');
@@ -2976,6 +2980,7 @@ function updateDashboardVisibility() {
     const hubMyStatsBtn = document.getElementById('hubMyStatsBtn');
     const adminStatsGrid = document.getElementById('adminStatsGrid');
     const employeeStatsGrid = document.getElementById('employeeStatsGrid');
+    const recordsCard = document.getElementById('recordsCard');
 
 
     if (currentUser.role === 'admin') {
@@ -2983,11 +2988,12 @@ function updateDashboardVisibility() {
         if (taskMentorCard) taskMentorCard.classList.remove('hidden');
         if (meetingMomCard) meetingMomCard.classList.remove('hidden');
         if (myTasksCard) {
-            myTasksCard.classList.remove('hidden');
+            myTasksCard.classList.add('hidden');
             // Update label for admin context if needed
             const title = myTasksCard.querySelector('.action-card-title');
             if (title) title.textContent = 'My Tasks';
         }
+        if (recordsCard) recordsCard.classList.remove('hidden');
 
         if (intelligenceHubCard) intelligenceHubCard.classList.remove('hidden');
         if (intelligenceHubCardEmployee) intelligenceHubCardEmployee.classList.add('hidden');
@@ -6551,13 +6557,17 @@ async function loadAttendanceRecords(isMore = false, searchTerm = '') {
         if (!isMore) {
             attendanceDaysOffset = 0;
             allAttendanceRecords = [];
-            if (!searchTerm) {
-                recordsContent.innerHTML = `
-                    <div class="text-center" style="padding: 40px;">
-                        <div class="loading-spinner" style="margin: 0 auto 16px; width: 24px; height: 24px;"></div>
-                        <p>Loading attendance records.</p>
-                    </div>
-                `;
+            const listContainer = document.getElementById('attendanceListContainer');
+            const loaderHtml = `
+                <div class="text-center" style="padding: 40px;">
+                    <div class="loading-spinner" style="margin: 0 auto 16px; width: 24px; height: 24px;"></div>
+                    <p>${searchTerm ? 'Searching records...' : 'Loading attendance records...'}</p>
+                </div>
+            `;
+            if (listContainer) {
+                listContainer.innerHTML = loaderHtml;
+            } else {
+                recordsContent.innerHTML = loaderHtml;
             }
         } else {
             const btn = document.getElementById('loadMoreAttendanceBtn');
