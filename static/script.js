@@ -1145,19 +1145,24 @@ async function handleSignup(event) {
 }
 
 function logout() {
+    // Clear user session data
     currentUser = null;
     sessionStorage.removeItem('attendanceUser');
     sessionStorage.removeItem('attendanceTokenVerified');
     sessionStorage.removeItem('attendanceLoginTime');
 
-    if (window.IS_DEVELOPMENT) {
-        // In local development, refresh the page to completely reset state
-        // This will naturally land on the login screen as it is the default active screen
-        window.location.href = window.location.origin + window.location.pathname;
-    } else {
-        // In production, redirect to main site as requested
-        window.location.href = "https://hanuai.com";
-    }
+    // Show the login screen instead of reloading/redirecting
+    // This allows the login page to be "restored" within the existing session
+    // while still maintaining the direct access gate on page refresh.
+    showScreen('loginScreen');
+    
+    // Clear any sensitive UI elements
+    const userName = document.getElementById('userName');
+    if (userName) userName.textContent = 'User';
+    const userAvatar = document.getElementById('userAvatar');
+    if (userAvatar) userAvatar.textContent = '👤';
+    
+    showNotification('You have been logged out.', 'info');
 }
 
 // Dashboard Functions

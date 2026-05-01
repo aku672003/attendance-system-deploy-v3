@@ -62,25 +62,16 @@ def require_valid_token(view_func):
     """
     @wraps(view_func)
     def _wrapped_view(request, *args, **kwargs):
-        host = request.get_host()
-        # Broad detection for development/instance environments
-        is_dev = any(x in host for x in ['127.0.0.1', 'localhost', '8000', '65.1.191.126']) or settings.DEBUG
-        
         token = request.GET.get('token')
         
-        # If no token, allow access ONLY if in development mode to show the login page
+        # Strictly require token presence for gated access
         if not token:
-            if is_dev:
-                return view_func(request, *args, **kwargs)
             from .views import error_403_view
             return error_403_view(request)
             
         success, result = validate_gated_token(token)
         
         if not success:
-            # On dev, if token is invalid, we still might want to allow access to the login page
-            if is_dev:
-                 return view_func(request, *args, **kwargs)
             from .views import error_403_view
             return error_403_view(request, message=result)
 

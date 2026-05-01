@@ -5577,8 +5577,8 @@ def error_500_view(request):
 def spa_view(request):
     """Protected view to serve the SPA index.html."""
     host = request.get_host()
-    # Broad detection for development/instance environments
-    is_development = any(x in host for x in ['127.0.0.1', 'localhost', '8000', '65.1.191.126']) or settings.DEBUG
+    # Check if we are running in development (localhost/127.0.0.1)
+    is_development = '127.0.0.1' in host or 'localhost' in host
     
     context = {
         'maps_api_key': settings.MAPS_API_KEY,
@@ -5597,7 +5597,7 @@ def gated_dashboard(request):
     success, data = validate_gated_token(token_str)
     
     host = request.get_host()
-    is_development = any(x in host for x in ['127.0.0.1', 'localhost', '8000', '65.1.191.126']) or settings.DEBUG
+    is_development = '127.0.0.1' in host or 'localhost' in host
     
     context = {
         'maps_api_key': settings.MAPS_API_KEY,
