@@ -1,49 +1,49 @@
 {
-    "average_rate": 70.69,
-    "stability_factor": 0.7769,
+    "average_rate": 71.78,
+    "stability_factor": 0.7793,
     "dow_patterns": {
-        "0": 73.08,
-        "1": 74.16,
-        "2": 76.71,
-        "3": 74.85,
-        "4": 74.04,
-        "5": 43.73
+        "0": 74.03,
+        "1": 75.22,
+        "2": 77.92,
+        "3": 76.52,
+        "4": 74.73,
+        "5": 44.3
     },
-    "data_points": 72,
-    "last_trained": "2026-04-30 10:22:56",
+    "data_points": 73,
+    "last_trained": "2026-05-01 11:07:01",
     "ml_model_active": true,
     "version": "2.0.0 (SLM Engine)",
     "logs": [
         {
-            "timestamp": "10:21:46",
+            "timestamp": "11:05:49",
             "message": "Initializing SLM-powered intelligence training sequence..."
         },
         {
-            "timestamp": "10:21:47",
-            "message": "Accessing history for 78 personnel."
+            "timestamp": "11:05:50",
+            "message": "Accessing history for 77 personnel."
         },
         {
-            "timestamp": "10:21:47",
+            "timestamp": "11:05:50",
             "message": "Retrieved 96 days of historical weighted vectors."
         },
         {
-            "timestamp": "10:21:47",
+            "timestamp": "11:05:50",
             "message": "Step 1/3: Training OrganizationSTLM..."
         },
         {
-            "timestamp": "10:21:53",
+            "timestamp": "11:05:57",
             "message": "STLM Organizational Model trained"
         },
         {
-            "timestamp": "10:21:53",
+            "timestamp": "11:05:57",
             "message": "Step 2/3: Training IndividualPredictor..."
         },
         {
-            "timestamp": "10:22:56",
+            "timestamp": "11:07:01",
             "message": "Individual RF Model Trained successfully"
         },
         {
-            "timestamp": "10:22:56",
+            "timestamp": "11:07:01",
             "message": "Step 3/3: Updating organizational performance metrics..."
         }
     ]

@@ -30,7 +30,10 @@
             <button class="btn btn-secondary btn-icon" onclick="TaskManagerV2.refresh()" title="Refresh">
                 <i class="fas fa-sync-alt"></i>
             </button>
-            <button class="btn btn-secondary btn-icon" onclick="TaskManagerV2.exportTasks()" title="Export Tasks">
+            <button id="tmV2RequestBtn" class="btn btn-secondary btn-icon" onclick="TaskManagerV2.requestTask()" title="Request New Task">
+                <i class="fas fa-rocket"></i>
+            </button>
+            <button id="tmV2ExportBtn" class="btn btn-secondary btn-icon" onclick="TaskManagerV2.exportTasks()" title="Export Tasks" style="display: none;">
                 <i class="fas fa-file-export"></i>
             </button>
             <div class="tm-v2-close-btn" onclick="TaskManagerV2.close()" title="Close Dashboard">

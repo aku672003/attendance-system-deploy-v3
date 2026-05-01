@@ -34,15 +34,48 @@ const TaskManagerV2 = {
         }
     },
 
-    async open() {
+    async open(scope = null) {
+        if (scope) {
+            this.currentScope = scope;
+        } else {
+            // Default logic if no scope provided
+            const user = window.currentUser || (typeof currentUser !== 'undefined' ? currentUser : null);
+            this.currentScope = (user && (user.role === 'admin' || user.role === 'Mentor' || user.has_subordinates)) ? 'team' : 'my';
+        }
+
         document.getElementById('taskManagerV2Modal').classList.add('active');
         if (typeof updateScrollLock === 'function') updateScrollLock();
         
+        // Toggle buttons based on role
+        const user = window.currentUser || (typeof currentUser !== 'undefined' ? currentUser : null);
+        const requestBtn = document.getElementById('tmV2RequestBtn');
+        const exportBtn = document.getElementById('tmV2ExportBtn');
+        const isAdmin = user && user.role === 'admin';
+
+        if (requestBtn) requestBtn.style.display = isAdmin ? 'none' : 'flex';
+        if (exportBtn) exportBtn.style.display = isAdmin ? 'flex' : 'none';
+
         // Ensure the active tab is properly initialized
         this.switchTab(this.activeTab);
         
+        // Pre-fetch employees in background if not already loaded
+        if (this.allEmployees.length === 0) {
+            this.fetchEmployees();
+        }
+
         // Refresh to get latest data
         this.refresh(); 
+    },
+
+    async fetchEmployees() {
+        try {
+            const res = await apiCall('employees-simple', 'GET');
+            if (res && res.success) {
+                this.allEmployees = res.employees;
+            }
+        } catch (e) {
+            console.error("Failed to fetch employees:", e);
+        }
     },
 
     close() {
@@ -234,6 +267,9 @@ const TaskManagerV2 = {
 
             if (task.status !== 'completed' || isAdmin) {
                 btns += `<button class="btn btn-secondary btn-sm" onclick="TaskManagerV2.openEditTaskModal()"><i class="fas fa-edit"></i> Edit</button> `;
+                if (isAdmin || isMentor) {
+                    btns += `<button class="btn btn-danger btn-sm" onclick="TaskManagerV2.deleteTask(${task.id})"><i class="fas fa-trash"></i> Delete</button> `;
+                }
             }
 
             if (isAssignee && !isAdmin) { // Admin can only track
@@ -326,25 +362,46 @@ const TaskManagerV2 = {
     },
 
     async openNewTaskModal(assigneeId = null) {
-        this.selectedAssignees = assigneeId ? [parseInt(assigneeId)] : [];
-        
-        // Fetch employees if not cached
+        // Show loading if data is not yet ready
         if (this.allEmployees.length === 0) {
-            const res = await apiCall('employees-simple', 'GET');
-            if (res && res.success) {
-                this.allEmployees = res.employees;
-            }
+            if (typeof showLoading === 'function') showLoading("Loading employee list...");
+            await this.fetchEmployees();
+            if (typeof hideLoading === 'function') hideLoading();
         }
+
+        this.selectedAssignees = assigneeId ? [parseInt(assigneeId)] : [];
 
         // Populate Overseer Select
         const overseerSelect = document.getElementById('newTaskV2Overseer');
-        if (overseerSelect.options.length <= 1) { // Only if not populated (1 is the default option)
+        if (overseerSelect) {
+            // Clear existing options except the first one
+            while (overseerSelect.options.length > 1) {
+                overseerSelect.remove(1);
+            }
             this.allEmployees.forEach(emp => {
                 const opt = document.createElement('option');
                 opt.value = emp.id;
                 opt.textContent = emp.name;
                 overseerSelect.appendChild(opt);
             });
+
+            // If assigneeId is provided, auto-select their mentor if possible
+            if (assigneeId) {
+                const emp = this.allEmployees.find(e => e.id == assigneeId);
+                if (emp && emp.mentor_ids && emp.mentor_ids.length > 0) {
+                    Array.from(overseerSelect.options).forEach(opt => {
+                        if (emp.mentor_ids.includes(Number(opt.value))) {
+                            // If current user is one of the mentors, prioritize them
+                            const user = window.currentUser || (typeof currentUser !== 'undefined' ? currentUser : null);
+                            if (user && Number(opt.value) === Number(user.id)) {
+                                opt.selected = true;
+                            } else if (!overseerSelect.value) {
+                                opt.selected = true;
+                            }
+                        }
+                    });
+                }
+            }
         }
 
         // Render searchable Assignee List
@@ -609,6 +666,28 @@ const TaskManagerV2 = {
         }
     },
 
+    async deleteTask(taskId) {
+        if (!(await showConfirm('Are you sure you want to delete this task?', 'Delete Task', '🗑️'))) return;
+        showLoading("Deleting task...");
+        try {
+            const res = await apiCall(`tasks/${taskId}`, 'POST', {
+                _method: 'DELETE',
+                user_id: (window.currentUser || currentUser).id
+            });
+            if (res && res.success) {
+                showNotification('Task deleted', 'success');
+                this.closeDetail();
+                this.refresh();
+            } else {
+                showNotification(res.message || 'Failed to delete task', 'error');
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            hideLoading();
+        }
+    },
+
     async updateStatus(taskId, newStatus) {
         showLoading("Updating Status...");
         try {
@@ -634,7 +713,7 @@ const TaskManagerV2 = {
     async refresh() {
         const user = window.currentUser || (typeof currentUser !== 'undefined' ? currentUser : null);
         const empId = user ? user.id : '';
-        const scope = (user && (user.role === 'admin' || user.role === 'Mentor' || user.has_subordinates)) ? 'team' : 'my';
+        const scope = this.currentScope || ((user && (user.role === 'admin' || user.role === 'Mentor' || user.has_subordinates)) ? 'team' : 'my');
         
         const loader = document.getElementById('tmV2Loader');
         if (loader && !this.tasks) loader.style.display = 'flex';
@@ -726,6 +805,38 @@ const TaskManagerV2 = {
         } catch (err) {
             console.error(err);
             showNotification("Export failed", "error");
+        } finally {
+            hideLoading();
+        }
+    },
+
+    async requestTask() {
+        const user = window.currentUser || (typeof currentUser !== 'undefined' ? currentUser : null);
+        if (!user) {
+            showNotification("User context not found. Please login again.", "error");
+            return;
+        }
+
+        const confirmReq = await showConfirm(
+            "Would you like to request a new task from your mentor or admin?",
+            "Request New Task",
+            "🚀"
+        );
+        if (!confirmReq) return;
+
+        showLoading("Sending request...");
+        try {
+            const res = await apiCall('request-new-task', 'POST', {
+                user_id: user.id
+            });
+            if (res && res.success) {
+                showNotification(res.message || "Task request sent successfully!", "success");
+            } else {
+                showNotification(res.message || "Failed to send task request.", "warning");
+            }
+        } catch (err) {
+            console.error(err);
+            showNotification("Error sending request.", "error");
         } finally {
             hideLoading();
         }

@@ -270,8 +270,8 @@
 
                 <form onsubmit="handleLogin(event)">
                     <div class="form-group">
-                        <label class="form-label">Username</label>
-                        <input type="text" id="loginUsername" class="form-control" placeholder="Enter your username"
+                        <label class="form-label">Username or Email</label>
+                        <input type="text" id="loginUsername" class="form-control" placeholder="Enter username or email"
                             required>
                     </div>
 
@@ -1140,12 +1140,11 @@
                     </div>
                 </div>
 
-                <div class="action-card" onclick="openMyTasks()" id="myTasksCard" draggable="false">
+                <div class="action-card" onclick="TaskManagerV2.open('my')" id="myTasksCard" draggable="false">
                     <span class="action-card-icon">📝</span>
                     <div class="action-card-title">My Tasks</div>
                     <div class="action-card-description">View and manage your assigned tasks</div>
                     <div class="widget-resize-controls" onclick="event.stopPropagation()">
-                        <button class="btn btn-sm btn-primary" onclick="TaskManagerV2.open()" style="font-size: 0.6rem; padding: 2px 6px; margin-right: 4px;">V2</button>
                         <button class="resize-btn" onclick="resizeWidget('myTasksCard', 'sm')">S</button>
                         <button class="resize-btn" onclick="resizeWidget('myTasksCard', 'md')">M</button>
                         <button class="resize-btn" onclick="resizeWidget('myTasksCard', 'lg')">L</button>
@@ -1153,17 +1152,6 @@
                     </div>
                 </div>
 
-                <div class="action-card" onclick="TaskManagerV2.open()" id="taskManagerV2Card" draggable="false" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none;">
-                    <span class="action-card-icon">⚡</span>
-                    <div class="action-card-title" style="color: white;">Task Manager Pro</div>
-                    <div class="action-card-description" style="color: rgba(255,255,255,0.8);">Enhanced full-screen experience</div>
-                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
-                        <button class="resize-btn" onclick="resizeWidget('taskManagerV2Card', 'sm')">S</button>
-                        <button class="resize-btn" onclick="resizeWidget('taskManagerV2Card', 'md')">M</button>
-                        <button class="resize-btn" onclick="resizeWidget('taskManagerV2Card', 'lg')">L</button>
-                        <button class="resize-btn" onclick="resizeWidget('taskManagerV2Card', 'xl')">XL</button>
-                    </div>
-                </div>
                 <div class="action-card" onclick="showScreen('recordsScreen')" id="recordsCard" draggable="false">
                     <span class="action-card-icon">📋</span>
                     <div class="action-card-title">Records</div>
@@ -1197,12 +1185,11 @@
                         <button class="resize-btn" onclick="resizeWidget('manageEmployeesCard', 'xl')">XL</button>
                     </div>
                 </div>
-                <div class="action-card hidden" onclick="openTaskMentor()" id="taskMentorCard" draggable="false">
+                <div class="action-card hidden" onclick="TaskManagerV2.open('team')" id="taskMentorCard" draggable="false">
                     <span class="action-card-icon">📝</span>
                     <div class="action-card-title">Team Tasks</div>
                     <div class="action-card-description">Manage tasks for your team</div>
                     <div class="widget-resize-controls" onclick="event.stopPropagation()">
-                        <button class="btn btn-sm btn-primary" onclick="TaskManagerV2.open()" style="font-size: 0.6rem; padding: 2px 6px; margin-right: 4px;">V2</button>
                         <button class="resize-btn" onclick="resizeWidget('taskMentorCard', 'sm')">S</button>
                         <button class="resize-btn" onclick="resizeWidget('taskMentorCard', 'md')">M</button>
                         <button class="resize-btn" onclick="resizeWidget('taskMentorCard', 'lg')">L</button>

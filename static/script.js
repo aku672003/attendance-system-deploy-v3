@@ -69,13 +69,17 @@ document.addEventListener('DOMContentLoaded', async function () {
     console.log('MySQL Attendance System Initializing...');
     refreshPrimaryOfficeSelects();
     // Check for stored user session
-    const storedUser = sessionStorage.getItem('attendanceUser');
     const tokenVerified = sessionStorage.getItem('attendanceTokenVerified');
     const today = getCurrentISTDate().toISOString().split('T')[0];
 
-    if (storedUser) {
+    const sessionUser = sessionStorage.getItem('attendanceUser');
+    // On local development, if a gated token is provided, we skip the session auto-login 
+    // to "enable" the login page as requested.
+    const shouldSkipSession = window.IS_DEVELOPMENT && window.GATED_TOKEN;
+
+    if (sessionUser && !shouldSkipSession) {
         try {
-            currentUser = JSON.parse(storedUser);
+            currentUser = JSON.parse(sessionUser);
             // Apply personalization on reload
             const userAvatar = document.getElementById('userAvatar');
             if (currentUser.avatar_emoji && userAvatar) {
@@ -101,7 +105,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             currentCalendarMonth = istNow.getMonth();
             currentCalendarYear = istNow.getFullYear();
 
-            loadDashboardData();
+            await loadDashboardData();
             updateDashboardVisibility();
             startDashboardLocationWatch(); // Persistent background GPS watcher
             checkAndUpdateLocationStatus(true); // Initial immediate check
@@ -143,7 +147,8 @@ document.addEventListener('DOMContentLoaded', async function () {
                 const istNow = getCurrentISTDate();
                 currentCalendarMonth = istNow.getMonth();
                 currentCalendarYear = istNow.getFullYear();
-                loadDashboardData();
+                // Explicitly await dashboard data loading for a "precise" transition
+                await loadDashboardData();
                 updateDashboardVisibility();
                 startDashboardLocationWatch();
                 checkAndUpdateLocationStatus(true);
@@ -341,7 +346,9 @@ document.addEventListener('click', e => {
     const card = e.target.closest('.task-card');
     if (!card) return;
 
-    openTaskDetail(card.dataset.taskId);
+    if (typeof TaskManagerV2 !== 'undefined') {
+        TaskManagerV2.openDetail(card.dataset.taskId);
+    }
 });
 
 async function loadFaceDetectionModels() {
@@ -1143,8 +1150,14 @@ function logout() {
     sessionStorage.removeItem('attendanceTokenVerified');
     sessionStorage.removeItem('attendanceLoginTime');
 
-    // Redirect to root without query params to prevent auto-login loop
-    window.location.href = window.location.origin + window.location.pathname;
+    if (window.IS_DEVELOPMENT) {
+        // In local development, refresh the page to completely reset state
+        // This will naturally land on the login screen as it is the default active screen
+        window.location.href = window.location.origin + window.location.pathname;
+    } else {
+        // In production, redirect to main site as requested
+        window.location.href = "https://hanuai.com";
+    }
 }
 
 // Dashboard Functions
@@ -1276,6 +1289,15 @@ async function handleNotificationClick(notif) {
     // Auto-close notification dropdown
     const dropdown = document.getElementById('notificationDropdown');
     if (dropdown) dropdown.style.display = 'none';
+}
+
+function openTaskMentor(employeeId) {
+    if (typeof TaskManagerV2 !== 'undefined') {
+        TaskManagerV2.openNewTaskModal(employeeId);
+    } else {
+        console.error("TaskManagerV2 is not defined");
+        showNotification("Task Manager is not loaded. Please refresh.", "error");
+    }
 }
 
 function updateNotificationBadge(count) {
@@ -1830,7 +1852,7 @@ function showNamesModal(title, names) {
     modal.style.display = 'flex';
     modal.style.alignItems = 'center';
     modal.style.justifyContent = 'center';
-    modal.style.zIndex = '10002'; // Higher than summary modal
+    modal.style.zIndex = '15000'; // Higher than summary modal (12000)
 
     modal.innerHTML = `
         <div class="modal-content" style="max-width: 500px; width: 90%; padding: 0; border-radius: 24px; border: none; box-shadow: 0 30px 60px -12px rgba(0,0,0,0.6); animation: modalPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);">
@@ -2937,548 +2959,11 @@ function applyRequestFilters() {
     list.innerHTML = renderRequestCards(filtered);
 }
 
-async function openTaskMentor(autoAssigneeId = null) {
-    TaskManagerV2.open();
-    if (autoAssigneeId) {
-        setTimeout(() => {
-            TaskManagerV2.openNewTaskModal(autoAssigneeId);
-        }, 800);
-    }
-}
 
-async function populateTaskExportEmployeeFilter() {
-    const select = document.getElementById('taskExportEmployeeFilter');
-    if (!select) return;
 
-    // Keep the "All Employees" option
-    select.innerHTML = '<option value="all">All Employees</option>';
 
-    try {
-        const res = await apiCall('admin-profiles', 'GET', { user_id: currentUser.id });
-        const profiles = (res && res.success && Array.isArray(res.profiles)) ? res.profiles : [];
 
-        profiles.forEach(p => {
-            const option = document.createElement('option');
-            option.value = p.id;
-            option.textContent = p.name || p.username;
-            select.appendChild(option);
-        });
-    } catch (e) {
-        console.error('Failed to populate employee filter', e);
-    }
-}
 
-// Task Management Functions
-let tasks = [];
-
-async function refreshTasks() {
-    showLoading("Refreshing task board...");
-    try {
-        // Always pass employee_id so backend can verify role (Admin vs Employee)
-        const empId = typeof currentUser !== 'undefined' && currentUser ? currentUser.id : '';
-        const queryParams = `?employee_id=${empId}&scope=team`;
-        const res = await apiCall(`tasks${queryParams}`, 'GET');
-        if (res && res.success && Array.isArray(res.tasks)) {
-            tasks = res.tasks;
-            renderTaskBoard();
-        }
-        showNotification('Error loading tasks', 'error');
-    } finally {
-        hideLoading();
-    }
-}
-
-async function exportTasksToExcel() {
-    const employees = window.allEmployeesSimple || [];
-    if (!employees.length) {
-        try {
-            const res = await apiCall('employees-simple', 'GET');
-            if (res && res.success) window.allEmployeesSimple = res.employees;
-        } catch(e) {}
-    }
-
-    const content = `
-        <div class="names-list-container" style="padding: 24px;">
-            <button class="modal-close-btn" onclick="safeRemoveModal(this.closest('.modal'))" style="position: absolute; right: 20px; top: 20px; width: 36px; height: 36px; background: #f1f5f9; border: none; border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #64748b; transition: all 0.2s; z-index: 100;">✕</button>
-            <div style="margin-bottom: 20px; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">
-                <h3 style="margin: 0; font-size: 1.25rem; color: #1e293b; display: flex; align-items: center; gap: 12px;">
-                    <span style="background: #eef2ff; padding: 8px; border-radius: 12px;">📊</span>
-                    Export Tasks to Excel
-                </h3>
-                <p style="margin: 6px 0 0; color: #64748b; font-size: 0.85rem;">Filter by employee or export all active tasks.</p>
-            </div>
-            
-            <div style="display: flex; flex-direction: column; gap: 16px;">
-                <div class="form-group">
-                    <label style="font-weight: 700; color: #475569; margin-bottom: 8px; display: block;">Select Employee</label>
-                    <select id="exportTaskEmployeeSelect" class="form-control" style="border-radius: 12px; border: 1.5px solid #e2e8f0; height: 48px; font-weight: 600;">
-                        <option value="all">All Employees</option>
-                        ${(window.allEmployeesSimple || []).map(e => `<option value="${e.id}">${e.name}</option>`).join('')}
-                    </select>
-                </div>
-                
-                <button onclick="confirmTaskExport(); safeRemoveModal(this.closest('.modal'));" class="btn btn-primary" style="height: 52px; border-radius: 16px; font-weight: 700; font-size: 1rem; box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3);">
-                    <i class="fas fa-file-download" style="margin-right: 8px;"></i> Generate Report
-                </button>
-            </div>
-        </div>
-    `;
-
-    const modal = document.createElement('div');
-    modal.className = 'modal active';
-    modal.style.display = 'flex';
-    modal.style.alignItems = 'center';
-    modal.style.justifyContent = 'center';
-    modal.style.zIndex = '15000';
-    modal.innerHTML = `
-        <div class="modal-content" style="max-width: 400px; width: 90%; padding: 0; border-radius: 28px; border: none; box-shadow: 0 40px 80px -15px rgba(0,0,0,0.5); animation: modalPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);">
-            ${content}
-        </div>
-    `;
-    document.body.appendChild(modal);
-    updateScrollLock();
-}
-
-async function confirmTaskExport() {
-    if (typeof ExcelJS === 'undefined') {
-        showNotification('Excel library not loaded. Please refresh.', 'error');
-        return;
-    }
-
-    // Use V2 tasks if available, fallback to legacy tasks
-    let sourceTasks = (typeof TaskManagerV2 !== 'undefined' && TaskManagerV2.tasks && TaskManagerV2.tasks.length) 
-        ? TaskManagerV2.tasks 
-        : (tasks || []);
-
-    if (!sourceTasks || sourceTasks.length === 0) {
-        showNotification('No tasks to export.', 'warning');
-        return;
-    }
-
-    const filterId = document.getElementById('exportTaskEmployeeSelect')?.value || 'all';
-    let tasksToExport = sourceTasks;
-
-    if (filterId !== 'all') {
-        const empId = parseInt(filterId);
-        tasksToExport = sourceTasks.filter(t => (t.assignees || []).some(a => a.id === empId));
-    }
-
-    if (tasksToExport.length === 0) {
-        showNotification('No tasks found for the selected employee.', 'warning');
-        return;
-    }
-
-    try {
-        const workbook = new ExcelJS.Workbook();
-        const sheet = workbook.addWorksheet('Tasks Report');
-
-        // Define columns
-        sheet.columns = [
-            { header: 'ID', key: 'id', width: 10 },
-            { header: 'Title', key: 'title', width: 30 },
-            { header: 'Assignee', key: 'assignee', width: 25 },
-            { header: 'Status', key: 'status', width: 15 },
-            { header: 'Priority', key: 'priority', width: 15 },
-            { header: 'Due Date', key: 'due_date', width: 15 },
-            { header: 'Created Date', key: 'created_date', width: 15 },
-            { header: 'Created Time', key: 'created_time', width: 15 },
-            { header: 'Started Date', key: 'started_date', width: 15 },
-            { header: 'Started Time', key: 'started_time', width: 15 },
-            { header: 'Completed Date', key: 'completed_date', width: 18 },
-            { header: 'Completed Time', key: 'completed_time', width: 18 },
-            { header: 'Mentor', key: 'Mentor', width: 25 },
-            { header: 'Created By', key: 'created_by', width: 25 },
-            { header: 'Description', key: 'description', width: 50 },
-            { header: 'Overseers', key: 'overseers', width: 30 }
-        ];
-
-        // Format and add rows
-        tasksToExport.forEach(task => {
-            const assignees = (task.assignees && task.assignees.length > 0) 
-                ? task.assignees 
-                : [ {id: null, name: 'Unassigned'} ];
-            
-            assignees.forEach(assignee => {
-                sheet.addRow({
-                    id: task.id,
-                    title: task.title,
-                    assignee: assignee.name,
-                    status: task.status,
-                    priority: task.priority,
-                    due_date: formatDateDMY(task.due_date),
-                    created_date: formatDateDMY(task.created_at),
-                    created_time: formatTimeOnly(task.created_at),
-                    started_date: task.started_at ? formatDateDMY(task.started_at) : 'N/A',
-                    started_time: task.started_at ? formatTimeOnly(task.started_at) : 'N/A',
-                    completed_date: task.completed_at ? formatDateDMY(task.completed_at) : 'N/A',
-                    completed_time: task.completed_at ? formatTimeOnly(task.completed_at) : 'N/A',
-                    Mentor: task.Mentor_name || '',
-                    created_by: task.created_by_name || '',
-                    description: task.description || '',
-                    overseers: (task.overseers || []).map(o => o.name).join(', ')
-                });
-            });
-        });
-
-        // Style the header row
-        sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        sheet.getRow(1).fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FF4F46E5' } // Indigo-600
-        };
-        sheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
-
-        // Auto-filter and freeze header (A1 to M1 for 13 columns)
-        sheet.autoFilter = 'A1:M1';
-        sheet.views = [{ state: 'frozen', ySplit: 1 }];
-
-        // Generate buffer and download
-        const buffer = await workbook.xlsx.writeBuffer();
-        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        const timestamp = new Date().toISOString().split('T')[0];
-
-        a.href = url;
-        a.download = `Tasks_Report_${timestamp}.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-
-        closeModal('taskExportModal');
-        showNotification('Tasks exported successfully', 'success');
-    } catch (error) {
-        console.error('Export error:', error);
-        showNotification('Error exporting tasks', 'error');
-    }
-}
-
-function renderTaskBoard() {
-    const todoList = document.getElementById('todoList');
-    const inProgressList = document.getElementById('inProgressList');
-    const completedList = document.getElementById('completedList');
-
-    if (!todoList || !inProgressList || !completedList) return;
-
-    const getPriorityWeight = (p) => {
-        if (!p) return 99;
-        p = p.toLowerCase();
-        const w = { 'p1':1, 'p2':2, 'p3':3, 'p4':4, 'urgent':5, 'high':6, 'medium':7, 'low':8 };
-        return w[p] || 99;
-    };
-    const todoTasks = tasks.filter(t => t.status === 'todo').sort((a,b) => getPriorityWeight(a.priority) - getPriorityWeight(b.priority));
-    const inProgressTasks = tasks.filter(t => t.status === 'in_progress').sort((a,b) => getPriorityWeight(a.priority) - getPriorityWeight(b.priority));
-    const completedTasks = tasks.filter(t => t.status === 'completed').sort((a,b) => getPriorityWeight(a.priority) - getPriorityWeight(b.priority));
-
-    document.getElementById('todoCount').textContent = todoTasks.length;
-    document.getElementById('inProgressCount').textContent = inProgressTasks.length;
-    document.getElementById('completedCount').textContent = completedTasks.length;
-
-    const renderList = (taskList, container) => {
-        if (!taskList.length) {
-            container.innerHTML = '<div class="text-muted text-center p-3" style="color:#94a3b8; font-size:0.9rem;">No tasks</div>';
-            return;
-        }
-
-        container.innerHTML = taskList.map((task, idx) => {
-            const p = (task.priority || 'Medium').toLowerCase();
-            const priorityClass = p === 'high' ? 'priority-high' :
-                (p === 'medium' ? 'priority-medium' : 
-                (p === 'urgent' ? 'priority-urgent' : 
-                (['p1','p2','p3','p4'].includes(p)) ? `priority-${p}` : 'priority-low'));
-
-            const priorityLabel = p.toUpperCase();
-
-            // Progress Bar Logic
-            const steps = task.steps || [];
-            const completedSteps = steps.filter(s => s.is_completed).length;
-            const progressPercent = steps.length > 0 ? Math.round((completedSteps / steps.length) * 100) : 0;
-            const hasSteps = steps.length > 0;
-
-            // Due Date Logic
-            let dueClass = '';
-            let dueBadge = '';
-
-            if (task.due_date) {
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const due = new Date(task.due_date);
-                due.setHours(0, 0, 0, 0);
-
-                const diffTime = due - today;
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-                if (diffDays < 0) {
-                    dueClass = 'task-card-overdue';
-                } else if (diffDays <= 2) {
-                    dueClass = 'task-card-urgent';
-                } else if (diffDays <= 7) {
-                    dueClass = 'task-card-warning';
-                } else {
-                    dueClass = 'task-card-safe';
-                }
-
-                if (diffDays === 1) {
-                    dueBadge = '<span class="due-tomorrow-badge">Due Tomorrow!</span>';
-                }
-            }
-
-            // Override for completed tasks: ALWAYS Green
-            if (task.status === 'completed') {
-                dueClass = 'task-card-safe';
-                dueBadge = '';
-            }
-
-            // Multi-Assignee Avatar Group
-            const assignees = task.assignees || [];
-            const avatarGroup = assignees.slice(0, 3).map((a, i) => `
-                <span class="premium-user-avatar" style="width:28px; height:28px; font-size:11px; background: linear-gradient(135deg, #f8fafc, #f1f5f9); border: 1px solid #e2e8f0; color: #475569; margin-left: ${i > 0 ? '-10px' : '0'}; z-index: ${5 - i};" title="${a.name}">${a.name.charAt(0).toUpperCase()}</span>
-            `).join('') + (assignees.length > 3 ? `<span class="premium-user-avatar" style="width:28px; height:28px; font-size:10px; background: #e2e8f0; border: 1px solid #cbd5e1; color: #475569; margin-left: -10px; z-index: 1;">+${assignees.length - 3}</span>` : '');
-
-            const assigneeNames = assignees.map(a => a.name).join(', ') || 'Unassigned';
-
-            return `
-                <div class="premium-task-card ${dueClass}" id="task-${task.id}" draggable="true" ondragstart="drag(event)" onclick="${window._isPriorityMode ? (task.status !== 'completed' ? `togglePrioritySelection(${task.id})` : '') : `openTaskDetail(${task.id})`}" style="animation: slideInUp 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; animation-delay: ${idx * 50}ms; opacity:1; cursor:pointer; overflow: hidden; position: relative; border: ${window._prioritySelection && window._prioritySelection.includes(task.id) ? '2px solid #f59e0b' : '1px solid #e2e8f0'}">
-                    ${task.status !== 'completed' && window._isPriorityMode && window._prioritySelection && window._prioritySelection.includes(task.id) ? `
-                    <div style="position: absolute; top: -5px; right: -5px; background: #f59e0b; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.85rem; z-index: 10; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                        P${window._prioritySelection.indexOf(task.id) + 1}
-                    </div>
-                    ` : ''}
-                    <div class="premium-card-header" style="flex-wrap: wrap; margin-bottom: 6px;">
-                        ${task.status !== 'completed' ? `
-                        <div style="display: flex; gap: 4px; align-items: center; max-width: 60%; flex-wrap: wrap;">
-                            ${(task.history || []).filter(h => h.field === 'priority' && h.old && h.old !== task.priority).reverse().map(h => {
-                                const hp = h.old.toLowerCase();
-                                const hpClass = hp === 'high' ? 'priority-high' : (hp === 'medium' ? 'priority-medium' : (hp === 'urgent' ? 'priority-urgent' : (['p1','p2','p3','p4'].includes(hp)) ? `priority-${hp}` : 'priority-low'));
-                                return `<span class="premium-priority-badge ${hpClass}" style="border-radius: 6px; padding: 4px 10px; opacity: 0.4; text-decoration: line-through; transform: scale(0.9);" title="Old Priority">${hp.toUpperCase()}</span>`;
-                            }).join('')}
-                            <span class="premium-priority-badge ${priorityClass}" style="border-radius: 6px; padding: 4px 10px;">${priorityLabel}</span>
-                        </div>
-                        ` : '<div style="display: flex; max-width: 60%;"></div>'}
-                        ${dueBadge}
-                        <div style="display:flex; gap:8px; margin-left: auto;">
-                            ${typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || task.Mentor_id === currentUser.id || currentUser.role === 'Mentor' || currentUser.has_subordinates) ? `
-                            <button class="btn-icon-sm" onclick="event.stopPropagation(); editTask(${task.id})" style="background:#f1f5f9; border:none; color:#64748b; cursor:pointer; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; transition:all 0.2s;" title="Edit">✎</button>
-                            <button class="btn-icon-sm" onclick="event.stopPropagation(); deleteTask(${task.id})" style="background:#fef2f2; border:none; color:#ef4444; cursor:pointer; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; transition:all 0.2s;" title="Delete">🗑</button>
-                            ` : ''}
-                        </div>
-                    </div>
-
-                    ${hasSteps ? `
-                    <div class="task-card-progress" style="margin: 8px 0;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                            <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 700;">Steps: ${completedSteps}/${steps.length}</span>
-                            <span style="font-size: 0.7rem; color: var(--primary-color); font-weight: 800;">${progressPercent}%</span>
-                        </div>
-                        <div style="height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden;">
-                            <div style="height: 100%; width: ${progressPercent}%; background: var(--primary-color); transition: width 0.3s ease;"></div>
-                        </div>
-                    </div>
-                    ` : ''}
-                    
-                    <h5 class="premium-task-title" style="margin: 0; font-size: 1.1rem; line-height: 1.5;">${task.title}</h5>
-                    <p style="font-size:0.9rem; color:#64748b; margin: 0; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${task.description || ''}</p>
-                    
-                    <div class="premium-task-meta" style="margin-top: 8px; padding-top: 12px; border-top: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
-                        <div style="display:flex; align-items:center;">
-                            <div style="display:flex;">${avatarGroup}</div>
-                            <span style="font-size:0.85rem; color:#475569; font-weight: 500; margin-left: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;" title="${assigneeNames}">${assigneeNames}</span>
-                        </div>
-                        
-                        <div style="display:flex; align-items:center; gap: 8px;">
-                            ${(task.comments && task.comments.length > 0) ? `
-                            <span style="font-size:0.75rem; color:var(--primary-color); font-weight: 700; background:rgba(37, 99, 235, 0.1); padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;" title="${task.comments.length} comments">
-                                💬 ${task.comments.length}
-                            </span>
-                            ` : ''}
-
-                            ${(task.overseers && task.overseers.length > 0) ? `
-                            <span style="font-size:0.75rem; color:#64748b; font-weight: 600; background:#f1f5f9; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;" title="Overseers: ${task.overseers.map(o => o.name).join(', ')}">
-                                👁 <span style="max-width: 60px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${task.overseers.map(o => o.name).join(', ')}</span>
-                            </span>
-                            ` : (task.Mentor_name ? `
-                            <span style="font-size:0.75rem; color:#64748b; font-weight: 600; background:#f1f5f9; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;" title="Mentor: ${task.Mentor_name}">
-                                👁 <span style="max-width: 60px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${task.Mentor_name}</span>
-                            </span>
-                            ` : '')}
-                            
-                            <span style="font-size:0.8rem; color:#94a3b8; font-weight: 600; display: flex; align-items: center; gap: 4px;">
-                                <span style="font-size: 0.9rem;">📅</span> ${formatDateDMY(task.due_date)}
-                            </span>
-                            
-                            ${task.comments && task.comments.length > 0 ? `
-                                <span style="font-size:0.75rem; color:#3b82f6; font-weight: 600; display:flex; align-items:center; gap:2px;" title="${task.comments.length} comments">
-                                    💬 ${task.comments.length}
-                                </span>
-                            ` : ''}
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    };
-
-    renderList(todoTasks, todoList);
-    renderList(inProgressTasks, inProgressList);
-    renderList(completedTasks, completedList);
-}
-
-// --- My Tasks Module (Employee Only) ---
-let myTasks = [];
-
-async function openMyTasks() {
-    TaskManagerV2.open();
-}
-
-async function refreshMyTasks() {
-    try {
-        const empId = typeof currentUser !== 'undefined' && currentUser ? currentUser.id : '';
-        console.log('DEBUG: refreshing my tasks for empId:', empId, 'currentUser:', window.currentUser);
-        const res = await apiCall(`tasks?employee_id=${empId}&scope=my`, 'GET');
-        console.log('DEBUG: my tasks response:', res);
-        if (res && res.success && Array.isArray(res.tasks)) {
-            myTasks = res.tasks;
-            renderMyTaskBoard();
-            checkDueTomorrowReminders();
-
-            // Immediate check for zero active tasks
-            const activeCount = myTasks.filter(t => t.status === 'todo' || t.status === 'in_progress').length;
-            if (activeCount === 0 && currentUser && currentUser.role !== 'admin') {
-                if (!window._lastTaskWarningShown) {
-                    openModal('noTasksModal');
-                    window._lastTaskWarningShown = true;
-                }
-            } else {
-                window._lastTaskWarningShown = false;
-            }
-        }
-    } catch (error) {
-        console.error('Error loading my tasks:', error);
-        showNotification('Error loading tasks', 'error');
-    }
-}
-
-function renderMyTaskBoard() {
-    const todoList = document.getElementById('myTodoList');
-    const inProgressList = document.getElementById('myInProgressList');
-    const completedList = document.getElementById('myCompletedList');
-
-    if (!todoList || !inProgressList || !completedList) return;
-
-    const getPriorityWeight = (p) => {
-        if (!p) return 99;
-        p = p.toLowerCase();
-        const w = { 'p1':1, 'p2':2, 'p3':3, 'p4':4, 'urgent':5, 'high':6, 'medium':7, 'low':8 };
-        return w[p] || 99;
-    };
-    const todoTasks = myTasks.filter(t => t.status === 'todo').sort((a,b) => getPriorityWeight(a.priority) - getPriorityWeight(b.priority));
-    const inProgressTasks = myTasks.filter(t => t.status === 'in_progress').sort((a,b) => getPriorityWeight(a.priority) - getPriorityWeight(b.priority));
-    const completedTasks = myTasks.filter(t => t.status === 'completed').sort((a,b) => getPriorityWeight(a.priority) - getPriorityWeight(b.priority));
-
-    document.getElementById('myTodoCount').textContent = todoTasks.length;
-    document.getElementById('myInProgressCount').textContent = inProgressTasks.length;
-    document.getElementById('myCompletedCount').textContent = completedTasks.length;
-
-    const renderList = (taskList, container) => {
-        if (!taskList.length) {
-            container.innerHTML = '<div class="text-muted text-center p-3" style="color:#94a3b8; font-size:0.9rem;">No tasks</div>';
-            return;
-        }
-
-        container.innerHTML = taskList.map((task, idx) => {
-            const priorityClass = task.priority === 'High' ? 'priority-high' :
-                (task.priority === 'Medium' ? 'priority-medium' : 'priority-low');
-
-            // Due Date Logic
-            let dueClass = '';
-            let dueBadge = '';
-
-            if (task.due_date) {
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const due = new Date(task.due_date);
-                due.setHours(0, 0, 0, 0);
-
-                const diffTime = due - today;
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-                if (diffDays < 0) {
-                    dueClass = 'task-card-overdue';
-                } else if (diffDays <= 2) {
-                    dueClass = 'task-card-urgent';
-                } else if (diffDays <= 7) {
-                    dueClass = 'task-card-warning';
-                } else {
-                    dueClass = 'task-card-safe';
-                }
-
-                if (diffDays === 1) {
-                    dueBadge = '<span class="due-tomorrow-badge">Due Tomorrow!</span>';
-                }
-            }
-
-            // Override for completed tasks: ALWAYS Green
-            if (task.status === 'completed') {
-                dueClass = 'task-card-safe';
-                dueBadge = '';
-            }
-
-            return `
-                <div class="premium-task-card ${dueClass}" id="mytask-${task.id}" onclick="openTaskDetail(${task.id})" style="animation: slideInUp 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards; animation-delay: ${idx * 50}ms; opacity:1; cursor:pointer;">
-                    <div class="premium-card-header" style="flex-wrap: wrap; margin-bottom: 6px;">
-                        ${task.status !== 'completed' ? `
-                        <div style="display: flex; gap: 4px; align-items: center; max-width: 60%; flex-wrap: wrap;">
-                            ${(task.history || []).filter(h => h.field === 'priority' && h.old && h.old !== task.priority).reverse().map(h => {
-                                const hp = h.old.toLowerCase();
-                                const hpClass = hp === 'high' ? 'priority-high' : (hp === 'medium' ? 'priority-medium' : (hp === 'urgent' ? 'priority-urgent' : (['p1','p2','p3','p4'].includes(hp)) ? `priority-${hp}` : 'priority-low'));
-                                return `<span class="premium-priority-badge ${hpClass}" style="border-radius: 6px; padding: 4px 10px; opacity: 0.4; text-decoration: line-through; transform: scale(0.9);" title="Old Priority">${hp.toUpperCase()}</span>`;
-                            }).join('')}
-                            <span class="premium-priority-badge ${priorityClass}" style="border-radius: 6px; padding: 4px 10px;">${(task.priority || 'Medium').toUpperCase()}</span>
-                        </div>
-                        ` : '<div style="display: flex; max-width: 60%;"></div>'}
-                        ${dueBadge}
-                        <div style="display:flex; gap:8px; margin-left: auto;">
-                            <button class="btn-icon-sm" onclick="event.stopPropagation(); editTask(${task.id})" style="background:#f1f5f9; border:none; color:#64748b; cursor:pointer; width:28px; height:28px; border-radius:6px; display:flex; align-items:center; justify-content:center; transition:all 0.2s; font-size: 10px;" title="Edit">✎</button>
-                            ${typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || task.Mentor_id === currentUser.id) ? `
-                            <button class="btn-icon-sm" onclick="event.stopPropagation(); deleteTask(${task.id})" style="background:#fef2f2; border:none; color:#ef4444; cursor:pointer; width:28px; height:28px; border-radius:6px; display:flex; align-items:center; justify-content:center; transition:all 0.2s; font-size: 10px;" title="Delete">🗑</button>
-                            ` : ''}
-                        </div>
-                        ${task.comments && task.comments.length > 0 ? `
-                        <span style="font-size:0.75rem; color:var(--primary-color); font-weight: 700; background:rgba(37, 99, 235, 0.1); padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;">💬 ${task.comments.length}</span>
-                        ` : ''}
-                    </div>
-                    
-                    <h5 class="premium-task-title" style="margin: 0; font-size: 1.1rem; line-height: 1.5;">${task.title}</h5>
-                    <p style="font-size:0.9rem; color:#64748b; margin: 0; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${task.description || ''}</p>
-                    
-                    <div class="premium-task-meta" style="margin-top: 8px; padding-top: 12px; border-top: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-                        <span style="font-size:0.8rem; color:#94a3b8; font-weight: 600; display: flex; align-items: center; gap: 4px;">
-                            <span style="font-size: 0.95rem;">📅</span> ${formatDateDMY(task.due_date)}
-                        </span>
-                        
-                        ${(task.overseers && task.overseers.length > 0) ? `
-                        <span style="font-size:0.75rem; color:#64748b; font-weight: 600; background:#f1f5f9; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:4px;" title="Overseers: ${task.overseers.map(o => o.name).join(', ')}">
-                            👁 <span style="max-width: 60px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${task.overseers.map(o => o.name).join(', ')}</span>
-                        </span>
-                        ` : ''}
-                    </div>
-
-                    <div style="margin-top: 4px; display:flex; gap:8px; justify-content:flex-end;" onclick="event.stopPropagation()">
-                        ${task.status !== 'todo' ? `<button onclick="moveTask(${task.id}, 'todo', true)" style="font-size:0.75rem; padding:6px 12px; border:1px solid #e2e8f0; border-radius:8px; background:#f8fafc; color:#64748b; cursor:pointer; font-weight: 600; transition: all 0.2s;">← Todo</button>` : ''}
-                        ${task.status !== 'in_progress' ? `<button onclick="moveTask(${task.id}, 'in_progress', true)" style="font-size:0.75rem; padding:6px 12px; border:1px solid #dbeafe; border-radius:8px; background:#eff6ff; color:#3b82f6; cursor:pointer; font-weight: 600; transition: all 0.2s;">In Prog</button>` : ''}
-                        ${task.status !== 'completed' ? `<button onclick="moveTask(${task.id}, 'completed', true)" style="font-size:0.75rem; padding:6px 12px; border:1px solid #dcfce7; border-radius:8px; background:#f0fdf4; color:#10b981; cursor:pointer; font-weight: 600; transition: all 0.2s;">Done ✓</button>` : ''}
-                    </div>
-                </div>
-            `;
-        }).join('');
-    };
-
-    renderList(todoTasks, todoList);
-    renderList(inProgressTasks, inProgressList);
-    renderList(completedTasks, completedList);
-}
 
 function updateDashboardVisibility() {
     if (!currentUser) return;
@@ -3486,21 +2971,23 @@ function updateDashboardVisibility() {
     const taskMentorCard = document.getElementById('taskMentorCard');
     const meetingMomCard = document.getElementById('meetingMomCard');
     const myTasksCard = document.getElementById('myTasksCard');
-    const taskManagerV2Card = document.getElementById('taskManagerV2Card');
     const intelligenceHubCard = document.getElementById('intelligenceHubCard');
     const intelligenceHubCardEmployee = document.getElementById('intelligenceHubCardEmployee');
     const hubMyStatsBtn = document.getElementById('hubMyStatsBtn');
     const adminStatsGrid = document.getElementById('adminStatsGrid');
     const employeeStatsGrid = document.getElementById('employeeStatsGrid');
 
-    // Task Manager V2 Card is visible for everyone
-    if (taskManagerV2Card) taskManagerV2Card.classList.remove('hidden');
 
     if (currentUser.role === 'admin') {
         // Admin sees Admin Stats Grid and intelligenceHubCard
         if (taskMentorCard) taskMentorCard.classList.remove('hidden');
         if (meetingMomCard) meetingMomCard.classList.remove('hidden');
-        if (myTasksCard) myTasksCard.classList.add('hidden');
+        if (myTasksCard) {
+            myTasksCard.classList.remove('hidden');
+            // Update label for admin context if needed
+            const title = myTasksCard.querySelector('.action-card-title');
+            if (title) title.textContent = 'My Tasks';
+        }
 
         if (intelligenceHubCard) intelligenceHubCard.classList.remove('hidden');
         if (intelligenceHubCardEmployee) intelligenceHubCardEmployee.classList.add('hidden');
@@ -3907,154 +3394,7 @@ async function editTask(taskId) {
     TaskManagerV2.openDetail(taskId);
 }
 
-// Task state variables are further down near multi-select logic
 
-async function populateTaskAssigneeDropdown() {
-    try {
-        const res = await apiCall('employees-simple', 'GET');
-        if (res && res.success && Array.isArray(res.employees)) {
-            window.allEmployeesSimple = res.employees; // Store for lookup
-
-            // Populate Multi-Select Options
-            populateEmployeeListInDropdown('multiSelectOptionsList', false);
-
-            const MentorSelect = document.getElementById('taskMentor');
-            if (MentorSelect) {
-                // Allow selecting any employee as a Mentor/overseer
-                MentorSelect.innerHTML = '<option value="none">Optional: Select Mentor...</option>' +
-                    res.employees.map(emp => `<option value="${emp.id}">${emp.name} (${emp.role})</option>`).join('');
-            }
-            // Populate Overseer Multi-Select
-            populateOverseerListInDropdown('overseerOptionsList');
-        }
-    } catch (error) {
-        console.error('Error loading users for task assignment:', error);
-    }
-}
-
-// Auto-select Mentor when assignee changes
-document.addEventListener('change', (e) => {
-    if (e.target.id === 'taskAssignee') {
-        const empId = parseInt(e.target.value);
-        if (!empId || !window.allEmployeesSimple) return;
-
-        const emp = window.allEmployeesSimple.find(x => x.id === empId);
-        if (emp && emp.Mentor_id) {
-            const MentorSelect = document.getElementById('taskMentor');
-            if (MentorSelect) {
-                MentorSelect.value = emp.Mentor_id;
-            }
-        }
-    }
-});
-
-async function saveNewTask() {
-    showLoading("Saving task...");
-    const title = document.getElementById('taskTitle').value.trim();
-    const description = document.getElementById('taskDescription').value.trim();
-    const priority = document.getElementById('taskPriority').value;
-    const startDate = document.getElementById('taskStartDate').value;
-    const dueDate = document.getElementById('taskDueDate').value;
-
-    if (!title) {
-        hideLoading();
-        showNotification('Task title is required', 'error');
-        return;
-    }
-
-    if (!dueDate) {
-        hideLoading();
-        showNotification('Completion deadline is required', 'error');
-        return;
-    }
-
-    if (!window.currentEditingTaskId && selectedEmployeeIds.length === 0) {
-        hideLoading();
-        showNotification('Please select at least one employee', 'error');
-        return;
-    }
-
-    const btn = document.getElementById('saveTaskBtn');
-    const btnText = document.getElementById('saveTaskText');
-    const spinner = document.getElementById('saveTaskSpinner');
-
-    btn.disabled = true;
-    if (btnText) btnText.classList.add('hidden');
-    if (spinner) spinner.classList.remove('hidden');
-
-    try {
-        const url = window.currentEditingTaskId ? `tasks/${window.currentEditingTaskId}` : 'tasks/create';
-        const method = 'POST'; // Backend uses POST for both creation and update
-
-        const payload = {
-            title,
-            description,
-            priority,
-            start_date: startDate || null,
-            due_date: dueDate || null,
-            assignees: selectedEmployeeIds,
-            overseer_ids: selectedOverseerIds,
-            user_id: typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null,
-            employee_id: typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null,
-            created_by: typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null
-        };
-
-        const res = await apiCall(url, method, payload);
-
-        if (res && res.success) {
-            showNotification(window.currentEditingTaskId ? 'Task updated successfully' : 'Task(s) created successfully');
-            closeModal('addTaskModal');
-            window.currentEditingTaskId = null;
-            await refreshTasks();
-            if (typeof refreshMyTasks === 'function') await refreshMyTasks();
-            await loadActiveTasks(); // Update dashboard count
-        } else {
-            showNotification(res?.message || (window.currentEditingTaskId ? 'Failed to update task' : 'Failed to create task'), 'error');
-        }
-    } catch (error) {
-        console.error('Error creating task:', error);
-        showNotification('Error creating task', 'error');
-    } finally {
-        if (btn) btn.disabled = false;
-        if (btnText) btnText.classList.remove('hidden');
-        if (spinner) spinner.classList.add('hidden');
-    }
-}
-
-async function requestNewTaskFromMentor() {
-    const btn = document.getElementById('btnRequestTask');
-    if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'Sending...';
-    }
-
-    // Close the warning modal immediately (User: "Board Empty card did not close")
-    closeModal('noTasksModal');
-
-    showLoading("Requesting new task from mentor...");
-    try {
-        const res = await apiCall('request-new-task', 'POST', {
-            user_id: currentUser.id
-        });
-
-        if (res && res.success) {
-            showNotification('Request sent successfully! 🚀', 'success');
-            window._lastTaskWarningShown = true;
-        } else {
-            showNotification(res.message || 'Failed to send request', 'error');
-            // If already sent or failed, we keep button disabled or just reset? 
-            // Better allow them to try again later if it was a real failure.
-            if (btn) btn.disabled = false;
-        }
-    } catch (e) {
-        console.error('Task request error:', e);
-        showNotification('Connection error', 'error');
-        if (btn) btn.disabled = false;
-    } finally {
-        if (btn) btn.textContent = '🚀 Request New Task';
-        hideLoading();
-    }
-}
 
 let currentSelectedTaskId = null;
 
@@ -4062,242 +3402,8 @@ async function openTaskDetail(taskId) {
     TaskManagerV2.openDetail(taskId);
 }
 
-function renderTaskComments(comments) {
-    const list = document.getElementById('taskCommentsList');
-    if (!comments.length) {
-        list.innerHTML = '<p style="text-align:center; color:#94a3b8; font-size:0.9rem; margin-top:20px;">No comments yet.</p>';
-        return;
-    }
-
-    list.innerHTML = comments.map(c => `
-        <div style="display: flex; flex-direction: column; gap: 4px; background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px solid #f1f5f9;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-weight: 700; color: #1e293b; font-size: 0.85rem;">${c.author_name}</span>
-                <span style="font-size: 0.75rem; color: #94a3b8;">${formatDateDMY(c.created_at)} ${formatTimeOnly(c.created_at)}</span>
-            </div>
-            <p style="margin: 0; color: #334155; font-size: 0.95rem; line-height: 1.5;">${c.content}</p>
-        </div>
-    `).join('');
-
-    // Scroll to bottom
-    setTimeout(() => {
-        list.scrollTop = list.scrollHeight;
-    }, 100);
-}
-
-async function submitTaskComment() {
-    showLoading("Posting comment...");
-    const content = document.getElementById('newTaskComment').value.trim();
-    if (!content || !currentSelectedTaskId) {
-        hideLoading();
-        return;
-    }
-
-    try {
-        const res = await apiCall('task-comment', 'POST', {
-            task_id: currentSelectedTaskId,
-            author_id: currentUser.id,
-            content: content
-        });
-
-        if (res && res.success) {
-            document.getElementById('newTaskComment').value = '';
-            // Refresh tasks to get the new comment (or we could just append locally)
-            await Promise.all([refreshTasks(), refreshMyTasks()]);
-
-            // Find updated task and re-render comments
-            const updatedTask = [...tasks, ...myTasks].find(t => t.id === currentSelectedTaskId);
-            if (updatedTask) {
-                renderTaskComments(updatedTask.comments || []);
-            }
-        } else {
-            showNotification(res.message || 'Failed to add comment', 'error');
-        }
-    } catch (error) {
-        console.error('Error adding comment:', error);
-        showNotification('An error occurred', 'error');
-    } finally {
-        hideLoading();
-    }
-}
-
-// NEW TASK STEP FUNCTIONS
-function addNewStepUI() {
-    document.getElementById('addStepInputWrapper').classList.toggle('hidden');
-    document.getElementById('newStepText').focus();
-}
-
-async function saveNewStep() {
-    const text = document.getElementById('newStepText').value.trim();
-    if (!text || !currentSelectedTaskId) return;
-
-    showLoading("Adding step...");
-    try {
-        const t = [...tasks, ...myTasks].find(t => t.id === currentSelectedTaskId);
-        const currentSteps = t.steps || [];
-        const newSteps = [...currentSteps, { text: text, is_completed: false }];
-
-        const res = await apiCall(`tasks/${currentSelectedTaskId}`, 'POST', {
-            user_id: currentUser.id,
-            steps: newSteps
-        });
-
-        if (res && res.success) {
-            document.getElementById('newStepText').value = '';
-            document.getElementById('addStepInputWrapper').classList.add('hidden');
-            await Promise.all([refreshTasks(), refreshMyTasks()]);
-            await openTaskDetail(currentSelectedTaskId);
-        }
-    } catch (e) {
-        showNotification('Error adding step', 'error');
-    } finally {
-        hideLoading();
-    }
-}
-
-async function toggleTaskStep(taskId, stepId, isCompleted) {
-    showLoading(isCompleted ? "Completing step..." : "Undoing step...");
-    try {
-        const t = [...tasks, ...myTasks].find(t => t.id === taskId);
-        const updatedSteps = (t.steps || []).map(s => {
-            if (s.id === stepId) return { ...s, is_completed: isCompleted };
-            return s;
-        });
-
-        const res = await apiCall(`tasks/${taskId}`, 'POST', {
-            user_id: currentUser.id,
-            steps: updatedSteps
-        });
-
-        if (res && res.success) {
-            await Promise.all([refreshTasks(), refreshMyTasks()]);
-            // Re-render only if modal still open
-            if (currentSelectedTaskId === taskId) {
-                await openTaskDetail(taskId);
-            }
-        }
-    } catch (e) {
-        showNotification('Error updating step', 'error');
-    } finally {
-        hideLoading();
-    }
-}
-
-// BULK PRIORITY MODE LOGIC
-window._isPriorityMode = false;
-window._prioritySelection = [];
-
-function enterPriorityMode() {
-    window._isPriorityMode = !window._isPriorityMode;
-    const btn = document.getElementById('btnEnterPriorityMode');
-    const saveBtn = document.getElementById('btnSavePriority');
-    
-    if (window._isPriorityMode) {
-        btn.textContent = '❌ Cancel Mode';
-        btn.style.background = '#64748b';
-        saveBtn.classList.remove('hidden');
-        window._prioritySelection = [];
-        showNotification('Priority Mode Active. Click tasks in order (P1, P2...)', 'info');
-    } else {
-        btn.textContent = '⭐ Prioritize';
-        btn.style.background = '#f59e0b';
-        saveBtn.classList.add('hidden');
-        window._prioritySelection = [];
-    }
-    
-    renderTaskBoard();
-}
-
-function togglePrioritySelection(taskId) {
-    const index = window._prioritySelection.indexOf(taskId);
-    if (index > -1) {
-        window._prioritySelection.splice(index, 1);
-    } else {
-        window._prioritySelection.push(taskId);
-    }
-    renderTaskBoard();
-}
-
-async function savePriorityOrder() {
-    if (window._prioritySelection.length === 0) {
-        showNotification('No tasks selected', 'warning');
-        return;
-    }
-
-    showLoading("Saving Priority Order...");
-    try {
-        const updates = window._prioritySelection.map((id, idx) => ({
-            id: id,
-            priority: `p${idx + 1}`
-        }));
-
-        const res = await apiCall('bulk-update-tasks', 'POST', {
-            user_id: currentUser.id,
-            updates: updates
-        });
-
-        if (res && res.success) {
-            showNotification('Priority order updated successfully', 'success');
-            enterPriorityMode(); // Exit mode
-            await refreshTasks();
-        } else {
-            showNotification(res.message || 'Failed to update priority', 'error');
-        }
-    } catch (e) {
-        console.error(e);
-        showNotification('An error occurred', 'error');
-    } finally {
-        hideLoading();
-    }
-}
-
-async function moveTask(taskId, newStatus, isMyTask = false) {
-    try {
-        const payload = {
-            status: newStatus,
-            user_id: typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null
-        };
-        const res = await apiCall(`tasks/${taskId}`, 'POST', payload);
-        if (res && res.success) {
-            if (isMyTask) {
-                await refreshMyTasks();
-            } else {
-                await refreshTasks();
-            }
-            await loadActiveTasks(); // Update dashboard count
-        } else {
-            showNotification('Failed to update task: ' + (res?.message || 'Unauthorized'), 'error');
-        }
-    } catch (error) {
-        console.error('Error updating task:', error);
-        showNotification('Error updating task', 'error');
-    }
-}
-
 async function deleteTask(taskId) {
-    if (!(await showConfirm('Are you sure you want to delete this task?', 'Delete Task', '🗑️'))) return;
-    showLoading("Deleting task...");
-
-    try {
-        const payload = {
-            _method: 'DELETE',
-            user_id: typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null
-        };
-        const res = await apiCall(`tasks/${taskId}`, 'POST', payload);
-        if (res && res.success) {
-            showNotification('Task deleted');
-            await refreshTasks();
-            if (typeof refreshMyTasks === 'function') await refreshMyTasks();
-            await loadActiveTasks(); // Update dashboard count
-        } else {
-            showNotification('Failed to delete task: ' + (res?.message || 'Unauthorized'), 'error');
-        }
-    } catch (error) {
-        console.error('Error deleting task:', error);
-        showNotification('Error deleting task', 'error');
-    } finally {
-        hideLoading();
-    }
+    TaskManagerV2.deleteTask(taskId);
 }
 
 async function approveRequest(requestId, type) {
@@ -8473,8 +7579,8 @@ function renderAdminUsers(users) {
         }
 
         const tasksHtml = (u.active_tasks && u.active_tasks.length > 0)
-            ? u.active_tasks.map(t => `<div class="task-pill" onclick="event.stopPropagation(); openTaskDetail(${t.id})" style="font-size:11px; background:#f0f9ff; color:#0369a1; padding:2px 8px; border-radius:6px; margin-bottom:4px; border:1px solid #bae6fd; font-weight:500; white-space:normal; line-height:1.2; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.background='#e0f2fe'; this.style.borderColor='#7dd3fc';" onmouseout="this.style.background='#f0f9ff'; this.style.borderColor='#bae6fd';">${t.title}</div>`).join('')
-            : `<div onclick="event.stopPropagation(); addNewTask(${u.id})" style="font-size:11px; color:#ef4444; font-weight:600; background:#fef2f2; padding:4px 8px; border-radius:6px; border:1px solid #fee2e2; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.background='#fee2e2'; this.style.borderColor='#fca5a5';" onmouseout="this.style.background='#fef2f2'; this.style.borderColor='#fee2e2;">⚠️ No Active Tasks</div>`;
+            ? u.active_tasks.map(t => `<div class="task-pill" onclick="event.stopPropagation(); if(typeof TaskManagerV2 !== 'undefined') TaskManagerV2.openDetail(${t.id})" style="font-size:11px; background:#f0f9ff; color:#0369a1; padding:2px 8px; border-radius:6px; margin-bottom:4px; border:1px solid #bae6fd; font-weight:500; white-space:normal; line-height:1.2; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.background='#e0f2fe'; this.style.borderColor='#7dd3fc';" onmouseout="this.style.background='#f0f9ff'; this.style.borderColor='#bae6fd';">${t.title}</div>`).join('')
+            : `<div onclick="event.stopPropagation(); if(typeof TaskManagerV2 !== 'undefined') TaskManagerV2.openNewTaskModal(${u.id})" style="font-size:11px; color:#ef4444; font-weight:600; background:#fef2f2; padding:4px 8px; border-radius:6px; border:1px solid #fee2e2; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.background='#fee2e2'; this.style.borderColor='#fca5a5';" onmouseout="this.style.background='#fef2f2'; this.style.borderColor='#fee2e2;">⚠️ No Active Tasks</div>`;
 
         return `
             <tr>
@@ -9433,7 +8539,6 @@ function openExportModal() {
     // Default dates (current month)
     const today = new Date();
     const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-
     document.getElementById('exportFromDate').value = formatDate(firstDayOfMonth);
     document.getElementById('exportToDate').value = formatDate(today);
     document.getElementById('exportError').style.display = 'none';
@@ -9615,6 +8720,15 @@ async function confirmExport() {
             });
         });
 
+        // Add Summary Headers at the end
+        headers.push({ header: 'Working Days', key: 'total_working_days', width: 12 });
+        headers.push({ header: 'Present', key: 'total_present', width: 10 });
+        headers.push({ header: 'WFH', key: 'total_wfh', width: 10 });
+        headers.push({ header: 'Half Day', key: 'total_hd', width: 10 });
+        headers.push({ header: 'Client', key: 'total_cl', width: 10 });
+        headers.push({ header: 'Leave', key: 'total_leave', width: 10 });
+        headers.push({ header: 'Absent', key: 'total_absent', width: 10 });
+
         ws.columns = headers;
 
         /* ---------- ROWS (CHUNIKED FOR PERFORMANCE) ---------- */
@@ -9633,6 +8747,9 @@ async function confirmExport() {
             'Leave': { fill: 'FFFFD9E1', font: 'FF9C004C' }
         };
 
+        // Calculate Total Working Days in range for summary
+        const totalWorkingDays = dateRange.filter(d => !weekendMap[d]).length;
+
         for (let idx = 0; idx < totalEmployees; idx++) {
             if (isExportAllCancelled) break;
             const emp = employeesList[idx];
@@ -9641,7 +8758,14 @@ async function confirmExport() {
                 employee: emp.employee,
                 department: emp.department,
                 type: emp.type,
-                office: emp.office
+                office: emp.office,
+                total_working_days: totalWorkingDays,
+                total_present: 0,
+                total_wfh: 0,
+                total_hd: 0,
+                total_cl: 0,
+                total_leave: 0,
+                total_absent: 0
             };
 
             // 1. Build Row Data
@@ -9656,7 +8780,16 @@ async function confirmExport() {
                     // Override weekday A with weekend label if applicable
                     val = weekendMap[d];
                 }
+                
                 rowData[d] = val;
+
+                // Update Summary Counters
+                if (val === 'P') rowData.total_present++;
+                else if (val === 'WFH') rowData.total_wfh++;
+                else if (val === 'HD') rowData.total_hd++;
+                else if (val === 'CL') rowData.total_cl++;
+                else if (val === 'Leave') rowData.total_leave++;
+                else if (val === 'A') rowData.total_absent++;
             });
 
             const row = ws.addRow(rowData);
@@ -9692,6 +8825,16 @@ async function confirmExport() {
                     };
                 }
             });
+
+            // 3. Style Summary Columns (after date loop)
+            const summaryStartCol = 5 + dateRange.length;
+            for (let j = 0; j < 7; j++) {
+                const sCell = row.getCell(summaryStartCol + j);
+                sCell.font = { bold: true };
+                sCell.alignment = { vertical: 'middle', horizontal: 'center' };
+                // Light gray background for summary area
+                sCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
+            }
 
             // Update progress and yield thread every 50 employees for much faster execution
             if (idx % 50 === 0 || idx === totalEmployees - 1) {
@@ -13381,8 +12524,10 @@ async function saveNewDueDate(taskId) {
             showNotification('Deadline updated successfully');
             toggleDateEditor(false);
             // Refresh and re-open detail to show updated history
-            await Promise.all([refreshTasks(), refreshMyTasks()]);
-            await openTaskDetail(taskId);
+            await TaskManagerV2.refresh();
+            if (typeof TaskManagerV2 !== 'undefined') {
+                await TaskManagerV2.openDetail(taskId);
+            }
         } else {
             showNotification(res.message || 'Failed to update date', 'error');
         }
@@ -13465,7 +12610,7 @@ function showLeaveDatesModal(mode = 'overview') {
     modal.style.display = 'flex';
     modal.style.alignItems = 'center';
     modal.style.justifyContent = 'center';
-    modal.style.zIndex = '13000'; // Higher than status overview modal
+    modal.style.zIndex = '15000'; // Higher than status overview modal (12000)
 
     modal.innerHTML = `
         <div class="modal-content" style="max-width: 440px; width: 90%; padding: 0; border-radius: 28px; border: none; box-shadow: 0 40px 80px -15px rgba(0,0,0,0.5); animation: modalPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);">

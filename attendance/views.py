@@ -151,13 +151,15 @@ def login(request):
             'message': 'Username and password are required'
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    print(f"DEBUG LOGIN attempt: username='{username}'")
+    print(f"DEBUG LOGIN attempt: identifier='{username}'")
 
     try:
-        employee = Employee.objects.get(username=username, is_active=True)
+        # Support login via both username OR email
+        employee = Employee.objects.get(Q(username=username) | Q(email=username), is_active=True)
+        
         # Check password (support both hashed and plain 'password' for compatibility)
         if check_password(password, employee.password) or password == 'password':
-            print("DEBUG LOGIN: Success")
+            print(f"DEBUG LOGIN: Success for user '{employee.username}'")
             profile = EmployeeProfile.objects.filter(employee=employee).first()
             assignment = employee.get_current_assignment()
             user_data = {
@@ -186,23 +188,23 @@ def login(request):
                 'message': 'Login successful'
             })
         else:
-            print(f"DEBUG LOGIN: Password mismatch for user '{username}'")
+            print(f"DEBUG LOGIN: Password mismatch for identifier '{username}'")
             return Response({
                 'success': False,
-                'message': 'Invalid username or password'
+                'message': 'Invalid username/email or password'
             }, status=status.HTTP_401_UNAUTHORIZED)
     except Employee.DoesNotExist:
-        # Check if the user exists but is inactive
-        if Employee.objects.filter(username=username, is_active=False).exists():
+        # Check if the user exists but is inactive (via username or email)
+        if Employee.objects.filter(Q(username=username) | Q(email=username), is_active=False).exists():
              return Response({
                 'success': False,
                 'message': 'Your account is inactive. Please contact the administrator.'
             }, status=status.HTTP_403_FORBIDDEN)
 
-        print(f"DEBUG LOGIN: User '{username}' not found")
+        print(f"DEBUG LOGIN: Identifier '{username}' not found")
         return Response({
             'success': False,
-            'message': 'Invalid username or password'
+            'message': 'Invalid username/email or password'
         }, status=status.HTTP_401_UNAUTHORIZED)
     except Exception as e:
         import traceback
@@ -3066,16 +3068,31 @@ def request_new_task(request):
         if existing:
             return Response({'success': False, 'message': 'You already have a pending task request sent to your mentor.'})
             
-        EmployeeRequest.objects.create(
+        req = EmployeeRequest.objects.create(
             employee=user,
             request_type='task_request',
             start_date=timezone.now().date(),
             end_date=timezone.now().date(),
-            reason='New task request from dashboard alert',
+            reason='New task request from Task Manager V2',
             status='pending'
         )
+
+        # Notify mentors or admins
+        mentors = user.mentors.all()
+        if not mentors.exists():
+            # Fallback to admins
+            mentors = Employee.objects.filter(role='admin', is_active=True)
         
-        return Response({'success': True, 'message': 'Task request sent to your mentor!'})
+        notif_msg = f"{user.name} has requested a new task assignment."
+        for mentor in mentors:
+            _send_task_notification(
+                user=mentor,
+                message=notif_msg,
+                task_id=f"req_{req.id}",
+                type="request"
+            )
+        
+        return Response({'success': True, 'message': 'Task request sent successfully to your mentor/admin!'})
         
     except Employee.DoesNotExist:
         return Response({'success': False, 'message': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -3528,8 +3545,15 @@ def tasks_api(request):
                 emp = Employee.objects.get(id=employee_id)
 
                 if emp.role == 'admin':
-                    # ADMIN PATH
-                    tasks_data = _get_admin_task_mentor_data()
+                    # ADMIN PATH - Now respects scope for consistency with Mentor view
+                    scope = request.GET.get('scope')
+                    if scope == 'my':
+                        # Tasks assigned TO the admin
+                        tasks = Task.objects.filter(assignees=emp).distinct().select_related('created_by', 'mentor').prefetch_related('assignees').order_by('-created_at')
+                        tasks_data = _serialize_tasks(tasks)
+                    else:
+                        # Full view for admin (Team/All)
+                        tasks_data = _get_admin_task_mentor_data()
                 elif emp.role == 'mentor':
                     # Mentor PATH - Separated based on scope
                     scope = request.GET.get('scope')
@@ -3538,10 +3562,10 @@ def tasks_api(request):
                         tasks = Task.objects.filter(assignees=emp).distinct().select_related('created_by', 'mentor').prefetch_related('assignees').order_by('-created_at')
                         tasks_data = _serialize_tasks(tasks)
                     elif scope == 'team':
-                        # Subordinates' tasks + tasks explicitly overseen (excluding ones where they are just assignees)
+                        # Subordinates' tasks (Excludes mentor's personal tasks)
                         tasks_data = _get_mentor_employees_tasks_data(emp)
                     else:
-                        # Legacy merged view
+                        # Legacy merged view (if no scope provided)
                         own_tasks = _get_employee_my_tasks_data(emp)
                         subordinate_tasks = _get_mentor_employees_tasks_data(emp)
                         tasks_data = own_tasks + [t for t in subordinate_tasks if t['id'] not in [ot['id'] for ot in own_tasks]]
@@ -3566,7 +3590,7 @@ def tasks_api(request):
         except Exception as e:
             return Response({
                 'success': False,
-                'message': 'Failed to fetch tasks'
+                'message': f'Failed to fetch tasks: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     elif request.method == 'POST':
@@ -3887,6 +3911,7 @@ def _update_task_employee(task, data, user=None):
 
 @api_view(['GET', 'POST'])
 @require_gated_token_api
+@parser_classes([JSONParser, MultiPartParser, FormParser])
 def meetings_api(request):
     """List or create meetings"""
     if request.method == 'GET':
@@ -3966,8 +3991,9 @@ def meetings_api(request):
         except Exception as e:
             return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-@api_view(['PATCH', 'DELETE'])
+@api_view(['GET', 'PATCH', 'DELETE'])
 @require_gated_token_api
+@parser_classes([JSONParser])
 def meeting_detail_api(request, meeting_id):
     """Update or delete a meeting"""
     try:
@@ -4006,7 +4032,7 @@ def meeting_detail_api(request, meeting_id):
         return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(['GET', 'POST', 'PATCH'])
+@api_view(['GET', 'POST', 'PATCH', 'DELETE'])
 @require_gated_token_api
 @parser_classes([JSONParser, MultiPartParser, FormParser])
 def task_detail_api(request, task_id):
@@ -4444,67 +4470,82 @@ def wfh_request_approve(request):
 
         # If approved, handle based on request type
         if status_val == 'approved':
-            # Determine the status to set based on request type
             req_type = request_obj.request_type
             
+            # 1. Determine attendance record settings
             if req_type == 'wfh':
-                # Mark as WFH approved for the entire range
-                current_date = request_obj.start_date
-                while current_date <= request_obj.end_date:
-                    # Update existing 'absent' records to 'wfh'
-                    AttendanceRecord.objects.filter(
-                        employee=request_obj.employee,
-                        date=current_date,
-                        status='absent'
-                    ).update(status='wfh', type='wfh')
-                    current_date += timedelta(days=1)
+                attendance_status = 'wfh'
+                attendance_type = 'wfh'
+                is_half = False
+            elif req_type == 'full_day':
+                attendance_status = 'leave'
+                attendance_type = 'office'
+                is_half = False
+            elif req_type == 'half_day':
+                attendance_status = 'half_day'
+                attendance_type = 'office'
+                is_half = True
+            elif req_type == 'optional_holiday':
+                # 'holiday' is not in STATUS_CHOICES, use 'leave' with notes
+                attendance_status = 'leave'
+                attendance_type = 'office'
+                is_half = False
             else:
-                # For leaves (full/half day), we generally DO want to auto-mark 
-                # because the employee isn't working.
-                if req_type == 'full_day':
-                    attendance_status = 'leave'
-                    attendance_type = 'office' # doesn't matter much
-                    is_half = False
-                elif req_type == 'half_day':
-                    attendance_status = 'half_day'
-                    attendance_type = 'office' 
-                    is_half = True
-                else:
-                    attendance_status = 'leave'
-                    attendance_type = 'office'
-                    is_half = False
+                attendance_status = 'leave'
+                attendance_type = 'office'
+                is_half = False
 
-                # Create or update attendance record for each day in the request date range
+            # 2. Update attendance records for the date range
+            if req_type != 'unblock_attendance' and req_type != 'task_request':
                 from datetime import timedelta
                 current_date = request_obj.start_date
                 while current_date <= request_obj.end_date:
-                    defaults = {
-                        'type': attendance_type,
-                        'status': attendance_status,
-                        'is_half_day': is_half,
-                        'notes': f'Approved request ({req_type})',
-                    }
-                    
                     AttendanceRecord.objects.update_or_create(
                         employee=request_obj.employee,
                         date=current_date,
-                        defaults=defaults
+                        defaults={
+                            'type': attendance_type,
+                            'status': attendance_status,
+                            'is_half_day': is_half,
+                            'notes': f'Approved request ({req_type})',
+                        }
                     )
                     current_date += timedelta(days=1)
+            
+            # 3. Update Leave Balance for CL if applicable
+            if req_type in ['full_day', 'half_day']:
+                try:
+                    profile = request_obj.employee.profile
+                    increment = 1.0 if req_type == 'full_day' else 0.5
+                    num_days = (request_obj.end_date - request_obj.start_date).days + 1
+                    profile.taken_cl += (increment * num_days)
+                    profile.save()
+                except Exception as e:
+                    print(f"Error updating leave balance: {e}")
 
         elif status_val == 'rejected':
-            if request_obj.request_type == 'wfh':
-                AttendanceRecord.objects.filter(
-                    employee=request_obj.employee,
-                    date=request_obj.start_date,
-                    type='wfh'
-                ).update(status='absent', notes='WFH Rejected (Incomplete Tasks)')
+            # Revert attendance records for the range if they were previously auto-created/updated
+            req_type = request_obj.request_type
+            if req_type != 'unblock_attendance' and req_type != 'task_request':
+                from datetime import timedelta
+                current_date = request_obj.start_date
+                while current_date <= request_obj.end_date:
+                    # Only revert if it matches the current request's expected approved status
+                    # to avoid accidentally reverting a 'present' record if someone worked anyway
+                    AttendanceRecord.objects.filter(
+                        employee=request_obj.employee,
+                        date=current_date,
+                        status__in=['wfh', 'leave', 'half_day']
+                    ).update(status='absent', notes=f'Request rejected ({req_type})')
+                    current_date += timedelta(days=1)
 
         return Response({
             'success': True,
             'message': f'Request {status_val}'
         })
     except Exception as e:
+        import traceback
+        print(traceback.format_exc())
         return Response({
             'success': False,
             'message': str(e)
@@ -4679,18 +4720,18 @@ def leave_request_approve(request):
             req_type = req.request_type
             
             # Unblock requests do not create attendance records, they just lift the check-in block
-            if req_type != 'unblock_attendance':
+            if req_type != 'unblock_attendance' and req_type != 'task_request':
                 if req_type == 'wfh':
                     attendance_status = 'wfh'
                     attendance_type = 'wfh'
                 elif req_type == 'full_day':
-                    attendance_status = 'leave'  # Full day leave shows as leave
+                    attendance_status = 'leave'
                     attendance_type = 'office'
                 elif req_type == 'half_day':
                     attendance_status = 'half_day'
                     attendance_type = 'office'
                 elif req_type == 'optional_holiday':
-                    attendance_status = 'holiday'
+                    attendance_status = 'leave' # 'holiday' is not in STATUS_CHOICES
                     attendance_type = 'office'
                 else:
                     attendance_status = 'leave'
@@ -4717,15 +4758,30 @@ def leave_request_approve(request):
                     try:
                         profile = req.employee.profile
                         increment = 1.0 if req_type == 'full_day' else 0.5
-                        # Calculate total days in request
                         num_days = (req.end_date - req.start_date).days + 1
                         profile.taken_cl += (increment * num_days)
                         profile.save()
                     except Exception as e:
                         print(f"Error updating leave balance: {e}")
+        
+        elif status_val == 'rejected':
+            # Revert attendance records if previously approved
+            req_type = req.request_type
+            if req_type != 'unblock_attendance' and req_type != 'task_request':
+                from datetime import timedelta
+                current_date = req.start_date
+                while current_date <= req.end_date:
+                    AttendanceRecord.objects.filter(
+                        employee=req.employee,
+                        date=current_date,
+                        status__in=['wfh', 'leave', 'half_day']
+                    ).update(status='absent', notes=f'Request rejected ({req_type})')
+                    current_date += timedelta(days=1)
 
         return Response({'success': True, 'message': f'Request {status_val}'})
     except Exception as e:
+        import traceback
+        print(traceback.format_exc())
         return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -5533,18 +5589,24 @@ def spa_view(request):
 
 @require_valid_token
 def gated_dashboard(request):
-    """Example of a protected dashboard view."""
+    """Entry point for gated access with token from portal."""
     token_str = request.GET.get('token')
     from .security import validate_gated_token
     success, data = validate_gated_token(token_str)
     
-    context = {}
+    host = request.get_host()
+    is_development = '127.0.0.1' in host or 'localhost' in host
+    
+    context = {
+        'maps_api_key': settings.MAPS_API_KEY,
+        'gated_token': token_str,
+        'is_development': is_development
+    }
+    
     if success:
         context['gated_user_id'] = data.get('user_id')
         context['is_gated'] = True
-        context['gated_token'] = token_str
         
-    context['maps_api_key'] = settings.MAPS_API_KEY
     return render(request, 'index.html', context)
 
 
