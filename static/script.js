@@ -119,9 +119,8 @@ document.addEventListener('DOMContentLoaded', async function () {
             sessionStorage.removeItem('attendanceUser');
         }
     } else if (window.GATED_TOKEN && !window.IS_DEVELOPMENT) {
-        // PRODUCTION AUTO-LOGIN: If a token exists and we are NOT on local development,
-        // hide the login screen immediately and attempt auto-login.
-        console.log('Production instance detected with token. Attempting auto-login...');
+        // PRODUCTION AUTO-LOGIN: If a token exists and we are in production, attempt auto-login.
+        console.log('Production token detected. Attempting auto-login...');
         const loginScreen = document.getElementById('loginScreen');
         if (loginScreen) loginScreen.classList.remove('active');
         showLoading('Authenticating with HanuAI Portal...');
@@ -142,6 +141,10 @@ document.addEventListener('DOMContentLoaded', async function () {
                 
                 // Initialize session
                 if (currentUser.theme_settings) applyUserTheme(currentUser.theme_settings);
+                
+                // Transition to dashboard
+                const loginScreen = document.getElementById('loginScreen');
+                if (loginScreen) loginScreen.classList.remove('active');
                 showScreen('dashboardScreen');
                 await syncServerTime();
                 const istNow = getCurrentISTDate();

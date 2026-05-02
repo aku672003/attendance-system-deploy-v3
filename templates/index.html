@@ -19,6 +19,7 @@
         window.MAPS_API_KEY = "{{ maps_api_key }}";
         window.GATED_TOKEN = "{{ gated_token }}";
         window.IS_DEVELOPMENT = "{{ is_development|yesno:'true,false' }}" === "true";
+        window.IS_AUTHENTICATED = "{{ is_authenticated|yesno:'true,false' }}" === "true";
     </script>
 
 
@@ -262,7 +263,7 @@
 
 <body>
     <!-- Login Screen -->
-    <div id="loginScreen" class="screen active">
+    <div id="loginScreen" class="screen {% if not is_authenticated or is_development %}active{% endif %}">
         <div class="login-container">
             <div class="login-card">
                 <div class="login-title">Employee Attendance System</div>
@@ -692,7 +693,7 @@
     </div>
 
     <!-- Dashboard Screen -->
-    <div id="dashboardScreen" class="screen">
+    <div id="dashboardScreen" class="screen {% if is_authenticated and not is_development %}active{% endif %}">
         <div class="container">
             <div class="header">
                 <div class="header-title-group">

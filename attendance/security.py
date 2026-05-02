@@ -54,6 +54,8 @@ def validate_gated_token(token):
     print(f"[SECURITY DEBUG] Token Validation Final Response: {last_error}")
     return False, last_error
 
+from .models import Employee
+
 def require_valid_token(view_func):
     """
     Decorator for Django views that requires a valid, signed token.
@@ -64,16 +66,30 @@ def require_valid_token(view_func):
     def _wrapped_view(request, *args, **kwargs):
         token = request.GET.get('token')
         
-        # Strictly require token presence for gated access
+        host = request.get_host()
+        is_development = '127.0.0.1' in host or 'localhost' in host
+
+        # Strictly require token presence for gated access, except in development
         if not token:
+            if is_development:
+                return view_func(request, *args, **kwargs)
             from .views import error_403_view
-            return error_403_view(request)
+            return error_403_view(request, message="Gated Token Missing")
             
         success, result = validate_gated_token(token)
         
         if not success:
             from .views import error_403_view
             return error_403_view(request, message=result)
+
+        # Extraction and Attachment: Bind the correct user from token to request
+        user_id = result.get('user_id')
+        if user_id:
+            try:
+                request.user = Employee.objects.get(id=user_id)
+            except Employee.DoesNotExist:
+                from .views import error_403_view
+                return error_403_view(request, message="User associated with token not found")
 
         return view_func(request, *args, **kwargs)
 
@@ -97,12 +113,26 @@ def require_gated_token_api(view_func):
                 token = request.data.get('token')
         
         if not token:
+            host = request.get_host()
+            is_development = '127.0.0.1' in host or 'localhost' in host
+            if is_development:
+                return view_func(request, *args, **kwargs)
             return JsonResponse({'success': False, 'message': 'Gated access required'}, status=403)
             
         success, result = validate_gated_token(token)
         if not success:
             return JsonResponse({'success': False, 'message': f'Invalid token: {result}'}, status=403)
             
+        # Extraction and Attachment: Bind the correct user from token to request
+        user_id = result.get('user_id')
+        if user_id:
+            try:
+                request.user = Employee.objects.get(id=user_id)
+            except Employee.DoesNotExist:
+                return JsonResponse({'success': False, 'message': 'User associated with token not found'}, status=403)
+        else:
+             return JsonResponse({'success': False, 'message': 'Invalid token payload: user_id missing'}, status=403)
+
         return view_func(request, *args, **kwargs)
 
     return _wrapped_view

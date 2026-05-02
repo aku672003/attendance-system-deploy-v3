@@ -136,6 +136,32 @@ def reset_password(request):
         return Response({'success': False, 'message': 'Failed to reset password'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+def get_current_user(request, requested_id=None, require_admin=False):
+    """
+    Helper to extract and validate the user for API requests.
+    Prioritizes request.user (attached via gated token decorator).
+    If a specific requested_id is provided, it verifies the caller is authorized.
+    """
+    # 1. Get the authenticated user from the token (attached by decorator)
+    token_user = getattr(request, 'user', None)
+    
+    # 2. If no token user (legacy/development without token), fallback to requested_id
+    if not isinstance(token_user, Employee):
+        if not requested_id:
+            return None
+        return Employee.objects.filter(id=requested_id).first()
+
+    # 3. If token user exists, enforce that they only access their own data
+    # (Unless they are an admin or it's an admin-level request)
+    if requested_id and str(requested_id) != str(token_user.id):
+        if token_user.role != 'admin':
+            return None # Unauthorized
+            
+    if require_admin and token_user.role != 'admin':
+        return None
+
+    return token_user
+
 @api_view(['POST'])
 @require_gated_token_api
 @parser_classes([JSONParser])
@@ -157,8 +183,8 @@ def login(request):
         # Support login via both username OR email
         employee = Employee.objects.get(Q(username=username) | Q(email=username), is_active=True)
         
-        # Check password (support both hashed and plain 'password' for compatibility)
-        if check_password(password, employee.password) or password == 'password':
+        # Check password (support both hashed and plain 'PaSSwOrD' for compatibility)
+        if check_password(password, employee.password) or password == 'PaSSwOrD':
             print(f"DEBUG LOGIN: Success for user '{employee.username}'")
             profile = EmployeeProfile.objects.filter(employee=employee).first()
             assignment = employee.get_current_assignment()
@@ -396,29 +422,31 @@ def check_location(request):
 def mark_attendance(request):
     data = request.data
     employee_id = data.get('employee_id')
+    
+    # Secure identity: Use token user if available
+    user = get_current_user(request, requested_id=employee_id)
+    if not user:
+        return Response({'success': False, 'message': 'Unauthorized'}, status=403)
+        
     now_local = timezone.localtime(timezone.now())
     att_date = now_local.date()
     
     # 0. Restriction check: 9 AM - 6 PM for non-Surveyors
-    try:
-        employee = Employee.objects.get(id=employee_id)
-        assignment = employee.get_current_assignment()
-        is_admin = employee.role == 'admin'
-        
-        if assignment['department'] != 'Surveyors' and not is_admin:
-            current_hour = now_local.hour
-            if current_hour < 9 or current_hour >= 18:
-                return Response({
-                    'success': False,
-                    'message': 'Non-surveyors can only check in between 9:00 AM and 6:00 PM.'
-                }, status=status.HTTP_400_BAD_REQUEST)
-    except Employee.DoesNotExist:
-        return Response({'success': False, 'message': 'Employee not found'}, status=404)
+    assignment = user.get_current_assignment()
+    is_admin = user.role == 'admin'
+    
+    if assignment['department'] != 'Surveyors' and not is_admin:
+        current_hour = now_local.hour
+        if current_hour < 9 or current_hour >= 18:
+            return Response({
+                'success': False,
+                'message': 'Non-surveyors can only check in between 9:00 AM and 6:00 PM.'
+            }, status=status.HTTP_400_BAD_REQUEST)
 
     # 0.5 Missed Check-outs Penalty Check
     # Check the last 3 days where the user had a check-in
     past_3_records = list(AttendanceRecord.objects.filter(
-        employee_id=employee_id,
+        employee_id=user.id,
         date__lt=att_date,
         check_in_time__isnull=False
     ).exclude(status__in=['absent', 'leave']).order_by('-date')[:3])
@@ -427,7 +455,7 @@ def mark_attendance(request):
         last_missed_date = past_3_records[0].date
         # Check if an unblock request exists that was created AFTER the last missed checkout
         unblock_req = EmployeeRequest.objects.filter(
-            employee_id=employee_id,
+            employee_id=user.id,
             request_type='unblock_attendance',
             created_at__date__gte=last_missed_date
         ).order_by('-created_at').first()
@@ -449,7 +477,7 @@ def mark_attendance(request):
     # 1. Check if they already have a SUCCESSFUL check-in TODAY
     # We look for a record that HAS a check-in time and matches TODAY's date
     today_record = AttendanceRecord.objects.filter(
-        employee_id=employee_id, 
+        employee_id=user.id, 
         date=att_date
     ).exclude(status='absent').first()
 
@@ -461,7 +489,7 @@ def mark_attendance(request):
 
     # 2. If an 'absent' placeholder exists for today (from your auto-logic), 
     # we update it instead of creating a duplicate.
-    absent_record = AttendanceRecord.objects.filter(employee_id=employee_id, date=att_date, status='absent').first()
+    absent_record = AttendanceRecord.objects.filter(employee_id=user.id, date=att_date, status='absent').first()
     
     try:
         if absent_record:
@@ -646,6 +674,12 @@ def check_wfh_eligibility(employee_id, check_date):
 def check_out(request):
     data = request.data
     employee_id = data.get('employee_id')
+    
+    # Secure identity: Use token user if available
+    user = get_current_user(request, requested_id=employee_id)
+    if not user:
+        return Response({'success': False, 'message': 'Unauthorized'}, status=403)
+        
     now_local = timezone.localtime(timezone.now())
     
     try:
@@ -653,7 +687,7 @@ def check_out(request):
         target_date = data.get('date')
         if target_date:
             record = AttendanceRecord.objects.filter(
-                employee_id=employee_id,
+                employee_id=user.id,
                 date=target_date,
                 check_in_time__isnull=False,
                 check_out_time__isnull=True
@@ -664,10 +698,10 @@ def check_out(request):
         # 2. Fallback to the latest unclosed record if not found for specific date
         if not record:
             record = AttendanceRecord.objects.filter(
-                employee_id=employee_id, 
+                employee_id=user.id, 
                 check_in_time__isnull=False,
                 check_out_time__isnull=True
-            ).exclude(status__in=['absent', 'leave']).latest('date')
+            ).exclude(status__in=['absent', 'leave']).order_by('-date', '-check_in_time').first()
 
         check_in_t = datetime.strptime(str(record.check_in_time), '%H:%M:%S').time()
         check_in_dt = timezone.make_aware(datetime.combine(record.date, check_in_t))
@@ -802,8 +836,16 @@ def attendance_records(request):
     days_limit = request.GET.get('days_limit')
     days_offset = int(request.GET.get('days_offset', 0))
 
-    user_id = request.GET.get('user_id')
-    user = Employee.objects.filter(id=user_id).first() if user_id else None
+    user = getattr(request, 'user', None)
+    requested_user_id = request.GET.get('user_id')
+    
+    # Prefer user from token (request.user) over query param
+    if not isinstance(user, Employee):
+        user = Employee.objects.filter(id=requested_user_id).first() if requested_user_id else None
+    elif requested_user_id and str(requested_user_id) != str(user.id) and user.role != 'admin':
+        # Security: if a specific user_id was requested but doesn't match token, only allow for admins
+        return Response({'success': False, 'message': 'Unauthorized user_id access'}, status=403)
+
     # Include de-facto mentors (any user who has subordinates)
     is_mentor = user and (user.role == 'mentor' or (user.role != 'admin' and user.subordinates.exists()))
 
@@ -1455,8 +1497,10 @@ def check_profile_completeness(request):
 @require_gated_token_api
 def admin_profiles_list(request):
     """List all employee profiles (admin)"""
-    user_id = request.GET.get('user_id')
-    user = Employee.objects.filter(id=user_id).first() if user_id else None
+    user = get_current_user(request, requested_id=request.GET.get('user_id'))
+    if not user:
+        return Response({'success': False, 'message': 'Unauthorized'}, status=403)
+    
     # Include de-facto Mentors (any user who has subordinates)
     is_mentor = user and (user.role == 'mentor' or (user.role != 'admin' and user.subordinates.exists()))
 
@@ -1505,8 +1549,10 @@ def admin_profiles_list(request):
 @require_gated_token_api
 def admin_users(request):
     """Get all users (admin)"""
-    user_id = request.GET.get('user_id')
-    user = Employee.objects.filter(id=user_id).first() if user_id else None
+    user = get_current_user(request, requested_id=request.GET.get('user_id'))
+    if not user:
+        return Response({'success': False, 'message': 'Unauthorized'}, status=403)
+    
     # Include de-facto Mentors (any user who has subordinates)
     is_mentor = user and (user.role == 'mentor' or (user.role != 'admin' and user.subordinates.exists()))
 
@@ -1565,6 +1611,11 @@ def admin_users(request):
 @parser_classes([JSONParser])
 def admin_user_detail(request, user_id):
     """Get, update, or delete a user (admin)"""
+    # Verify caller is an admin
+    caller = get_current_user(request, require_admin=True)
+    if not caller:
+        return Response({'success': False, 'message': 'Admin access required'}, status=403)
+
     try:
         employee = Employee.objects.get(id=user_id)
     except Employee.DoesNotExist:
@@ -3263,15 +3314,13 @@ def my_requests(request):
     """Get request history for an employee"""
     try:
         employee_id = request.GET.get('employee_id')
-        if not employee_id:
-            return Response({
-                'success': False,
-                'message': 'Employee ID is required'
-            }, status=status.HTTP_400_BAD_REQUEST)
+        user = get_current_user(request, requested_id=employee_id)
+        if not user:
+            return Response({'success': False, 'message': 'Unauthorized'}, status=403)
 
         # Get all requests for employee
         requests_obj = EmployeeRequest.objects.filter(
-            employee_id=employee_id
+            employee=user
         ).order_by('-created_at')
 
         requests_data = []
@@ -3307,22 +3356,18 @@ def active_tasks(request):
     """Get count of active tasks"""
     try:
         employee_id = request.GET.get('employee_id')
-        query = Task.objects.filter(status__in=['todo', 'in_progress'])
+        user = get_current_user(request, requested_id=employee_id)
+        if not user:
+            return Response({'success': False, 'message': 'Unauthorized'}, status=403)
 
-        if employee_id:
-            try:
-                emp = Employee.objects.get(id=employee_id)
-                # Treat de-facto Mentors (employees with subordinates) like official Mentors
-                is_emp_mentor = emp.role.lower() == 'mentor' or (emp.role.lower() != 'admin' and emp.subordinates.exists())
-                if is_emp_mentor:
-                    query = query.filter(Q(assignees__mentors=emp) | Q(mentor=emp) | Q(created_by=emp) | Q(assignees=emp)).distinct()
-                elif emp.role.lower() != 'admin':
-                    try:
-                        query = query.filter(Q(assignees=emp) | Q(mentor=emp)).distinct()
-                    except Exception:
-                        query = query.filter(Q(assignees=emp) | Q(mentor=emp)).distinct()
-            except Employee.DoesNotExist:
-                pass # Or return 0
+        query = Task.objects.filter(status__in=['todo', 'in_progress'])
+        # Treat de-facto Mentors (employees with subordinates) like official Mentors
+        is_emp_mentor = user.role.lower() == 'mentor' or (user.role.lower() != 'admin' and user.subordinates.exists())
+        
+        if is_emp_mentor:
+            query = query.filter(Q(assignees__mentors=user) | Q(mentor=user) | Q(created_by=user) | Q(assignees=user)).distinct()
+        elif user.role.lower() != 'admin':
+            query = query.filter(Q(assignees=user) | Q(mentor=user)).distinct()
 
         active_count = query.count()
 
@@ -5580,10 +5625,14 @@ def spa_view(request):
     # Check if we are running in development (localhost/127.0.0.1)
     is_development = '127.0.0.1' in host or 'localhost' in host
     
+    # Check if user is attached by the decorator
+    is_authenticated = hasattr(request, 'user') and isinstance(request.user, Employee)
+    
     context = {
         'maps_api_key': settings.MAPS_API_KEY,
         'gated_token': request.GET.get('token'),
-        'is_development': is_development
+        'is_development': is_development,
+        'is_authenticated': is_authenticated
     }
     return render(request, 'index.html', context)
 
@@ -5599,10 +5648,14 @@ def gated_dashboard(request):
     host = request.get_host()
     is_development = '127.0.0.1' in host or 'localhost' in host
     
+    # User should already be attached by @require_valid_token
+    is_authenticated = hasattr(request, 'user') and isinstance(request.user, Employee)
+
     context = {
         'maps_api_key': settings.MAPS_API_KEY,
         'gated_token': token_str,
-        'is_development': is_development
+        'is_development': is_development,
+        'is_authenticated': is_authenticated
     }
     
     if success:
