@@ -168,6 +168,12 @@ document.addEventListener('DOMContentLoaded', async function () {
     } else {
         // NORMAL LOGIN: In development or if no token provided.
         console.log('Normal login mode active.');
+        if (!window.IS_DEVELOPMENT) {
+            console.log('Deployment mode: Hiding login screen as requested.');
+            const loginScreen = document.getElementById('loginScreen');
+            if (loginScreen) loginScreen.classList.remove('active');
+            showLoading('Please access this system through the HanuAI Portal.');
+        }
     }
 
     // Load face detection models
