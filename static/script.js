@@ -1402,8 +1402,8 @@ async function loadDashboardData() {
         // Admin sees admin stats grid and admin-specific cards
         document.getElementById('employeeStatsGrid')?.classList.add('hidden');
         document.getElementById('adminStatsGrid')?.classList.remove('hidden');
-        document.getElementById('checkInCard')?.classList.add('hidden');
-        document.getElementById('checkOutCard')?.classList.add('hidden');
+        document.getElementById('checkInCard')?.classList.remove('hidden');
+        document.getElementById('checkOutCard')?.classList.remove('hidden');
         document.getElementById('recordsCard')?.classList.remove('hidden');
         document.getElementById('adminCard')?.classList.remove('hidden');
         document.getElementById('assignMentorDashboardCard')?.classList.remove('hidden');

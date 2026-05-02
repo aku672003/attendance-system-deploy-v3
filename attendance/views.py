@@ -5555,8 +5555,15 @@ def verify_token(request):
     success, result = validate_gated_token(token)
     if success:
         user_id = result.get('user_id')
-        try:
-            employee = Employee.objects.get(id=user_id, is_active=True)
+        username = result.get('username')
+        employee = None
+        
+        if username:
+            employee = Employee.objects.filter(username=username, is_active=True).first()
+        if not employee and user_id:
+            employee = Employee.objects.filter(id=user_id, is_active=True).first()
+
+        if employee:
             profile = EmployeeProfile.objects.filter(employee=employee).first()
             assignment = employee.get_current_assignment()
             user_data = {
@@ -5584,7 +5591,7 @@ def verify_token(request):
                 'message': 'Token verified (Gated)',
                 'user': user_data
             })
-        except Employee.DoesNotExist:
+        else:
             return Response({'success': False, 'message': 'User associated with token not found'}, status=404)
 
     # 2. Try HMAC verification (The legacy way)

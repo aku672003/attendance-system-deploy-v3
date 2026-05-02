@@ -84,12 +84,19 @@ def require_valid_token(view_func):
 
         # Extraction and Attachment: Bind the correct user from token to request
         user_id = result.get('user_id')
-        if user_id:
-            try:
-                request.user = Employee.objects.get(id=user_id)
-            except Employee.DoesNotExist:
-                from .views import error_403_view
-                return error_403_view(request, message="User associated with token not found")
+        username = result.get('username')
+        employee = None
+        
+        if username:
+            employee = Employee.objects.filter(username=username).first()
+        if not employee and user_id:
+            employee = Employee.objects.filter(id=user_id).first()
+            
+        if employee:
+            request.user = employee
+        else:
+            from .views import error_403_view
+            return error_403_view(request, message="User associated with token not found")
 
         return view_func(request, *args, **kwargs)
 
@@ -125,13 +132,18 @@ def require_gated_token_api(view_func):
             
         # Extraction and Attachment: Bind the correct user from token to request
         user_id = result.get('user_id')
-        if user_id:
-            try:
-                request.user = Employee.objects.get(id=user_id)
-            except Employee.DoesNotExist:
-                return JsonResponse({'success': False, 'message': 'User associated with token not found'}, status=403)
+        username = result.get('username')
+        employee = None
+        
+        if username:
+            employee = Employee.objects.filter(username=username).first()
+        if not employee and user_id:
+            employee = Employee.objects.filter(id=user_id).first()
+
+        if employee:
+            request.user = employee
         else:
-             return JsonResponse({'success': False, 'message': 'Invalid token payload: user_id missing'}, status=403)
+             return JsonResponse({'success': False, 'message': 'User associated with token not found or invalid payload'}, status=403)
 
         return view_func(request, *args, **kwargs)
 
