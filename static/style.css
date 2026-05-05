@@ -1333,6 +1333,20 @@ body.modal-open .modal {
     box-shadow: 0 0 8px #f43f5e, 0 0 16px #f43f5e;
 }
 
+/* Working Day - Neon Blue/Cyan */
+.cal-working-day,
+.calendar-day.cal-working-day {
+    background: rgba(6, 182, 212, 0.1) !important;
+    color: #0891b2 !important;
+    border: 1px solid rgba(6, 182, 212, 0.4) !important;
+    box-shadow: 0 0 15px rgba(6, 182, 212, 0.1), inset 0 0 10px rgba(6, 182, 212, 0.05);
+}
+
+.cal-working-day .calendar-day-status-dot {
+    background: #0891b2 !important;
+    box-shadow: 0 0 8px #0891b2, 0 0 16px #0891b2;
+}
+
 /* Optional Holiday (Unselected) - Amber/Orange */
 .cal-optional,
 .calendar-day.cal-optional {

@@ -2494,7 +2494,7 @@ def employee_performance_analysis(request, employee_id):
         calc_end_date = min(end_date, today)
         if start_date <= calc_end_date:
             passed_days = (calc_end_date - start_date).days + 1
-            working_days_passed = sum(1 for d in range(passed_days) if (start_date + timedelta(days=d)).weekday() < 6)
+            working_days_passed = sum(1 for d in range(passed_days) if Holiday.is_date_working(start_date + timedelta(days=d)))
         else:
             working_days_passed = 0
 
@@ -4914,7 +4914,7 @@ def company_predictive_report(request):
 
         total_days   = (end_date - start_date).days + 1
         working_days = sum(1 for i in range(total_days)
-                           if (start_date + timedelta(days=i)).weekday() < 6)
+                           if Holiday.is_date_working(start_date + timedelta(days=i)))
 
         employees = Employee.objects.filter(is_active=True).exclude(role='admin').order_by('department', 'name')
 
@@ -5083,7 +5083,7 @@ def intelligence_hub_forecast(request):
                 )
                 
                 passed_days = (today - start_date).days + 1
-                working_days_passed = sum(1 for d in range(passed_days) if (start_date + timedelta(days=d)).weekday() < 6)
+                working_days_passed = sum(1 for d in range(passed_days) if Holiday.is_date_working(start_date + timedelta(days=d)))
                 
                 weekday_present_days = records.filter(
                     date__week_day__in=[2, 3, 4, 5, 6, 7],
@@ -5286,7 +5286,7 @@ def employee_hr_report(request, employee_id):
         total_days  = (end_date - start_date).days + 1
         working_days = sum(
             1 for i in range(total_days)
-            if (start_date + timedelta(days=i)).weekday() < 6
+            if Holiday.is_date_working(start_date + timedelta(days=i))
         )
 
         raw_attended = status_counts['present'] + status_counts['wfh'] + status_counts['half_day']
@@ -6598,19 +6598,23 @@ def manage_date(request):
         existing_holiday = Holiday.objects.filter(date=target_date).first()
         
         msg = ""
+        import calendar as cal_mod
+        day_name = cal_mod.day_name[target_date.weekday()]
+
         if date_type == 'working':
-            if existing_holiday:
-                existing_holiday.is_working_day = True
-                existing_holiday.name = reason or "Working Day"
-                existing_holiday.save()
-                msg = f"marked as Working Day: {reason}"
-            else:
-                msg = "set as Regular Working Day"
+            Holiday.objects.update_or_create(
+                date=target_date,
+                defaults={
+                    'name': reason or "Working Day",
+                    'is_optional': False,
+                    'is_working_day': True,
+                    'day': day_name,
+                    'year': target_date.year
+                }
+            )
+            msg = f"marked as Working Day: {reason or 'Regular'}"
         else:
             # Set as Holiday or Optional
-            import calendar as cal_mod
-            day_name = cal_mod.day_name[target_date.weekday()]
-            
             Holiday.objects.update_or_create(
                 date=target_date,
                 defaults={
@@ -6622,7 +6626,7 @@ def manage_date(request):
                 }
             )
             type_label = "Optional Holiday" if is_optional else "Mandatory Holiday"
-            msg = f"set as {type_label}: {reason}"
+            msg = f"set as {type_label}: {reason or 'Scheduled'}"
 
         # Notify EVERYONE
         all_employees = Employee.objects.filter(is_active=True)

@@ -43,7 +43,7 @@ function getCurrentISTDate() {
 }
 // API Configuration
 const apiBaseUrl = "/api";
-const MAPS_API_KEY = window.MAPS_API_KEY || ''; 
+const MAPS_API_KEY = window.MAPS_API_KEY || '';
 
 // Helper: Format Date to DD-MM-YYYY
 function formatDateDMY(dateInput) {
@@ -138,10 +138,10 @@ document.addEventListener('DOMContentLoaded', async function () {
                 currentUser = result.user;
                 sessionStorage.setItem('attendanceUser', JSON.stringify(currentUser));
                 sessionStorage.setItem('attendanceLoginTime', Date.now().toString());
-                
+
                 // Initialize session
                 if (currentUser.theme_settings) applyUserTheme(currentUser.theme_settings);
-                
+
                 // Transition to dashboard
                 const loginScreen = document.getElementById('loginScreen');
                 if (loginScreen) loginScreen.classList.remove('active');
@@ -186,7 +186,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     const activeToggle = document.getElementById('newUserIsActive');
     const activeLabel = document.getElementById('newUserIsActiveLabel');
     if (activeToggle && activeLabel) {
-        activeToggle.addEventListener('change', function() {
+        activeToggle.addEventListener('change', function () {
             activeLabel.textContent = this.checked ? 'Active' : 'Inactive';
         });
     }
@@ -195,7 +195,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     const joiningDateInput = document.getElementById('newUserJoiningDate');
     const totalClInput = document.getElementById('newUserTotalCL');
     if (joiningDateInput && totalClInput) {
-        joiningDateInput.addEventListener('change', function() {
+        joiningDateInput.addEventListener('change', function () {
             if (!this.value) return;
             const joiningDate = new Date(this.value);
             const today = getCurrentISTDate();
@@ -272,7 +272,7 @@ async function setupPushNotifications(employeeId) {
         // Subscribe via PushManager
         const applicationServerKey = urlBase64ToUint8Array(keyData.public_key);
         let subscription = await reg.pushManager.getSubscription();
-        
+
         // If there's an existing subscription, unsubscribe first to avoid VAPID key mismatches
         // which often cause "AbortError: Registration failed - push service error"
         if (subscription) {
@@ -903,12 +903,12 @@ async function apiCall(path, method = 'GET', data = null) {
     const opts = { method, headers: {} };
     opts.cache = 'no-store';
     opts.headers['Cache-Control'] = 'no-cache';
-    
+
     // Add Gated Token to all API calls for security
     if (window.GATED_TOKEN && window.GATED_TOKEN !== "") {
         // Appending to headers
         opts.headers['X-Gated-Token'] = window.GATED_TOKEN;
-        
+
         // Also appending as a parameter for maximum compatibility (as requested)
         const separator = url.includes('?') ? '&' : '?';
         url += `${separator}token=${encodeURIComponent(window.GATED_TOKEN)}`;
@@ -1164,13 +1164,13 @@ function logout() {
     // This allows the login page to be "restored" within the existing session
     // while still maintaining the direct access gate on page refresh.
     showScreen('loginScreen');
-    
+
     // Clear any sensitive UI elements
     const userName = document.getElementById('userName');
     if (userName) userName.textContent = 'User';
     const userAvatar = document.getElementById('userAvatar');
     if (userAvatar) userAvatar.textContent = '👤';
-    
+
     showNotification('You have been logged out.', 'info');
 }
 
@@ -1441,11 +1441,11 @@ async function loadDashboardData() {
             document.getElementById('manageEmployeesCard')?.classList.remove('hidden');
             document.getElementById('taskMentorCard')?.classList.remove('hidden');
             document.getElementById('meetingMomCard')?.classList.remove('hidden');
-            
+
             // Customize labels for Mentor context
             const summaryTitle = document.querySelector('#widget-admin-summary .stat-card-title');
             if (summaryTitle) summaryTitle.textContent = '👥 Team Summary';
-            
+
             const requestsTitle = document.querySelector('#widget-admin-requests .stat-card-title');
             if (requestsTitle) requestsTitle.textContent = '📋 Team Requests';
 
@@ -1496,8 +1496,8 @@ async function loadDashboardData() {
 
     try {
         await checkBirthday();
-    } catch (e) {}
-    
+    } catch (e) { }
+
     hideLoading();
 }
 
@@ -1571,10 +1571,10 @@ async function loadAdminSummary() {
             const totalEl = document.getElementById('totalEmployees');
             const presentEl = document.getElementById('presentToday');
             const surveyorSummaryEl = document.getElementById('surveyorsPresent');
-            
+
             if (totalEl) totalEl.textContent = res.total_employees || 0;
             if (presentEl) presentEl.textContent = `${res.present_today || 0} active today`;
-            
+
             // Keep a simple summary line on the dashboard card
             if (surveyorSummaryEl) {
                 surveyorSummaryEl.textContent = `${res.surveyors_present || 0} Surveyors Active Today`;
@@ -1632,11 +1632,11 @@ async function showEmployeeSummary(targetDateStr = null) {
     const isToday = formattedDateForApi === todayStr;
 
     showLoading(targetDateStr ? `Loading summary for ${formatDateDMY(currentSummaryDate)}...` : "Generating workforce summary...");
-    
+
     try {
-        const res = await apiCall('admin-summary', 'GET', { 
+        const res = await apiCall('admin-summary', 'GET', {
             user_id: currentUser.id,
-            date: formattedDateForApi 
+            date: formattedDateForApi
         });
 
         if (res && res.success) {
@@ -1771,12 +1771,12 @@ async function showEmployeeSummary(targetDateStr = null) {
 
             // Create modal wrapper
             const modal = document.createElement('div');
-            modal.className = 'modal summary-modal-active'; 
-            modal.style.display = 'flex'; 
-            modal.style.alignItems = 'flex-start'; 
-            modal.style.overflowY = 'auto'; 
-            modal.style.padding = '40px 10px'; 
-            
+            modal.className = 'modal summary-modal-active';
+            modal.style.display = 'flex';
+            modal.style.alignItems = 'flex-start';
+            modal.style.overflowY = 'auto';
+            modal.style.padding = '40px 10px';
+
             modal.innerHTML = `
                 <div class="modal-content" style="max-width: 600px; width: 95%; padding: 0; border-radius: 20px; border: none; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); margin: auto; overflow: visible; flex: none;">
                     ${content}
@@ -1810,18 +1810,18 @@ async function showEmployeeSummary(targetDateStr = null) {
 
 async function changeSummaryDate(offset) {
     if (!currentSummaryDate) currentSummaryDate = getCurrentISTDate();
-    
+
     // Logic: check if next day is in future
     const newDate = new Date(currentSummaryDate);
     newDate.setDate(newDate.getDate() + offset);
-    
+
     const todayStr = getCurrentISTDate().toISOString().split('T')[0];
     const newDateStr = newDate.toISOString().split('T')[0];
-    
+
     if (newDateStr > todayStr) {
         return; // Don't allow future dates
     }
-    
+
     currentSummaryDate = newDate;
     await showEmployeeSummary();
 }
@@ -1943,11 +1943,11 @@ async function openBirthdayCalendar() {
         const res = await apiCall(`upcoming-birthdays?month=${monthToSend}&year=${yearToSend}`, 'GET');
         if (res && res.success) {
             const birthdays = res.birthdays || [];
-            
+
             // Also fetch holidays for the current view
             const holidaysRes = await apiCall(`holidays?year=${yearToSend}`, 'GET');
             window.viewingHolidays = (holidaysRes && holidaysRes.success) ? holidaysRes.holidays : [];
-            
+
             const total = birthdays.length;
             const currentDate = getCurrentISTDate();
             const upcoming = birthdays.filter(b => {
@@ -2559,12 +2559,12 @@ function createBirthdayCalendarHTML(calendarInfo, year, month) {
         // Add hover events only if there are birthdays
         let hoverAttrs = dayData.hasBirthday ?
             `onmouseenter="showBirthdayTooltip(event, ${day})"` : '';
-        
+
         if (holiday) {
-             hoverAttrs += ` title="Holiday: ${holiday.name}${holiday.is_working_day ? ' (Working)' : ''}"`;
+            hoverAttrs += ` title="Holiday: ${holiday.name}${holiday.is_working_day ? ' (Working)' : ''}"`;
         }
 
-        const clickAttr = (currentUser && currentUser.role === 'admin') ? 
+        const clickAttr = (currentUser && currentUser.role === 'admin') ?
             `onclick="adminManageDate('${dateKey}')"` : `onclick="selectDay(${day})"`;
 
         html += `
@@ -2607,7 +2607,7 @@ function changeBirthdayMonth(direction) {
 function showBirthdayDetails(day) {
     const detailsPanel = document.getElementById('birthdayDetailsContent');
     if (!detailsPanel) return;
-    
+
     const calendarInfo = createBirthdayCalendarData(window.birthdayData, window.currentBirthdayYear, window.currentBirthdayMonth);
     const dayData = calendarInfo.calendarData[day];
 
@@ -2649,19 +2649,19 @@ let activeManageDate = null;
 
 function adminManageDate(dateStr) {
     if (!currentUser || currentUser.role !== 'admin') return;
-    
+
     activeManageDate = dateStr;
     const display = document.getElementById('manageDateDisplay');
     if (display) display.textContent = dateStr;
-    
+
     // Reset form
     const reasonInput = document.getElementById('manageDateReason');
     if (reasonInput) reasonInput.value = '';
-    
+
     // Find existing holiday
     const holiday = window.viewingHolidays ? window.viewingHolidays.find(h => h.date === dateStr) : null;
     const radios = document.getElementsByName('dateType');
-    
+
     if (holiday) {
         if (holiday.is_working_day) {
             radios.forEach(r => r.checked = (r.value === 'working'));
@@ -2674,16 +2674,16 @@ function adminManageDate(dateStr) {
     } else {
         radios.forEach(r => r.checked = (r.value === 'working'));
     }
-    
+
     openModal('adminManageDateModal');
 }
 
 async function saveAdminDateManagement() {
     if (!activeManageDate) return;
-    
+
     const type = document.querySelector('input[name="dateType"]:checked').value;
     const reason = document.getElementById('manageDateReason').value.trim();
-    
+
     showLoading("Updating date status...");
     try {
         const res = await apiCall('manage-date', 'POST', {
@@ -2692,12 +2692,12 @@ async function saveAdminDateManagement() {
             reason: reason,
             user_id: currentUser.id
         });
-        
+
         if (res && res.success) {
             showNotification(res.message || "Date updated successfully", "success");
             closeModal('adminManageDateModal');
             // Refresh the calendar
-            openBirthdayCalendar(); 
+            openBirthdayCalendar();
         } else {
             showNotification(res.message || "Update failed", "error");
         }
@@ -3066,16 +3066,16 @@ async function openMeetingMomModal() {
         // Pre-fill date/time
         const now = getCurrentISTDate();
         document.getElementById('momTargetTitle').value = '';
-        document.getElementById('momTargetDate').value  = now.toISOString().split('T')[0];
-        document.getElementById('momStartTime').value   = now.toTimeString().slice(0, 5);
-        document.getElementById('momNotes').value       = '';
+        document.getElementById('momTargetDate').value = now.toISOString().split('T')[0];
+        document.getElementById('momStartTime').value = now.toTimeString().slice(0, 5);
+        document.getElementById('momNotes').value = '';
 
         // Load employees for @mention
         if (!window._momAllEmployees.length) {
             try {
                 const res = await apiCall('employees-simple', 'GET');
                 if (res && res.success) window._momAllEmployees = res.employees || [];
-            } catch(e) { console.warn('Could not load employees for MoM:', e); }
+            } catch (e) { console.warn('Could not load employees for MoM:', e); }
         }
 
         // Reset steps
@@ -3211,9 +3211,9 @@ function _momGetChipIds(stepId) {
 function _momGetSteps() {
     return Array.from(document.querySelectorAll('#momStepsWrap .mom-step-row')).map(row => {
         const stepId = row.id;
-        const text   = row.querySelector('.mom-step-text')?.value?.trim() || '';
+        const text = row.querySelector('.mom-step-text')?.value?.trim() || '';
         const tagged = Array.from(row.querySelectorAll(`#${stepId}_chips .mom-user-chip`)).map(c => ({
-            id:   parseInt(c.dataset.empId),
+            id: parseInt(c.dataset.empId),
             name: c.textContent.replace('×', '').replace('@', '').trim()
         }));
         return { text, tagged };
@@ -3230,9 +3230,9 @@ async function saveMeetingMom() {
 
     const meetingDate = document.getElementById('momTargetDate').value;
     const meetingTime = document.getElementById('momStartTime').value;
-    const notes       = document.getElementById('momNotes').value.trim();
+    const notes = document.getElementById('momNotes').value.trim();
 
-    const btnBtn  = document.getElementById('saveMomBtn');
+    const btnBtn = document.getElementById('saveMomBtn');
     const btnText = document.getElementById('saveMomText');
     const spinner = document.getElementById('saveMomSpinner');
     if (btnBtn) btnBtn.disabled = true;
@@ -3245,7 +3245,7 @@ async function saveMeetingMom() {
 
         // Date helpers
         let fmtStart = meetingDate || getCurrentISTDate().toISOString().split('T')[0];
-        let dueDate  = new Date(fmtStart);
+        let dueDate = new Date(fmtStart);
         dueDate.setDate(dueDate.getDate() + 1);
         const fmtDue = dueDate.toISOString().split('T')[0];
         const scheduledStr = (meetingDate && meetingTime) ? `${meetingDate} at ${meetingTime}` : 'Now';
@@ -3254,11 +3254,11 @@ async function saveMeetingMom() {
         const meetingPayload = {
             title,
             description: notes || `Meeting on ${meetingDate} at ${meetingTime}`,
-            date:         fmtStart,
-            start_time:   meetingTime || null,
+            date: fmtStart,
+            start_time: meetingTime || null,
             participants: allParticipantIds,
-            created_by:   currentUser.id,
-            steps_json:   JSON.stringify(steps)   // stored in description as JSON note
+            created_by: currentUser.id,
+            steps_json: JSON.stringify(steps)   // stored in description as JSON note
         };
 
         let meetingId = window.currentEditingMeetingId;
@@ -3274,19 +3274,19 @@ async function saveMeetingMom() {
         for (const step of steps) {
             if (!step.tagged.length) continue;
             const assigneeIds = step.tagged.map(u => u.id);
-            const taskTitle   = `[MoM] ${title}: ${step.text.slice(0, 80)}`;
+            const taskTitle = `[MoM] ${title}: ${step.text.slice(0, 80)}`;
 
             const taskPayload = {
-                title:        taskTitle,
-                description:  `From MoM: "${title}"\n📅 ${scheduledStr}\n\n${step.text}${notes ? '\n\nNotes: ' + notes : ''}`,
-                priority:     'high',
-                start_date:   fmtStart,
-                due_date:     fmtDue,
-                assignees:    assigneeIds,
+                title: taskTitle,
+                description: `From MoM: "${title}"\n📅 ${scheduledStr}\n\n${step.text}${notes ? '\n\nNotes: ' + notes : ''}`,
+                priority: 'high',
+                start_date: fmtStart,
+                due_date: fmtDue,
+                assignees: assigneeIds,
                 overseer_ids: [currentUser.id],
-                user_id:      currentUser.id,
-                employee_id:  currentUser.id,
-                created_by:   currentUser.id,
+                user_id: currentUser.id,
+                employee_id: currentUser.id,
+                created_by: currentUser.id,
                 mom_meeting_id: meetingId,     // custom marker (backend ignores unknown fields safely)
                 check_duplicate_mom: true       // hint to backend
             };
@@ -3303,7 +3303,7 @@ async function saveMeetingMom() {
         closeModal('meetingMomModal');
         if (typeof refreshTasks === 'function') await refreshTasks();
 
-    } catch(e) {
+    } catch (e) {
         console.error('saveMeetingMom error:', e);
         showNotification('Error publishing MoM', 'error');
     } finally {
@@ -3323,7 +3323,7 @@ async function fetchRecentMeetings() {
         } else {
             listContainer.innerHTML = '<div style="text-align:center;color:#ef4444;padding:20px;">Failed to load meetings</div>';
         }
-    } catch(e) {
+    } catch (e) {
         listContainer.innerHTML = '<div style="text-align:center;color:#ef4444;padding:20px;">Error fetching meetings</div>';
     }
 }
@@ -3351,7 +3351,7 @@ function renderRecentMeetings(meetings) {
             </div>
             ${canManage ? `
             <div class="mom-history-actions">
-                <button onclick='editMeeting(${JSON.stringify(m).replace(/'/g,"&apos;")})' class="mom-hist-btn mom-hist-edit" title="Edit">✏️</button>
+                <button onclick='editMeeting(${JSON.stringify(m).replace(/'/g, "&apos;")})' class="mom-hist-btn mom-hist-edit" title="Edit">✏️</button>
                 <button onclick="deleteMeeting(${m.id})" class="mom-hist-btn mom-hist-del" title="Delete">🗑️</button>
             </div>` : ''}
         </div>`;
@@ -3368,15 +3368,15 @@ async function deleteMeeting(id) {
         } else {
             showNotification('Failed to delete meeting', 'error');
         }
-    } catch(e) { showNotification('Error deleting meeting', 'error'); }
+    } catch (e) { showNotification('Error deleting meeting', 'error'); }
 }
 
 function editMeeting(m) {
     // Populate header fields
     document.getElementById('momTargetTitle').value = m.title;
-    document.getElementById('momTargetDate').value  = m.date;
-    document.getElementById('momStartTime').value   = m.start_time || '';
-    document.getElementById('momNotes').value       = m.description || '';
+    document.getElementById('momTargetDate').value = m.date;
+    document.getElementById('momStartTime').value = m.start_time || '';
+    document.getElementById('momNotes').value = m.description || '';
 
     // Rebuild steps
     const stepsWrap = document.getElementById('momStepsWrap');
@@ -3544,7 +3544,7 @@ async function loadStatusOverview() {
             const balanceEl = document.getElementById('ovLeaveBalance');
             const optionalEl = document.getElementById('ovOptional');
             const totalDaysEl = document.getElementById('ovTotalDays');
-            
+
             if (totalDaysEl) totalDaysEl.textContent = stats.total_working_days || 0;
             if (officeEl) officeEl.textContent = stats.office_days || 0;
             if (wfhEl) wfhEl.textContent = stats.wfh_days || 0;
@@ -3555,7 +3555,7 @@ async function loadStatusOverview() {
                 const allowance = stats.leave_allowance || 0;
                 leavesEl.textContent = `${stats.leave_days || 0}/${allowance}`;
             }
-            
+
             // Balance format: taken / total in year
             if (balanceEl) {
                 const yearlyTaken = stats.yearly_taken || 0;
@@ -3772,7 +3772,7 @@ function updateCalendarDayDetails(record, day) {
     let html = '';
     const monthLabel = document.getElementById('calendarMonthLabel')?.textContent || '';
     const dateStr = `${day} ${monthLabel}`;
-    
+
     if (record.source === 'request') {
         const typeLabel = record.status === 'wfh' ? 'WFH' : (record.is_half_day ? 'Half Day' : 'Full Day');
         html = `
@@ -3940,12 +3940,18 @@ async function buildAttendanceCalendar(year, month) {
     console.log('DEBUG Calendar Requests:', allRequests);
 
     const byDay = {};
+    const parseLocalDate = (s) => {
+        if (!s) return null;
+        const parts = s.split('-');
+        if (parts.length < 3) return new Date(s);
+        return new Date(parts[0], parts[1] - 1, parts[2]);
+    };
 
     // 1. Map attendance records first
     allRecords.forEach(r => {
         if (!r.date) return;
-        const d = new Date(r.date);
-        if (d.getFullYear() === year && d.getMonth() === month) {
+        const d = parseLocalDate(r.date);
+        if (d && d.getFullYear() === year && d.getMonth() === month) {
             byDay[d.getDate()] = { ...r, source: 'attendance' };
         }
     });
@@ -3955,14 +3961,8 @@ async function buildAttendanceCalendar(year, month) {
         if (!req.start_date) return;
         if (req.status === 'rejected') return; // User requested: rejected requests should disappear
 
-        // Use a safe date parser to avoid UTC shifts
-        const parseDate = (s) => {
-            const parts = s.split('-');
-            return new Date(parts[0], parts[1] - 1, parts[2]);
-        };
-
-        const start = parseDate(req.start_date);
-        const end = parseDate(req.end_date || req.start_date);
+        const start = parseLocalDate(req.start_date);
+        const end = parseLocalDate(req.end_date || req.start_date);
 
         let curr = new Date(start);
         while (curr <= end) {
@@ -3995,12 +3995,12 @@ async function buildAttendanceCalendar(year, month) {
             curr.setDate(curr.getDate() + 1);
         }
     });
-    
+
     // 3. Map Holidays - they should override 'absent' but NOT 'present'/'wfh'
     allHolidays.forEach(h => {
         if (!h.date) return;
-        const d = new Date(h.date + 'T00:00:00');
-        if (d.getFullYear() === year && d.getMonth() === month) {
+        const d = parseLocalDate(h.date);
+        if (d && d.getFullYear() === year && d.getMonth() === month) {
             const dayNum = d.getDate();
             // Show all holidays. Regular ones or selected ones should have 'holiday' status.
             // Unselected optional ones should have 'optional' status.
@@ -4036,10 +4036,10 @@ async function buildAttendanceCalendar(year, month) {
                     byDay[dayNum].isSelected = isUserSelected;
                     byDay[dayNum].isWorkingDay = h.is_working_day;
                     if (h.is_optional && !isUserSelected) {
-                         // Keep optional status if it was already set or is absent
-                         if (!byDay[dayNum].status || byDay[dayNum].status === 'absent') {
-                             byDay[dayNum].status = 'optional_holiday';
-                         }
+                        // Keep optional status if it was already set or is absent
+                        if (!byDay[dayNum].status || byDay[dayNum].status === 'absent') {
+                            byDay[dayNum].status = 'optional_holiday';
+                        }
                     }
                 } else {
                     byDay[dayNum] = {
@@ -4087,6 +4087,8 @@ async function buildAttendanceCalendar(year, month) {
         else if (status === 'holiday') cls += ' cal-holiday';
         else if (status === 'optional_holiday') cls += ' cal-optional';
 
+        if (record && record.isWorkingDay) cls += ' cal-working-day';
+
         // Add structure
         cell.innerHTML = `
             <span class="calendar-day-number">${day}</span>
@@ -4116,9 +4118,12 @@ async function buildAttendanceCalendar(year, month) {
                 }
             } else {
                 // Regular attendance record
+                if (record.isWorkingDay) {
+                    tooltipLines.push(`Working Day: ${record.holidayName || 'Special Session'}`);
+                }
                 if (record.isHoliday) {
                     tooltipLines.push(`Holiday: ${record.holidayName}`);
-                    tooltipLines.push(`Type: ${record.isOptional ? 'Optional' : 'Holiday'}`);
+                    tooltipLines.push(`Type: ${record.isOptional ? 'Optional' : 'Mandatory'}`);
                 }
                 if (record.check_in_time) tooltipLines.push(`In: ${record.check_in_time}`);
                 if (record.check_out_time) tooltipLines.push(`Out: ${record.check_out_time}`);
@@ -5676,12 +5681,12 @@ async function capturePhoto() {
 
                     // Extract shortAddress (City, State, Country) from Google's address components
                     const comps = result.address_components;
-                    const city = comps.find(c => c.types.includes("locality"))?.long_name || 
-                                 comps.find(c => c.types.includes("administrative_area_level_3"))?.long_name || 
-                                 comps.find(c => c.types.includes("administrative_area_level_2"))?.long_name || "";
+                    const city = comps.find(c => c.types.includes("locality"))?.long_name ||
+                        comps.find(c => c.types.includes("administrative_area_level_3"))?.long_name ||
+                        comps.find(c => c.types.includes("administrative_area_level_2"))?.long_name || "";
                     const state = comps.find(c => c.types.includes("administrative_area_level_1"))?.long_name || "";
                     const country = comps.find(c => c.types.includes("country"))?.long_name || "";
-                    
+
                     shortAddress = [city, state, country].filter(Boolean).join(", ");
                 } else {
                     throw new Error("Google Geocoder status: " + response.status);
@@ -5726,7 +5731,7 @@ async function capturePhoto() {
     const mapX = p;
     const mapY = overlayY + p;
 
-     // --- FINAL PRECISE MAP LOGIC ---
+    // --- FINAL PRECISE MAP LOGIC ---
     let mapDrawn = false;
     const zoom = 15;
     const cleanLat = lat.toFixed(6);
@@ -5754,7 +5759,7 @@ async function capturePhoto() {
                     // SILENT AUTO-SWITCH: If Google fails once (403/404), mark it as failed and use OSM
                     window.GOOGLE_STATIC_MAPS_FAILED = true;
                     console.warn("Google Maps Service Blocked. Switching to professional OSM fallback.");
-                    resolve(); 
+                    resolve();
                 };
                 mapImg.src = staticMapUrl;
                 setTimeout(resolve, 2000); // 2s timeout safety
@@ -5776,7 +5781,7 @@ async function capturePhoto() {
 
             // This "Positron" style looks identical to a premium Google Map
             const osmUrl = `https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/${zoom}/${tx}/${ty}.png`;
-            
+
             await new Promise((resolve) => {
                 const osmImg = new Image();
                 osmImg.crossOrigin = "Anonymous";
@@ -5786,10 +5791,10 @@ async function capturePhoto() {
                     const tCtx = tempCanvas.getContext('2d');
                     tCtx.drawImage(osmImg, offsetX - (mapSize / 2), offsetY - (mapSize / 2), mapSize, mapSize, 0, 0, mapSize, mapSize);
                     ctx.drawImage(tempCanvas, mapX, mapY);
-                    
+
                     // Marker Design
                     ctx.fillStyle = '#ef4444';
-                    ctx.beginPath(); ctx.arc(mapX + mapSize/2, mapY + mapSize/2, 6, 0, Math.PI * 2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(mapX + mapSize / 2, mapY + mapSize / 2, 6, 0, Math.PI * 2); ctx.fill();
                     ctx.strokeStyle = 'white'; ctx.lineWidth = 2; ctx.stroke();
 
                     // Branding
@@ -5822,7 +5827,7 @@ async function capturePhoto() {
 
             // Using professional CartoDB Positron theme for a premium "Google-like" look
             const osmUrl = `https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/${osmZoom}/${tx}/${ty}.png`;
-            
+
             await new Promise((resolve) => {
                 const osmImg = new Image();
                 osmImg.crossOrigin = "Anonymous";
@@ -5831,14 +5836,14 @@ async function capturePhoto() {
                     tempCanvas.width = mapSize;
                     tempCanvas.height = mapSize;
                     const tCtx = tempCanvas.getContext('2d');
-                    
+
                     tCtx.drawImage(osmImg, offsetX - (mapSize / 2), offsetY - (mapSize / 2), mapSize, mapSize, 0, 0, mapSize, mapSize);
                     ctx.drawImage(tempCanvas, mapX, mapY);
-                    
+
                     // Manual Center Marker
                     ctx.fillStyle = '#ef4444'; // Red
                     ctx.beginPath();
-                    ctx.arc(mapX + mapSize/2, mapY + mapSize/2, 5, 0, Math.PI * 2);
+                    ctx.arc(mapX + mapSize / 2, mapY + mapSize / 2, 5, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.strokeStyle = 'white';
                     ctx.lineWidth = 2;
@@ -5849,7 +5854,7 @@ async function capturePhoto() {
                     ctx.fillStyle = '#fff';
                     ctx.font = '8px sans-serif';
                     ctx.fillText('Map Data: OSM', mapX + 2, mapY + mapSize - 3);
-                    
+
                     mapDrawn = true;
                     resolve();
                 };
@@ -6045,7 +6050,7 @@ function startFaceTracking() {
 
         // Perform detection (this can be slow)
         const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
-        
+
         // Critical: Check dimensions AFTER await. If video was hidden/stopped during detection,
         // offsetWidth/Height will be 0, which would cause faceapi.resizeResults to crash.
         const width = video.offsetWidth;
@@ -6452,7 +6457,7 @@ async function confirmCheckOut() {
                 if (officeRes && officeRes.success && Array.isArray(officeRes.offices)) {
                     allOffices = officeRes.offices;
                 }
-            } catch (_) {}
+            } catch (_) { }
 
             // Always ensure the check-in office is in the list to check
             const checkedOfficeIds = new Set(allOffices.map(o => o.id));
@@ -6860,8 +6865,8 @@ function _buildDateSearchTokens(dateStr) {
     const dateObj = new Date(dateStr);
     if (isNaN(dateObj)) return [dateStr.toLowerCase()];
 
-    const dd   = String(dateObj.getDate()).padStart(2, '0');
-    const mm   = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const dd = String(dateObj.getDate()).padStart(2, '0');
+    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
     const yyyy = String(dateObj.getFullYear());
 
     return [
@@ -6873,10 +6878,10 @@ function _buildDateSearchTokens(dateStr) {
         `${mm}/${dd}`,                                      // 04/22  (partial)
         yyyy,                                               // 2026
         // Month — full & short (en-US locale)
-        dateObj.toLocaleDateString('en-US', { month: 'long'  }).toLowerCase(),  // april
+        dateObj.toLocaleDateString('en-US', { month: 'long' }).toLowerCase(),  // april
         dateObj.toLocaleDateString('en-US', { month: 'short' }).toLowerCase(),  // apr
         // Day of week — full & short
-        dateObj.toLocaleDateString('en-US', { weekday: 'long'  }).toLowerCase(), // wednesday
+        dateObj.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase(), // wednesday
         dateObj.toLocaleDateString('en-US', { weekday: 'short' }).toLowerCase(), // wed
         // Long display: "April 22, 2026"
         dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }).toLowerCase(),
@@ -6891,7 +6896,7 @@ function applyAttendanceSearch() {
     if (!input) return;
 
     const term = input.value.trim().toLowerCase();
-    
+
     // Clear any pending timeouts
     if (attendanceSearchTimeout) clearTimeout(attendanceSearchTimeout);
 
@@ -6899,24 +6904,24 @@ function applyAttendanceSearch() {
     let filtered = allAttendanceRecords || [];
     if (term) {
         filtered = filtered.filter(r => {
-            const name     = (r.employee_name || r.name || '').toLowerCase();
+            const name = (r.employee_name || r.name || '').toLowerCase();
             const username = (r.username || '').toLowerCase();
-            const dept     = (r.department || '').toLowerCase();
-            const status   = (r.status || '').toLowerCase().replace('_', ' ');
-            const type     = (r.type || '').toLowerCase();
-            const office   = (r.office_name || '').toLowerCase();
+            const dept = (r.department || '').toLowerCase();
+            const status = (r.status || '').toLowerCase().replace('_', ' ');
+            const type = (r.type || '').toLowerCase();
+            const office = (r.office_name || '').toLowerCase();
             const dateTokens = _buildDateSearchTokens(r.date);
-            const checkIn  = (r.check_in_time  || '').toLowerCase();
+            const checkIn = (r.check_in_time || '').toLowerCase();
             const checkOut = (r.check_out_time || '').toLowerCase();
 
             return (
-                name.includes(term)     ||
+                name.includes(term) ||
                 username.includes(term) ||
-                dept.includes(term)     ||
-                status.includes(term)   ||
-                type.includes(term)     ||
-                office.includes(term)   ||
-                checkIn.includes(term)  ||
+                dept.includes(term) ||
+                status.includes(term) ||
+                type.includes(term) ||
+                office.includes(term) ||
+                checkIn.includes(term) ||
                 checkOut.includes(term) ||
                 dateTokens.some(tok => tok.includes(term))
             );
@@ -8088,8 +8093,6 @@ async function loadEmployeeProfile() {
         setFieldValue('profileHomeAddress', p.home_address);
         setFieldValue('profileCurrentAddress', p.current_address);
         setFieldValue('profileDoj', p.date_of_joining);
-        setFieldValue('profileReportingMgr', p.reporting_Mentor);
-
         setFieldValue('profileSkillSet', p.skill_set);
 
         // Sync personalization if returned (consistency check)
@@ -8103,7 +8106,7 @@ async function loadEmployeeProfile() {
         }
         if (p.total_cl !== undefined) currentUser.total_cl = p.total_cl;
         if (p.taken_cl !== undefined) currentUser.taken_cl = p.taken_cl;
-        
+
         sessionStorage.setItem('attendanceUser', JSON.stringify(currentUser));
         setFieldValue('profileProfessionalTraining', p.professional_training);
         setFieldValue('profileBankAccount', p.bank_account_number);
@@ -8136,46 +8139,15 @@ async function saveProfile() {
     msg.textContent = '';
 
     try {
-        /* =======================
-           1️⃣ BASIC USER UPDATE
-           ======================= */
-
         const primaryOfficeValue =
             getFieldValue('profilePrimaryOffice') || currentUser.primary_office;
 
-        const basePayload = {
+        const profilePayload = {
+            employee_id: currentUser.id,
             name: getFieldValue('profileName'),
             email: getFieldValue('profileEmail'),
             phone: getFieldValue('profilePhone'),
-            department: currentUser.department,
-            role: currentUser.role,
-            is_active: 1,
-            primary_office: primaryOfficeValue
-        };
-
-        const newPass = getFieldValue('profilePassword');
-        if (newPass) {
-            if (newPass.length < 6) {
-                throw new Error('Password must be at least 6 characters');
-            }
-            basePayload.password = newPass;
-        }
-
-        const res1 = await apiCall(`admin-user/${currentUser.id}`, 'POST', basePayload);
-        if (!res1 || !res1.success) {
-            throw new Error(res1?.message || 'Failed to update basic profile');
-        }
-
-        /* =======================
-           2️⃣ EXTENDED PROFILE UPDATE
-           ======================= */
-
-        /* =======================
-           2️⃣ EXTENDED PROFILE UPDATE (FIXED)
-           ======================= */
-
-        const profilePayload = {
-            employee_id: currentUser.id,
+            primary_office: primaryOfficeValue,
             personal_email: getFieldValue('profilePersonalEmail'),
             date_of_birth: getFieldValue('profileDob'),
             gender: getFieldValue('profileGender'),
@@ -8186,7 +8158,6 @@ async function saveProfile() {
             home_address: getFieldValue('profileHomeAddress'),
             current_address: getFieldValue('profileCurrentAddress'),
             date_of_joining: getFieldValue('profileDoj'),
-            reporting_mentor: getFieldValue('profileReportingMgr'),
             skill_set: getFieldValue('profileSkillSet'),
             bank_account_number: getFieldValue('profileBankAccount'),
             bank_name: getFieldValue('profileBankName'),
@@ -8198,23 +8169,30 @@ async function saveProfile() {
             pan_number: getFieldValue('docPanNumber')
         };
 
-        const res2 = await apiCall('employee-profile', 'POST', profilePayload);
-
-        if (!res2 || !res2.success) {
-            throw new Error(res2?.message || 'Failed to update extended profile');
+        const newPass = getFieldValue('profilePassword');
+        if (newPass) {
+            if (newPass.length < 6) {
+                throw new Error('Password must be at least 6 characters');
+            }
+            profilePayload.password = newPass;
         }
 
+        const res = await apiCall('employee-profile', 'POST', profilePayload);
+
+        if (!res || !res.success) {
+            throw new Error(res?.message || 'Failed to update profile');
+        }
 
         /* =======================
-           3️⃣ LOCAL STATE UPDATE
+           2️⃣ LOCAL STATE UPDATE
            ======================= */
 
         currentUser = {
             ...currentUser,
-            name: basePayload.name,
-            email: basePayload.email,
-            phone: basePayload.phone,
-            primary_office: basePayload.primary_office
+            name: profilePayload.name,
+            email: profilePayload.email,
+            phone: profilePayload.phone,
+            primary_office: profilePayload.primary_office
         };
         sessionStorage.setItem('attendanceUser', JSON.stringify(currentUser));
 
@@ -8671,10 +8649,23 @@ async function confirmExport() {
             throw new Error('No records found for selected criteria');
         }
 
-        if (progressStatus) progressStatus.innerText = 'Building attendance register...';
-        if (progressBar) progressBar.style.width = '30%';
+        if (progressStatus) progressStatus.innerText = 'Fetching holidays...';
+        const fromYear = new Date(fromDate).getFullYear();
+        const toYear = new Date(toDate).getFullYear();
+        const years = [fromYear];
+        if (toYear !== fromYear) years.push(toYear);
 
-        /* ---------------- BUILD REGISTER (OPTIMIZED) ---------------- */
+        const holidayMap = {};
+        for (const y of years) {
+            const hRes = await apiCall('holidays', 'GET', { year: y });
+            if (hRes && hRes.success && Array.isArray(hRes.holidays)) {
+                hRes.holidays.forEach(h => {
+                    holidayMap[h.date] = h;
+                });
+            }
+        }
+
+        if (progressStatus) progressStatus.innerText = 'Building attendance register...';
 
         const dateRange = getDateRange(fromDate, toDate);
         const employeeMap = {};
@@ -8687,7 +8678,6 @@ async function confirmExport() {
                     employee: r.employee_name || r.name || `#${r.employee_id}`,
                     department: r.department || '',
                     type: (r.type || '').toUpperCase(),
-                    office: r.office_name || '',
                     date_of_joining: r.date_of_joining,
                     attendance: {}
                 };
@@ -8725,17 +8715,28 @@ async function confirmExport() {
         const headers = [
             { header: 'Employee', key: 'employee', width: 22 },
             { header: 'Department', key: 'department', width: 16 },
-            { header: 'Type', key: 'type', width: 10 },
-            { header: 'Office', key: 'office', width: 20 }
+            { header: 'Type', key: 'type', width: 10 }
         ];
 
-        // Pre-calculate weekend labels and header keys
-        const weekendMap = {};
+        // Pre-calculate status labels (Weekends/Holidays) and header keys
+        const statusMap = {};
         dateRange.forEach(d => {
             const dateObj = new Date(d);
-            const day = dateObj.getDay();
-            if (day === 0) weekendMap[d] = 'Sunday';
-            else if (day === 6) weekendMap[d] = 'Saturday';
+            const day = dateObj.getDay(); // 0=Sun, 6=Sat
+            const h = holidayMap[d];
+            // Unified logic: Working if (Admin override) OR (Optional holiday) OR (Regular weekday and NOT a holiday)
+            let isWorking = true;
+            if (h) {
+                if (h.is_working_day) isWorking = true;
+                else if (h.is_optional) isWorking = true;
+                else isWorking = false; // Mandatory Holiday
+            } else if (day === 0) {
+                isWorking = false; // Sunday
+            }
+
+            if (!isWorking) {
+                statusMap[d] = (h && h.name) ? h.name : (day === 0 ? 'Sunday' : 'Holiday');
+            }
 
             headers.push({
                 header: d.split('-').reverse().slice(0, 2).join('-'),
@@ -8745,6 +8746,7 @@ async function confirmExport() {
         });
 
         // Add Summary Headers at the end
+        headers.push({ header: 'Total Days', key: 'total_days', width: 12 });
         headers.push({ header: 'Working Days', key: 'total_working_days', width: 12 });
         headers.push({ header: 'Present', key: 'total_present', width: 10 });
         headers.push({ header: 'WFH', key: 'total_wfh', width: 10 });
@@ -8771,8 +8773,7 @@ async function confirmExport() {
             'Leave': { fill: 'FFFFD9E1', font: 'FF9C004C' }
         };
 
-        // Calculate Total Working Days in range for summary
-        const totalWorkingDays = dateRange.filter(d => !weekendMap[d]).length;
+        // Calculate Summary Data (moved inside employee loop)
 
         for (let idx = 0; idx < totalEmployees; idx++) {
             if (isExportAllCancelled) break;
@@ -8782,8 +8783,8 @@ async function confirmExport() {
                 employee: emp.employee,
                 department: emp.department,
                 type: emp.type,
-                office: emp.office,
-                total_working_days: totalWorkingDays,
+                total_days: 0,
+                total_working_days: 0,
                 total_present: 0,
                 total_wfh: 0,
                 total_hd: 0,
@@ -8792,19 +8793,32 @@ async function confirmExport() {
                 total_absent: 0
             };
 
-            // 1. Build Row Data
+            // 1. Calculate Counts and Build Row Data
             dateRange.forEach(d => {
                 const att = emp.attendance[d];
-                let val = att ? att.code : (weekendMap[d] || defaultStatus);
+                const h = holidayMap[d];
+                const dateObj = new Date(d);
+                const day = dateObj.getDay();
+
+                let val = att ? att.code : (statusMap[d] || defaultStatus);
 
                 // If date is before Joining Date, show as '-' (Not Hired)
                 if (emp.date_of_joining && d < emp.date_of_joining) {
                     val = '-';
-                } else if (val === 'A' && weekendMap[d]) {
-                    // Override weekday A with weekend label if applicable
-                    val = weekendMap[d];
+                } else {
+                    // Employee was active
+                    rowData.total_days++;
+
+                    // Working Day Logic (Unified with header logic)
+                    let isWorking = !statusMap[d];
+                    if (isWorking) rowData.total_working_days++;
+
+                    if (val === 'A' && statusMap[d]) {
+                        // Override weekday A with weekend/holiday label if applicable
+                        val = statusMap[d];
+                    }
                 }
-                
+
                 rowData[d] = val;
 
                 // Update Summary Counters
@@ -8820,13 +8834,16 @@ async function confirmExport() {
 
             // 2. Apply Styles in Single Pass
             dateRange.forEach((d, i) => {
-                const cell = row.getCell(5 + i);
+                const cell = row.getCell(4 + i);
                 cell.alignment = { vertical: 'middle', horizontal: 'center' };
 
                 const val = rowData[d];
                 const att = emp.attendance[d];
 
                 let s = styles[val];
+
+                // If it's a weekend or holiday label but employee was present, show present color?
+                // No, follow the code. If P exists, it stays P.
 
                 // Performance-based override for presence
                 if (att && (val === 'P' || val === 'HD')) {
@@ -8851,8 +8868,8 @@ async function confirmExport() {
             });
 
             // 3. Style Summary Columns (after date loop)
-            const summaryStartCol = 5 + dateRange.length;
-            for (let j = 0; j < 7; j++) {
+            const summaryStartCol = 4 + dateRange.length;
+            for (let j = 0; j < 8; j++) {
                 const sCell = row.getCell(summaryStartCol + j);
                 sCell.font = { bold: true };
                 sCell.alignment = { vertical: 'middle', horizontal: 'center' };
@@ -8874,7 +8891,7 @@ async function confirmExport() {
 
         /* ---------- FORMATTING ---------- */
         ws.getRow(1).font = { bold: true };
-        ws.views = [{ state: 'frozen', xSplit: 4, ySplit: 1 }];
+        ws.views = [{ state: 'frozen', xSplit: 3, ySplit: 1 }];
         ws.autoFilter = {
             from: { row: 1, column: 1 },
             to: { row: 1, column: headers.length }
@@ -9521,7 +9538,7 @@ function openRequestModal(dateStr) {
             try {
                 if (!currentUser) return;
                 const curYear = new Date().getFullYear();
-                const statsRes = await apiCall('monthly-stats', 'GET', { 
+                const statsRes = await apiCall('monthly-stats', 'GET', {
                     employee_id: currentUser.id,
                     year: curYear,
                     month: new Date().getMonth() + 1
@@ -12422,7 +12439,7 @@ async function loadMentorStatus() {
                     }
 
                     const isMentorAdmin = mentor.role === 'admin';
-                    
+
                     html += `
                         <div class="mentor-status-card">
                             <div class="mentor-avatar">${avatarHtml}</div>
@@ -12488,7 +12505,7 @@ function updateScrollLock() {
     const activeModals = document.querySelectorAll('.modal.active').length;
     const loader = document.getElementById('globalLoader');
     const isLoading = loader && loader.classList.contains('active');
-    
+
     if (activeModals > 0 || isLoading) {
         if (!document.body.classList.contains('modal-open')) {
             const scrollWidth = window.innerWidth - document.documentElement.clientWidth;
@@ -12498,7 +12515,7 @@ function updateScrollLock() {
     } else {
         // Small delay to ensure transitions finish
         setTimeout(() => {
-            if (document.querySelectorAll('.modal.active').length === 0 && 
+            if (document.querySelectorAll('.modal.active').length === 0 &&
                 (!document.getElementById('globalLoader') || !document.getElementById('globalLoader').classList.contains('active'))) {
                 document.body.classList.remove('modal-open');
                 document.documentElement.style.removeProperty('--scrollbar-width');
@@ -12604,12 +12621,12 @@ function showLeaveDatesModal(mode = 'overview') {
             </div>
             <div class="names-scroll-area" style="max-height: 400px; overflow-y: auto;">
                 <div style="display: flex; flex-direction: column; gap: 8px;">
-                    ${dates.sort((a,b) => new Date(a.date) - new Date(b.date)).map((item, idx) => {
-                        const d = new Date(item.date);
-                        const dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
-                        const formattedDate = formatDateDMY(item.date);
-                        const isHalf = item.type === 'half_day';
-                        return `
+                    ${dates.sort((a, b) => new Date(a.date) - new Date(b.date)).map((item, idx) => {
+        const d = new Date(item.date);
+        const dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
+        const formattedDate = formatDateDMY(item.date);
+        const isHalf = item.type === 'half_day';
+        return `
                             <div class="name-item" style="background: #f8fafc; padding: 14px 18px; border-radius: 14px; border: 1px solid #e2e8f0; font-weight: 700; color: #334155; font-size: 0.95rem; display: flex; align-items: center; justify-content: space-between; transition: all 0.2s ease;">
                                 <div style="display: flex; align-items: center; gap: 12px;">
                                     <span style="color: #94a3b8; font-size: 0.75rem;">${idx + 1}.</span>
@@ -12623,7 +12640,7 @@ function showLeaveDatesModal(mode = 'overview') {
                                 </span>
                             </div>
                         `;
-                    }).join('')}
+    }).join('')}
                 </div>
             </div>
         </div>

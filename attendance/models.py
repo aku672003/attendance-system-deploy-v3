@@ -600,6 +600,29 @@ class Holiday(models.Model):
         h_type = "Optional" if self.is_optional else "Holiday"
         return f"{self.name} ({self.date}) – {h_type}"
 
+    @staticmethod
+    def is_date_working(check_date):
+        """
+        Determines if a given date is a working day, considering admin overrides.
+        Rules:
+        1. If a Holiday record exists:
+           - If is_working_day is True -> Working Day (Explicit override)
+           - If is_optional is True -> Working Day (Default, selection logic handled separately)
+           - Otherwise (Mandatory Holiday) -> Not a Working Day
+        2. If no Holiday record exists:
+           - Monday to Saturday (0-5) -> Working Day
+           - Sunday (6) -> Not a Working Day
+        """
+        try:
+            h = Holiday.objects.filter(date=check_date).first()
+            if h:
+                if h.is_working_day: return True
+                if h.is_optional: return True
+                return False
+            return check_date.weekday() < 6 # 0=Mon, 6=Sun
+        except Exception:
+            return True # Fallback
+
     def save(self, *args, **kwargs):
         # Normalize name: rename 'Mandatory' to 'Holiday'
         if self.name:

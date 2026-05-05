@@ -15,7 +15,7 @@ def load_env():
                     if len(key_val) == 2: 
                         os.environ[key_val[0]] = key_val[1]
 
-def generate_gated_token(user_id=24):
+def generate_gated_token(user_id=1):
     load_env()
     secret_key = str(os.getenv('ATTENDANCE_SECRET_KEY', 'hanuai-attendance-secure-token-key-2024'))
     
