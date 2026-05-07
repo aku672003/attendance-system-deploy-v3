@@ -5615,7 +5615,7 @@ async function capturePhoto() {
     canvas.height = height;
 
     // Draw the frame from video onto canvas (No longer mirroring the capture so text stays readable and it looks like a standard photo)
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     ctx.save();
     // (Removed mirroring logic here to provide a 'standard' rather than 'mirrored' photo)
     ctx.drawImage(video, 0, 0, width, height);
@@ -5765,7 +5765,7 @@ async function capturePhoto() {
                 osmImg.onload = () => {
                     const tempCanvas = document.createElement('canvas');
                     tempCanvas.width = mapSize; tempCanvas.height = mapSize;
-                    const tCtx = tempCanvas.getContext('2d');
+                    const tCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
                     tCtx.drawImage(osmImg, offsetX - (mapSize / 2), offsetY - (mapSize / 2), mapSize, mapSize, 0, 0, mapSize, mapSize);
                     ctx.drawImage(tempCanvas, mapX, mapY);
 
@@ -5812,7 +5812,7 @@ async function capturePhoto() {
                     const tempCanvas = document.createElement('canvas');
                     tempCanvas.width = mapSize;
                     tempCanvas.height = mapSize;
-                    const tCtx = tempCanvas.getContext('2d');
+                    const tCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
 
                     tCtx.drawImage(osmImg, offsetX - (mapSize / 2), offsetY - (mapSize / 2), mapSize, mapSize, 0, 0, mapSize, mapSize);
                     ctx.drawImage(tempCanvas, mapX, mapY);
@@ -6040,7 +6040,7 @@ function startFaceTracking() {
         const resizedDetections = faceapi.resizeResults(detections, displaySize);
 
         // Clear canvas and draw detections (without score)
-        const ctx = overlay.getContext('2d');
+        const ctx = overlay.getContext('2d', { willReadFrequently: true });
         ctx.clearRect(0, 0, overlay.width, overlay.height);
         resizedDetections.forEach(detection => {
             new faceapi.draw.DrawBox(detection.box, { label: "" }).draw(overlay);
@@ -6056,7 +6056,7 @@ function stopFaceTracking() {
     const overlay = document.getElementById('overlayCanvas');
     if (overlay) {
         overlay.style.display = 'none';
-        const ctx = overlay.getContext('2d');
+        const ctx = overlay.getContext('2d', { willReadFrequently: true });
         ctx.clearRect(0, 0, overlay.width, overlay.height);
     }
 }

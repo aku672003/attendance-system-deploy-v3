@@ -3439,8 +3439,8 @@ def active_tasks(request):
         # Use request.user which is already validated by @require_gated_token_api
         caller = getattr(request, 'user', None)
         
-        # In development, request.user might be AnonymousUser if token is missing
-        if not caller or not caller.is_authenticated or not hasattr(caller, 'role'):
+        # Verify caller identity
+        if not caller or not isinstance(caller, Employee):
             return Response({'success': False, 'message': 'Unauthorized or Session Expired'}, status=403)
             
         requested_id = request.GET.get('employee_id')
