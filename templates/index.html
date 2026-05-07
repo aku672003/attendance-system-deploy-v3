@@ -17,7 +17,7 @@
     <script src="https://maps.googleapis.com/maps/api/js?key={{ maps_api_key }}&libraries=places"></script>
     <script>
         window.MAPS_API_KEY = "{{ maps_api_key }}";
-        window.GATED_TOKEN = "{{ gated_token }}";
+        window.GATED_TOKEN = "{{ gated_token|escapejs }}";
         window.IS_DEVELOPMENT = "{{ is_development|yesno:'true,false' }}" === "true";
         window.IS_AUTHENTICATED = "{{ is_authenticated|yesno:'true,false' }}" === "true";
     </script>
@@ -293,7 +293,6 @@
 
                 <div class="signup-link">
                     <p><a href="#" onclick="showScreen('forgotPasswordScreen')">Forgot Password?</a></p>
-                    <p>New employee? <a href="#" onclick="showScreen('signupScreen')">Sign up here</a></p>
                 </div>
             </div>
         </div>
@@ -602,95 +601,8 @@
         </div>
     </div>
 
-    <!-- Signup Screen -->
-    <div id="signupScreen" class="screen">
-        <div class="login-container">
-            <div class="login-card" style="max-width: 600px;">
-                <div class="login-title">Create Your Account</div>
-                <div class="login-subtitle">Join our attendance system</div>
 
-                <form onsubmit="handleSignup(event)">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label">Full Name</label>
-                            <input type="text" id="signupName" class="form-control" placeholder="Enter full name"
-                                required pattern="[A-Za-z ]+" title="Only alphabets and spaces allowed">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Phone</label>
-                            <input type="tel" id="signupPhone" class="form-control" placeholder="10-digit number"
-                                required pattern="[0-9]{10}">
-                        </div>
-                    </div>
 
-                    <div class="form-group">
-                        <label class="form-label">Email</label>
-                        <input type="email" id="signupEmail" class="form-control" placeholder="Enter email" required>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label">Department</label>
-                            <select id="signupDepartment" class="form-control" required>
-                                <option value="">Select Department</option>
-                                <option value="IT">IT</option>
-                                <option value="HR">HR</option>
-                                <option value="Surveyors">Surveyors</option>
-                                <option value="Accounts">Accounts</option>
-                                <option value="Growth">Growth</option>
-                                <option value="Others">Others</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Primary Office</label>
-                            <select id="signupOffice" class="form-control" required>
-                                <option value="">Select Office</option>
-                                <option value="79">79 Office</option>
-                                <option value="105">105 Office</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label">Username</label>
-                            <input type="text" id="signupUsername" class="form-control" placeholder="Choose username"
-                                required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Password</label>
-                            <div class="password-wrapper">
-                                <input type="password" id="signupPassword" class="form-control"
-                                    placeholder="Create password" required minlength="6">
-                                <button type="button" class="toggle-password-btn"
-                                    data-target="signupPassword">👁</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- NEW: Confirm Password field -->
-                    <div class="form-group">
-                        <label class="form-label">Confirm Password</label>
-                        <div class="password-wrapper">
-                            <input type="password" id="signupConfirmPassword" class="form-control"
-                                placeholder="Re-enter password" required minlength="6">
-                            <button type="button" class="toggle-password-btn"
-                                data-target="signupConfirmPassword">👁</button>
-                        </div>
-                    </div>
-
-                    <button type="submit" class="btn btn-primary btn-full-width" id="signupBtn">
-                        <span id="signupBtnText">Create Account</span>
-                        <span id="signupSpinner" class="loading-spinner hidden"></span>
-                    </button>
-                </form>
-
-                <div class="login-link">
-                    <p>Already have an account? <a href="#" onclick="showScreen('loginScreen')">Sign in here</a></p>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Dashboard Screen -->
     <div id="dashboardScreen" class="screen {% if is_authenticated and not is_development %}active{% endif %}">
@@ -1009,9 +921,9 @@
                     </div>
                 </div>
                 <div class="stat-card" onclick="openTaskMentor()" id="widget-admin-tasks" draggable="false">
-                    <div class="stat-card-title">📝 Task Mentor</div>
+                    <div class="stat-card-title">📝 In Progress Tasks</div>
                     <div class="stat-card-value" id="activeTasks">0</div>
-                    <div class="stat-card-timing">Active tasks</div>
+                    <div class="stat-card-timing">Tasks in progress</div>
                     <div class="widget-resize-controls" onclick="event.stopPropagation()">
                         <button class="resize-btn" onclick="resizeWidget('widget-admin-tasks', 'sm')">S</button>
                         <button class="resize-btn" onclick="resizeWidget('widget-admin-tasks', 'md')">M</button>
@@ -3568,7 +3480,7 @@
         // ───────────────────────────────────────────────────────────────────────
         //  HOLIDAY MANAGEMENT JS
         // ───────────────────────────────────────────────────────────────────────
-        window.GATED_TOKEN = "{{ gated_token }}";
+        window.GATED_TOKEN = "{{ gated_token|escapejs }}";
 
         let _holidayUploadId = null;
         let _holidayPreviewData = [];

@@ -9,11 +9,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 # Security Configuration
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production-1234567890')
+_secret_key = os.getenv('SECRET_KEY')
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
+if not _secret_key and not DEBUG:
+    raise RuntimeError(
+        "SECRET_KEY environment variable is required in production. "
+        "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(64))\""
+    )
+SECRET_KEY = _secret_key or 'django-insecure-dev-only-key-do-not-use-in-production'
 ATTENDANCE_SECRET_KEY = os.getenv('ATTENDANCE_SECRET_KEY', 'hanuai-attendance-secret-shared-key')
 REDIRECT_PORTAL_URL = os.getenv('REDIRECT_PORTAL_URL', 'https://hanuai.com/employee')
-DEBUG = os.getenv('DEBUG', 'False') == 'True'
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1' if DEBUG else '').split(',')
+ALLOWED_HOSTS = [h.strip() for h in ALLOWED_HOSTS if h.strip()]
+# Always allow localhost access during development
+if DEBUG:
+    for dev_host in ['localhost', '127.0.0.1']:
+        if dev_host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(dev_host)
 
 # Application definition
 INSTALLED_APPS = [
@@ -26,8 +38,9 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'attendance',
-    'sslserver',
 ]
+if DEBUG:
+    INSTALLED_APPS.append('sslserver')
 
 CSRF_TRUSTED_ORIGINS = [
     "https://hanuai.com",
@@ -157,6 +170,14 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.FormParser',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '200/minute',
+        'user': '500/minute',
+    },
 }
 
 # Email Configuration
@@ -189,11 +210,20 @@ CACHES = {
     }
 }
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only allow all origins in development
 CORS_ALLOW_CREDENTIALS = True
+
+# Production CORS whitelist
+if not DEBUG:
+    CORS_ALLOWED_ORIGINS = [
+        "https://hanuai.com",
+        "https://attendance.hanuai.com",
+    ]
+
 CORS_ALLOWED_HEADERS = [
     'accept', 'accept-encoding', 'authorization', 'content-type',
     'dnt', 'origin', 'user-agent', 'x-csrftoken', 'x-requested-with',
+    'x-gated-token', 'cache-control',
 ]
 
 # File upload settings

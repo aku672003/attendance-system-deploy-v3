@@ -905,7 +905,7 @@ async function apiCall(path, method = 'GET', data = null) {
     opts.headers['Cache-Control'] = 'no-cache';
 
     // Add Gated Token to all API calls for security
-    if (window.GATED_TOKEN && window.GATED_TOKEN !== "") {
+    if (window.GATED_TOKEN && window.GATED_TOKEN !== "" && window.GATED_TOKEN !== "None" && window.GATED_TOKEN !== "undefined") {
         // Appending to headers
         opts.headers['X-Gated-Token'] = window.GATED_TOKEN;
 
@@ -1099,59 +1099,7 @@ async function handleResetPasswordSubmit(event) {
     }
 }
 
-async function handleSignup(event) {
-    event.preventDefault();
 
-    const password = document.getElementById('signupPassword').value;
-    const confirmPassword = document.getElementById('signupConfirmPassword').value;
-
-    // Check passwords match before calling API
-    if (password !== confirmPassword) {
-        showNotification('Passwords do not match', 'error');
-        return;
-    }
-
-    const formData = {
-        name: document.getElementById('signupName').value,
-        phone: document.getElementById('signupPhone').value,
-        email: document.getElementById('signupEmail').value,
-        department: document.getElementById('signupDepartment').value,
-        primary_office: document.getElementById('signupOffice').value,
-        username: document.getElementById('signupUsername').value,
-        password: password
-    };
-
-    const signupBtn = document.getElementById('signupBtn');
-    const signupBtnText = document.getElementById('signupBtnText');
-    const signupSpinner = document.getElementById('signupSpinner');
-
-    // Show loading state
-    signupBtn.disabled = true;
-    signupBtnText.classList.add('hidden');
-    signupSpinner.classList.remove('hidden');
-
-    try {
-        const result = await apiCall('register', 'POST', formData);
-
-        if (result.success) {
-            showNotification('Account created successfully! Please login.');
-            showScreen('loginScreen');
-
-            // Clear form
-            Object.keys(formData).forEach(key => {
-                const element = document.getElementById(`signup${key.charAt(0).toUpperCase()}${key.slice(1).replace('_', '')}`);
-                if (element) element.value = '';
-            });
-        } else {
-            showNotification(result.message || 'Registration failed', 'error');
-        }
-    } finally {
-        // Reset button state
-        signupBtn.disabled = false;
-        signupBtnText.classList.remove('hidden');
-        signupSpinner.classList.add('hidden');
-    }
-}
 
 function logout() {
     // Clear user session data
@@ -1310,6 +1258,7 @@ function openTaskMentor(employeeId) {
         if (employeeId) {
             TaskManagerV2.openNewTaskModal(employeeId);
         } else {
+            TaskManagerV2.activeTab = 'inProgress';
             TaskManagerV2.open('team');
         }
     } else {
@@ -1474,7 +1423,6 @@ async function loadDashboardData() {
             (async () => { try { await loadTodayAttendance(); } catch (e) { console.error(e); } })(),
             (async () => { try { await loadMonthlyStats(); } catch (e) { console.error(e); } })(),
             (async () => { try { await loadWFHEligibility(); } catch (e) { console.error(e); } })(),
-            (async () => { try { await refreshMyTasks(); } catch (e) { console.error(e); } })(),
             (async () => { try { await loadIntelligenceHubData(); } catch (e) { console.error(e); } })(),
             (async () => { try { await loadMentorStatus(); } catch (e) { console.error(e); } })()
         ];
@@ -1487,6 +1435,7 @@ async function loadDashboardData() {
 
         await Promise.all(promises);
         await checkProfileCompleteness();
+        setupCheckInReminder();
     }
 
     // Auto-load Task Manager V2 data in background
@@ -4386,6 +4335,11 @@ async function loadTodayAttendance(isUserInRange = false) {
             checkInCard.classList.remove('hidden');
             checkOutCard.classList.add('hidden');
         }
+        
+        // Setup shift reminder for 8.95 hours
+        if (currentAttendanceRecord) {
+            setupShiftReminder(currentAttendanceRecord);
+        }
     } catch (error) {
         console.error('Error loading today attendance:', error);
     }
@@ -5165,22 +5119,29 @@ async function refreshWFHAvailability() {
         wfhStatus.style.color = 'var(--gray-600)';
     }
 
-    // ---------- 3) Remove Pre-Approval Requirement ----------
+    // ---------- 3) Re-Enforce Pre-Approval Requirement ----------
     try {
         const today = getCurrentDateTime().date;
         const r = await apiCall('wfh-eligibility', 'GET', { employee_id: currentUser.id, date: today });
 
-        // New logic: Pre-approval is NO LONGER required! WFH is validated post-checkout.
-        wfhStatus.textContent = 'Post-Approval Required';
-        wfhStatus.style.color = 'var(--success-color)';
-        wfhOption.classList.remove('disabled');
-        if (requestBtn) requestBtn.style.display = 'none';
-
+        if (r && r.success) {
+            if (r.has_approved_request) {
+                wfhStatus.textContent = 'Approved for today';
+                wfhStatus.style.color = 'var(--success-color)';
+                wfhOption.classList.remove('disabled');
+                if (requestBtn) requestBtn.style.display = 'none';
+            } else {
+                wfhStatus.textContent = 'Approval Required';
+                wfhStatus.style.color = 'var(--error-color)';
+                wfhOption.classList.add('disabled');
+                if (requestBtn) requestBtn.style.display = 'block';
+            }
+        }
     } catch (e) {
         console.error("WFH check failed", e);
-        // Fallback: still enable but label unknown
-        wfhStatus.textContent = 'Status unknown - Proceed';
-        wfhOption.classList.remove('disabled');
+        // Fallback: disable and show error
+        wfhStatus.textContent = 'Availability unknown';
+        wfhOption.classList.add('disabled');
     }
 }
 
@@ -6255,12 +6216,7 @@ async function populateOfficeDropdowns() {
         const res = await apiCall('offices', 'GET', { active: 1 });
         const offices = (res && res.success) ? (res.offices || []) : [];
 
-        // Signup page
-        const signupOffice = document.getElementById('signupOffice');
-        if (signupOffice) {
-            signupOffice.innerHTML = '<option value="">Select Office</option>' +
-                offices.map(o => `<option value="${o.id}">${o.name}</option>`).join('');
-        }
+
 
         // Admin → Add New User
         const newUserPrimaryOffice = document.getElementById('newUserPrimaryOffice');
@@ -6302,7 +6258,11 @@ async function showCheckOut() {
 
         const checkInTime = new Date(`${record.date}T${record.check_in_time}`);
         const now = getCurrentISTDate();
-        const workHours = (now - checkInTime) / (1000 * 60 * 60);
+        let workHours = (now - checkInTime) / (1000 * 60 * 60);
+        
+        // Cap at 14.0 hours for safety/bug prevention
+        if (workHours > 14.0) workHours = 14.0;
+        if (workHours < 0) workHours = 0;
 
         // Save context for confirmCheckOut()
         currentCheckOutContext = { record, workHours };
@@ -7877,14 +7837,14 @@ async function refreshPrimaryOfficeSelects() {
         const res = await apiCall('offices', 'GET', { active: 1 });
         const offices = (res && res.success && Array.isArray(res.offices)) ? res.offices : [];
 
-        const signupSel = document.getElementById('signupOffice');
+
         const adminSel = document.getElementById('newUserPrimaryOffice');
         const profileSel = document.getElementById('profilePrimaryOffice');
 
         const options = '<option value="">Select Office</option>' +
             offices.map(o => `<option value="${o.id}">${o.name}</option>`).join('');
 
-        if (signupSel) signupSel.innerHTML = options;
+
         if (adminSel) adminSel.innerHTML = options;
         if (profileSel) profileSel.innerHTML = options;
     } catch (e) {
@@ -12469,13 +12429,13 @@ async function refreshPrimaryOfficeSelects() {
     try {
         const result = await apiCall('offices', 'GET');
         if (result.success && result.offices) {
-            const signupSelect = document.getElementById('signupOffice');
+
             const profileSelect = document.getElementById('profilePrimaryOffice');
 
             const optionsHtml = '<option value="">Select Office</option>' +
                 result.offices.map(o => `<option value="${o.id}">${o.name}</option>`).join('');
 
-            if (signupSelect) signupSelect.innerHTML = optionsHtml;
+
             if (profileSelect) profileSelect.innerHTML = optionsHtml;
 
             // Re-select value if profile is loaded
@@ -12669,4 +12629,64 @@ function showLeaveDatesModal(mode = 'overview') {
     modal.addEventListener('click', (e) => {
         if (e.target === modal) safeRemoveModal(modal);
     });
+}
+
+/**
+ * Setup a timer to remind user to check out after 8.95 hours of work
+ */
+function setupShiftReminder(record) {
+    if (!record || !record.check_in_time || record.check_out_time) return;
+    
+    try {
+        const [h, m] = record.check_in_time.split(':');
+        const checkInDate = new Date();
+        checkInDate.setHours(parseInt(h), parseInt(m), 0, 0);
+        
+        // Target is 8.95 hours after check-in
+        const targetTime = checkInDate.getTime() + (8.95 * 3600 * 1000);
+        const now = Date.now();
+        
+        const delay = targetTime - now;
+        
+        if (delay > 0) {
+            setTimeout(() => {
+                // Re-check if still not checked out (record might be stale, check window object)
+                if (window.currentAttendanceRecord && !window.currentAttendanceRecord.check_out_time) {
+                    const msg = "Shift Completion Reminder 🏃: You have completed 8.95 hours. Please wrap up and check out.";
+                    showNotification(msg, "info", 15000);
+                    if (Notification.permission === "granted") {
+                        new Notification("Shift Completion", { body: msg, icon: "/favicon.ico" });
+                    }
+                }
+            }, delay);
+        } else if (delay > -1800000) { // If it passed in the last 30 mins
+             showNotification("Reminder 🏃: You have completed over 8.95 hours. Don't forget to check out!", "info", 10000);
+        }
+    } catch (e) {
+        console.error("Error setting shift reminder:", e);
+    }
+}
+
+/**
+ * Setup a timer to remind user to check in at 9 AM
+ */
+function setupCheckInReminder() {
+    if (window.currentAttendanceRecord && window.currentAttendanceRecord.check_in_time) return;
+    
+    const now = new Date();
+    const target = new Date();
+    target.setHours(9, 0, 0, 0);
+    
+    const delay = target.getTime() - now.getTime();
+    if (delay > 0) {
+        setTimeout(() => {
+            if (!window.currentAttendanceRecord || !window.currentAttendanceRecord.check_in_time) {
+                 const msg = "9 AM Reminder 📍: Good morning! Don't forget to mark your attendance.";
+                 showNotification(msg, "info", 15000);
+                 if (Notification.permission === "granted") {
+                    new Notification("Attendance Reminder", { body: msg, icon: "/favicon.ico" });
+                }
+            }
+        }, delay);
+    }
 }

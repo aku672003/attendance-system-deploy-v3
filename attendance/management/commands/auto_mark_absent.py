@@ -51,14 +51,32 @@ class Command(BaseCommand):
                 absent_count += 1
 
         # Also mark those who checked in but didn't check out as 'absent'
-        missed_checkout_count = AttendanceRecord.objects.filter(
-            date=target_date,
+        # If it's today, we only mark as absent if it's past 11 PM (to allow late workers/surveyors)
+        # Otherwise, we mark all unclosed records from past days.
+        missed_checkout_qs = AttendanceRecord.objects.filter(
             check_in_time__isnull=False,
             check_out_time__isnull=True
-        ).exclude(status__in=['absent', 'leave']).update(
-            status='absent',
-            notes="Absent marked: Forgot to check out"
-        )
+        ).exclude(status__in=['absent', 'leave'])
+
+        if target_date < now.date():
+            # For past dates, mark all unclosed records
+            missed_checkout_count = missed_checkout_qs.filter(date=target_date).update(
+                status='absent',
+                notes="Absent marked: Forgot to check out"
+            )
+        else:
+            # For today, only mark if it's very late (e.g., past 22:00 / 10 PM)
+            if now.hour >= 22:
+                missed_checkout_count = missed_checkout_qs.filter(date=target_date).update(
+                    status='absent',
+                    notes="Absent marked: Forgot to check out (Late night cutoff)"
+                )
+            else:
+                # Still catch any missed checkouts from YESTERDAY that were missed by previous runs
+                missed_checkout_count = missed_checkout_qs.filter(date__lt=target_date).update(
+                    status='absent',
+                    notes="Absent marked: Forgot to check out (Catch-up run)"
+                )
 
         msg = f"Marked {absent_count} employee(s) as Absent (no check-in) and {missed_checkout_count} as Absent (missed check-out) for {target_date}"
         self.stdout.write(self.style.SUCCESS(msg))
@@ -94,13 +112,26 @@ def run_auto_mark_absent():
             absent_count += 1
     
     # Also mark those who checked in but didn't check out as 'absent'
+    # Catch-up for any unclosed records from past days
     missed_checkout_count = AttendanceRecord.objects.filter(
-        date=target_date,
+        date__lt=target_date,
         check_in_time__isnull=False,
         check_out_time__isnull=True
     ).exclude(status__in=['absent', 'leave']).update(
         status='absent',
-        notes="Absent marked: Forgot to check out"
+        notes="Absent marked: Forgot to check out (Previous day)"
     )
+
+    # For today, only mark if it's very late (Scheduler currently runs at 6 PM, so this will skip today's)
+    if now.hour >= 22:
+        today_missed = AttendanceRecord.objects.filter(
+            date=target_date,
+            check_in_time__isnull=False,
+            check_out_time__isnull=True
+        ).exclude(status__in=['absent', 'leave']).update(
+            status='absent',
+            notes="Absent marked: Forgot to check out (Today, late night)"
+        )
+        missed_checkout_count += today_missed
 
     logger.info(f"[Scheduler] Marked {absent_count} employee(s) as Absent (no check-in) and {missed_checkout_count} as Absent (missed check-out) for {target_date}")

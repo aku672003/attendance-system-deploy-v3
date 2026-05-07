@@ -371,6 +371,13 @@ const TaskManagerV2 = {
 
         this.selectedAssignees = assigneeId ? [parseInt(assigneeId)] : [];
 
+        // Set min date for task dates to today (prevent past dates for NEW tasks)
+        const today = new Date().toISOString().split('T')[0];
+        const startDateInput = document.getElementById('newTaskV2StartDate');
+        const dueDateInput = document.getElementById('newTaskV2DueDate');
+        if (startDateInput) startDateInput.setAttribute('min', today);
+        if (dueDateInput) dueDateInput.setAttribute('min', today);
+
         // Populate Overseer Select
         const overseerSelect = document.getElementById('newTaskV2Overseer');
         if (overseerSelect) {
@@ -438,6 +445,13 @@ const TaskManagerV2 = {
         }
 
         document.getElementById('newTaskV2HeaderTitle').innerHTML = '<i class="fas fa-edit"></i> Edit Task';
+        
+        // Remove min date restriction when editing existing tasks
+        const startDateInput = document.getElementById('newTaskV2StartDate');
+        const dueDateInput = document.getElementById('newTaskV2DueDate');
+        if (startDateInput) startDateInput.removeAttribute('min');
+        if (dueDateInput) dueDateInput.removeAttribute('min');
+
         document.getElementById('newTaskV2Id').value = task.id;
         document.getElementById('newTaskV2Title').value = task.title;
         document.getElementById('newTaskV2Desc').value = task.description || '';

@@ -1,90 +1,65 @@
 import logging
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from attendance.models import Employee, AttendanceRecord, PushSubscription
+from datetime import datetime, timedelta
+from attendance.models import Employee, AttendanceRecord, Holiday
+from attendance.views import _trigger_push_notification
 
-logger = logging.getLogger(__name__)
-
-
-def send_push_to_subscription(sub, title, body, icon='/static/assets/icon-192.png'):
-    """Send a single Web Push notification using pywebpush."""
-    try:
-        from pywebpush import webpush, WebPushException
-        from django.conf import settings
-
-        subscription_info = {
-            "endpoint": sub.endpoint,
-            "keys": {
-                "p256dh": sub.p256dh,
-                "auth": sub.auth,
-            }
-        }
-
-        webpush(
-            subscription_info=subscription_info,
-            data=f'{{"title":"{title}","body":"{body}","icon":"{icon}"}}',
-            vapid_private_key=settings.VAPID_PRIVATE_KEY,
-            vapid_claims={"sub": settings.VAPID_CLAIMS_SUB},
-        )
-    except Exception as e:
-        logger.warning(f"Push failed for endpoint {sub.endpoint[:60]}: {e}")
-        # If endpoint is gone (410 Gone), remove stale subscription
-        if hasattr(e, 'response') and e.response is not None and e.response.status_code in (404, 410):
-            sub.delete()
-            logger.info("Removed stale push subscription.")
-
-
-def run_attendance_reminders(phase='check_in'):
+def run_attendance_reminders(reminder_type=None):
     """
-    Send push notifications to employees who:
-      - phase='check_in'  → haven't checked in yet today
-      - phase='check_out' → checked in but haven't checked out
-    Called by the scheduler.
+    Core logic for reminders, callable by both Management Command and Scheduler.
     """
-    now = timezone.localtime(timezone.now())
-    today = now.date()
+    now_ist = timezone.localtime(timezone.now())
+    today = now_ist.date()
+    
+    # 1. 9 AM Check-in Reminder
+    if reminder_type == 'check_in' or (now_ist.hour == 9 and now_ist.minute == 0):
+        if Holiday.is_date_working(today):
+            employees = Employee.objects.filter(is_active=True).exclude(role='admin')
+            for emp in employees:
+                checked_in = AttendanceRecord.objects.filter(
+                    employee=emp, 
+                    date=today,
+                    check_in_time__isnull=False
+                ).exclude(status__in=['absent', 'leave']).exists()
+                
+                if not checked_in:
+                    _trigger_push_notification(
+                        emp, 
+                        "9 AM Reminder 📍", 
+                        "Good morning! Don't forget to mark your attendance for today.",
+                        link="/"
+                    )
 
-    if phase == 'check_in':
-        # Employees with NO attendance record at all for today
-        checked_in_ids = AttendanceRecord.objects.filter(date=today).values_list('employee_id', flat=True)
-        employees = Employee.objects.filter(is_active=True).exclude(id__in=checked_in_ids)
-        title = "⏰ Don't Forget to Check In!"
-        body = "You haven't checked in yet today. Open the attendance portal to mark your attendance."
-    else:  # check_out
-        # Employees who checked in but have no check_out_time
-        checked_in_no_out = AttendanceRecord.objects.filter(
+    # 2. 8.95 Hours Check-out Reminder
+    if reminder_type == 'check_out' or reminder_type is None:
+        active_records = AttendanceRecord.objects.filter(
             date=today,
             check_in_time__isnull=False,
-            check_out_time__isnull=True,
-        ).values_list('employee_id', flat=True)
-        employees = Employee.objects.filter(is_active=True, id__in=checked_in_no_out)
-        title = "⏰ Don't Forget to Check Out!"
-        body = "You're checked in but haven't checked out yet. Please mark your check-out before you leave."
+            check_out_time__isnull=True
+        ).exclude(status__in=['absent', 'leave'])
 
-    sent_count = 0
-    for employee in employees:
-        subs = PushSubscription.objects.filter(employee=employee)
-        for sub in subs:
-            send_push_to_subscription(sub, title, body)
-            sent_count += 1
-
-    logger.info(f"[{phase}] Push notifications sent to {sent_count} subscription(s) for {len(employees)} employee(s).")
-    return sent_count
-
+        for record in active_records:
+            try:
+                check_in_t = datetime.strptime(str(record.check_in_time), '%H:%M:%S').time()
+                check_in_dt = timezone.make_aware(datetime.combine(record.date, check_in_t))
+                elapsed_hours = (now_ist - check_in_dt).total_seconds() / 3600
+                
+                # If specific 'check_out' type requested (from scheduler), or natural 8.95 mark
+                if reminder_type == 'check_out' or (8.95 <= elapsed_hours < 8.98):
+                    _trigger_push_notification(
+                        record.employee,
+                        "Shift Completion Reminder 🏃",
+                        f"You have completed {round(elapsed_hours, 2)} hours. Please wrap up your tasks and check out.",
+                        link="/"
+                    )
+            except Exception:
+                pass
 
 class Command(BaseCommand):
-    help = 'Send attendance check-in or check-out push reminders'
-
-    def add_arguments(self, parser):
-        parser.add_argument(
-            '--phase',
-            type=str,
-            default='check_in',
-            choices=['check_in', 'check_out'],
-            help='Which reminder to send: check_in or check_out',
-        )
+    help = 'Send 9 AM check-in reminders and 8.95 hours check-out reminders'
 
     def handle(self, *args, **options):
-        phase = options['phase']
-        count = run_attendance_reminders(phase)
-        self.stdout.write(self.style.SUCCESS(f"Sent {count} push notification(s) for phase={phase}"))
+        self.stdout.write("Processing reminders...")
+        run_attendance_reminders()
+        self.stdout.write(self.style.SUCCESS('Reminders processed.'))

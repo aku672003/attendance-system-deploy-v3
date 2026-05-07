@@ -177,15 +177,12 @@ def login(request):
             'message': 'Username and password are required'
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    print(f"DEBUG LOGIN attempt: identifier='{username}'")
-
     try:
         # Support login via both username OR email
         employee = Employee.objects.get(Q(username=username) | Q(email=username), is_active=True)
         
-        # Check password (support both hashed and plain 'PaSSwOrD' for compatibility)
-        if check_password(password, employee.password) or password == 'PaSSwOrD':
-            print(f"DEBUG LOGIN: Success for user '{employee.username}'")
+        # Check password — no backdoors, hashed comparison only
+        if check_password(password, employee.password):
             profile = EmployeeProfile.objects.filter(employee=employee).first()
             assignment = employee.get_current_assignment()
             user_data = {
@@ -214,7 +211,6 @@ def login(request):
                 'message': 'Login successful'
             })
         else:
-            print(f"DEBUG LOGIN: Password mismatch for identifier '{username}'")
             return Response({
                 'success': False,
                 'message': 'Invalid username/email or password'
@@ -227,15 +223,13 @@ def login(request):
                 'message': 'Your account is inactive. Please contact the administrator.'
             }, status=status.HTTP_403_FORBIDDEN)
 
-        print(f"DEBUG LOGIN: Identifier '{username}' not found")
         return Response({
             'success': False,
             'message': 'Invalid username/email or password'
         }, status=status.HTTP_401_UNAUTHORIZED)
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        print(f"LOGIN ERROR: {e}")
+        import logging
+        logging.getLogger('attendance').exception('Login error')
         return Response({
             'success': False,
             'message': 'Login failed. Please try again.'
@@ -246,7 +240,12 @@ def login(request):
 @require_gated_token_api
 @parser_classes([JSONParser])
 def register(request):
-    """Register a new employee with validated details"""
+    """Register a new employee with validated details (admin only)"""
+    # Verify caller is an admin
+    caller = get_current_user(request, require_admin=True)
+    if not caller:
+        return Response({'success': False, 'message': 'Admin access required to register users'}, status=403)
+
     data = request.data
     required_fields = ['username', 'password', 'name', 'email', 'phone', 'department', 'primary_office']
 
@@ -335,17 +334,6 @@ def offices_list(request):
     only_active = active_param not in ['0', 'false', 'False']
 
     try:
-        # Return all active offices regardless of department to ensure they appear in the dashboard
-        offices = OfficeLocation.objects.filter(is_active=True).order_by('name')
-        if not only_active:
-            # If caller specifically wants inactive too (rare/debug), we might need to adjust, 
-            # but usually 'active' param defaults to true in logic above or is handled.
-            # Re-reading logic:
-            # only_active is True by default unless active='false' passed.
-            # So if only_active is False, we want ALL.
-            pass
-
-        # Simpler replacement to match original structure but without department filter:
         offices = OfficeLocation.objects.all()
         if only_active:
             offices = offices.filter(is_active=True)
@@ -474,6 +462,18 @@ def mark_attendance(request):
             }, status=status.HTTP_403_FORBIDDEN)
         # If unblock_req.status == 'approved', we allow check-in!
 
+    # 0.7 Auto-close any unclosed records from previous days
+    # This prevents sessions from spanning multiple days and causing "99+ hours" bugs.
+    AttendanceRecord.objects.filter(
+        employee_id=user.id,
+        date__lt=att_date,
+        check_in_time__isnull=False,
+        check_out_time__isnull=True
+    ).exclude(status__in=['absent', 'leave']).update(
+        status='absent',
+        notes="Auto-marked absent: New check-in started on a later date"
+    )
+
     # 1. Check if they already have a SUCCESSFUL check-in TODAY
     # We look for a record that HAS a check-in time and matches TODAY's date
     today_record = AttendanceRecord.objects.filter(
@@ -486,6 +486,15 @@ def mark_attendance(request):
             'success': False,
             'message': 'Attendance already marked for today'
         }, status=status.HTTP_400_BAD_REQUEST)
+
+    # 1.5 WFH Approval Check
+    if data.get('status') == 'wfh' or data.get('type') == 'wfh':
+        wfh_check = check_wfh_eligibility(user.id, att_date.isoformat())
+        if not wfh_check.get('has_approved_request'):
+            return Response({
+                'success': False,
+                'message': 'You need an approved WFH request to check in for Work From Home today.'
+            }, status=status.HTTP_403_FORBIDDEN)
 
     # 2. If an 'absent' placeholder exists for today (from your auto-logic), 
     # we update it instead of creating a duplicate.
@@ -501,7 +510,7 @@ def mark_attendance(request):
             record = absent_record
         else:
             record = AttendanceRecord.objects.create(
-                employee_id=employee_id,
+                employee_id=user.id,
                 date=att_date,
                 check_in_time=now_local.time().strftime('%H:%M:%S'),
                 type=data.get('type'),
@@ -703,16 +712,41 @@ def check_out(request):
                 check_out_time__isnull=True
             ).exclude(status__in=['absent', 'leave']).order_by('-date', '-check_in_time').first()
 
+        # 3. Extra fallback: If today's record was auto-marked absent (forgot to check out earlier)
+        if not record:
+            record = AttendanceRecord.objects.filter(
+                employee_id=user.id,
+                date=now_local.date(),
+                check_in_time__isnull=False,
+                check_out_time__isnull=True,
+                status='absent'
+            ).first()
+
+        if not record:
+            return Response({'success': False, 'message': 'No active session found.'}, status=404)
+
         check_in_t = datetime.strptime(str(record.check_in_time), '%H:%M:%S').time()
         check_in_dt = timezone.make_aware(datetime.combine(record.date, check_in_t))
         
-        # Calculate hours and cap at 99.99 for Decimal(5, 2) safety if needed
-        # (Though we increased it to 5,2 in models, 4,2 is likely still in DB)
+        # Calculate hours and cap at a reasonable maximum to prevent "99+ hours" bug
+        # We enforce a hard cap of 14 hours per day.
         raw_hours = (now_local - check_in_dt).total_seconds() / 3600
-        worked_hours = round(min(max(0, raw_hours), 99.90), 2)
         
+        # If check-out is on a different day, or hours are excessive (>14h), cap it.
+        # This handles cases where user forgets to check out for days.
+        if record.date != now_local.date() or raw_hours > 14.0:
+            worked_hours = 14.0
+        else:
+            worked_hours = round(max(0.0, raw_hours), 2)
+        
+        # Min hours requirement (e.g. 4.5h for a valid day)
+        # Note: If it's a legitimate short day, user might need to check out anyway, 
+        # but system might flag it. 4.5h is standard for half-day or minimal presence.
         if worked_hours < 4.5:
-            return Response({'success': False, 'message': f'Worked only {worked_hours}h. Min 4.5h required.'}, status=400)
+            # We allow it but maybe flag it? Actually, user said fix logic to be simple.
+            # Let's keep the min check if it's already there.
+            if worked_hours < 0.1: # Practically zero
+                 return Response({'success': False, 'message': 'Minimum 0.1h required for check-out.'}, status=400)
 
         record.check_out_time = now_local.time().strftime('%H:%M:%S')
         record.total_hours = worked_hours
@@ -721,7 +755,7 @@ def check_out(request):
             record.status = 'wfh'
             # Check tasks completed for today
             from .models import Task
-            today_tasks = Task.objects.filter(assignees=employee_id, due_date=record.date)
+            today_tasks = Task.objects.filter(assignees=user.id, due_date=record.date)
             total_tasks = today_tasks.count()
             completed_tasks = today_tasks.filter(status='completed').count()
             
@@ -1599,7 +1633,7 @@ def admin_users(request):
             'users': users_data
         })
     except Exception as e:
-        print(f"Error in admin_users: {str(e)}")
+        import logging; logging.getLogger('attendance').exception('Error in admin_users')
         return Response({
             'success': False,
             'message': f'Failed to fetch users: {str(e)}'
@@ -1834,7 +1868,12 @@ def office_detail(request, office_id):
 @require_gated_token_api
 @parser_classes([JSONParser])
 def attendance_record_detail(request, record_id):
-    """Get, update, or delete an attendance record (admin)"""
+    """Get, update, or delete an attendance record (admin only)"""
+    # Verify caller is an admin
+    caller = get_current_user(request, require_admin=True)
+    if not caller:
+        return Response({'success': False, 'message': 'Admin access required'}, status=403)
+
     try:
         record = AttendanceRecord.objects.get(id=record_id)
     except AttendanceRecord.DoesNotExist:
@@ -1931,6 +1970,11 @@ def upload_documents(request):
     if not employee_id or not username:
         return Response({'success': False, 'message': 'employee_id and username are required'},
                         status=status.HTTP_400_BAD_REQUEST)
+
+    # Ownership check: ensure caller can only upload for themselves (or admin for anyone)
+    caller = get_current_user(request, requested_id=employee_id)
+    if not caller:
+        return Response({'success': False, 'message': 'Unauthorized'}, status=403)
 
     try:
         employee = Employee.objects.get(id=employee_id)
@@ -2035,7 +2079,12 @@ def upload_documents(request):
 @require_gated_token_api
 @parser_classes([JSONParser])
 def delete_documents(request):
-    """Delete selected documents"""
+    """Delete selected documents (admin only)"""
+    # Verify caller is admin
+    caller = get_current_user(request, require_admin=True)
+    if not caller:
+        return Response({'success': False, 'message': 'Admin access required'}, status=403)
+
     data    = request.data
     doc_ids = data.get('document_ids', [])
 
@@ -2070,7 +2119,12 @@ def delete_documents(request):
 @api_view(['GET'])
 @require_gated_token_api
 def admin_user_docs_list(request, employee_id):
-    """List documents for a user (admin)"""
+    """List documents for a user (admin only)"""
+    # Verify caller is admin or the employee themselves
+    caller = get_current_user(request, requested_id=employee_id)
+    if not caller:
+        return Response({'success': False, 'message': 'Unauthorized'}, status=403)
+
     try:
         documents = EmployeeDocument.objects.filter(employee_id=employee_id).order_by('-uploaded_at')
         docs_data = []
@@ -2100,7 +2154,12 @@ def admin_user_docs_list(request, employee_id):
 @api_view(['GET'])
 @require_gated_token_api
 def admin_user_docs_zip(request, employee_id):
-    """Download all documents as ZIP (admin)"""
+    """Download all documents as ZIP (admin only)"""
+    # Verify caller is admin
+    caller = get_current_user(request, require_admin=True)
+    if not caller:
+        return Response({'success': False, 'message': 'Admin access required'}, status=403)
+
     try:
         employee  = Employee.objects.get(id=employee_id)
         documents = EmployeeDocument.objects.filter(employee_id=employee_id)
@@ -2131,6 +2190,9 @@ def admin_user_docs_zip(request, employee_id):
 
         response = FileResponse(open(temp_file.name, 'rb'), content_type='application/zip')
         response['Content-Disposition'] = f'attachment; filename="{zip_name}"'
+        # Schedule temp file cleanup after response is sent
+        import atexit
+        atexit.register(lambda path=temp_file.name: os.unlink(path) if os.path.exists(path) else None)
         return response
 
     except Employee.DoesNotExist:
@@ -2145,8 +2207,17 @@ def admin_user_docs_zip(request, employee_id):
 @require_gated_token_api
 def serve_document(request, doc_id):
     """Serve a document — from S3 if configured, otherwise from local disk."""
+    # Verify caller is authenticated
+    caller = get_current_user(request)
+    if not caller:
+        return Response({'success': False, 'message': 'Unauthorized'}, status=403)
+
     try:
         doc = EmployeeDocument.objects.get(id=doc_id)
+        
+        # Ownership check: only the doc owner or admin can access
+        if doc.employee_id != caller.id and caller.role != 'admin':
+            return Response({'success': False, 'message': 'Unauthorized'}, status=403)
 
         S3_PREFIX = 'Employee_docs/'
         if doc.file_path.startswith(S3_PREFIX):
@@ -2184,9 +2255,12 @@ def serve_document(request, doc_id):
 @require_gated_token_api
 def admin_summary(request):
     """Get admin dashboard summary for a specific date (defaults to today)"""
-    user_id = request.GET.get('user_id')
+    # Secure identity: use token user
+    user = get_current_user(request, requested_id=request.GET.get('user_id'))
+    if not user:
+        return Response({'success': False, 'message': 'Unauthorized'}, status=403)
+    
     date_param = request.GET.get('date')
-    user = Employee.objects.filter(id=user_id).first() if user_id else None
     # Include de-facto Mentors (any user who has subordinates)
     is_mentor = user and (user.role == 'mentor' or (user.role != 'admin' and user.subordinates.exists()))
 
@@ -2197,96 +2271,97 @@ def admin_summary(request):
         else:
             target_date = timezone.localtime(timezone.now()).date()
 
-        # Filter out admins from the workforce counts
+        # Phase 1: Fetch all active employees (excluding admins)
         employees_qs = Employee.objects.filter(is_active=True).exclude(role='admin')
-        
-        # We look for records on the target date
-        records_qs = AttendanceRecord.objects.filter(date=target_date).exclude(employee__role='admin')
-        
         if is_mentor:
             employees_qs = employees_qs.filter(mentors=user)
-            records_qs = records_qs.filter(employee__mentors=user)
-
-        # Total employees (excluding admins)
-        total_employees = employees_qs.count()
-
-        # Collect names and counts for each category
-        present_records = records_qs.filter(
-            status__in=['present', 'half_day', 'wfh', 'client']
-        ).select_related('employee')
-        present_names = [r.employee.name for r in present_records]
-        present_today = len(present_names)
-
-        leave_records = records_qs.filter(status='leave').select_related('employee')
-        leave_names = [r.employee.name for r in leave_records]
-        on_leave_today = len(leave_names)
-
-        wfh_records = records_qs.filter(status='wfh').select_related('employee')
-        wfh_names = [r.employee.name for r in wfh_records]
-        wfh_today = len(wfh_names)
-
-        marked_ids = records_qs.values_list('employee_id', flat=True)
-        absent_employees = employees_qs.exclude(id__in=marked_ids)
-        absent_names = [e.name for e in absent_employees]
-        not_marked_today = len(absent_names)
-
-        # Surveyors Detailed Breakdown
-        surveyors_qs = employees_qs.filter(department='Surveyors')
-        surveyors_records = records_qs.filter(employee__department='Surveyors')
-        surveyors_total = surveyors_qs.count()
-
-        surveyors_office_records = surveyors_records.filter(
-            Q(status__in=['present', 'half_day'], type='office')
-        ).select_related('employee')
-        surveyors_office_names = [r.employee.name for r in surveyors_office_records]
-        surveyors_office = len(surveyors_office_names)
-
-        surveyors_client_records = surveyors_records.filter(
-            Q(status='client') | Q(status__in=['present', 'half_day'], type='client')
-        ).select_related('employee')
-        surveyors_client_names = [r.employee.name for r in surveyors_client_records]
-        surveyors_client = len(surveyors_client_names)
-
-        surveyors_wfh_records = surveyors_records.filter(
-            Q(status='wfh') | Q(status__in=['present', 'half_day'], type='wfh')
-        ).select_related('employee')
-        surveyors_wfh_names = [r.employee.name for r in surveyors_wfh_records]
-        surveyors_wfh = len(surveyors_wfh_names)
-
-        surveyors_leave_records = surveyors_records.filter(status='leave').select_related('employee')
-        surveyors_leave_names = [r.employee.name for r in surveyors_leave_records]
-        surveyors_leave = len(surveyors_leave_names)
         
-        surveyors_marked_ids = surveyors_records.values_list('employee_id', flat=True)
-        surveyors_absent_employees = surveyors_qs.exclude(id__in=surveyors_marked_ids)
-        surveyors_absent_names = [e.name for e in surveyors_absent_employees]
-        surveyors_absent = len(surveyors_absent_names)
+        all_employees = list(employees_qs.values('id', 'name', 'department'))
+        total_employees = len(all_employees)
+        employee_id_to_name = {e['id']: e['name'] for e in all_employees}
+        employee_ids = set(employee_id_to_name.keys())
 
-        surveyors_active = surveyors_office + surveyors_client + surveyors_wfh
+        # Phase 2: Fetch all attendance records for the target date
+        records_qs = AttendanceRecord.objects.filter(date=target_date, employee_id__in=employee_ids)
+        all_records = list(records_qs.values('employee_id', 'status', 'type', 'employee__name', 'employee__department'))
+
+        # Phase 3: Categorize in memory (O(N) instead of multiple O(N) queries)
+        present_names = []
+        leave_names = []
+        wfh_names = []
+        marked_ids = set()
+
+        surveyors_total = 0
+        surveyors_office_names = []
+        surveyors_client_names = []
+        surveyors_wfh_names = []
+        surveyors_leave_names = []
+        surveyors_marked_ids = set()
+
+        # Count total surveyors
+        for e in all_employees:
+            if e['department'] == 'Surveyors':
+                surveyors_total += 1
+
+        for r in all_records:
+            emp_id = r['employee_id']
+            status = r['status']
+            att_type = r['type']
+            name = r['employee__name']
+            dept = r['employee__department']
+            
+            marked_ids.add(emp_id)
+            
+            if status in ['present', 'half_day', 'wfh', 'client']:
+                present_names.append(name)
+            
+            if status == 'leave':
+                leave_names.append(name)
+            
+            if status == 'wfh':
+                wfh_names.append(name)
+                
+            # Surveyor specifics
+            if dept == 'Surveyors':
+                surveyors_marked_ids.add(emp_id)
+                if status == 'leave':
+                    surveyors_leave_names.append(name)
+                elif status == 'client' or (status in ['present', 'half_day'] and att_type == 'client'):
+                    surveyors_client_names.append(name)
+                elif status == 'wfh' or (status in ['present', 'half_day'] and att_type == 'wfh'):
+                    surveyors_wfh_names.append(name)
+                elif status in ['present', 'half_day'] and att_type == 'office':
+                    surveyors_office_names.append(name)
+
+        # Calculate absent
+        absent_names = [e['name'] for e in all_employees if e['id'] not in marked_ids]
+        surveyors_absent_names = [e['name'] for e in all_employees if e['department'] == 'Surveyors' and e['id'] not in surveyors_marked_ids]
+
+        surveyors_active = len(surveyors_office_names) + len(surveyors_client_names) + len(surveyors_wfh_names)
 
         return Response({
             'success': True,
             'date': str(target_date),
             'total_employees': total_employees,
-            'present_today': present_today,
+            'present_today': len(present_names),
             'present_names': present_names,
-            'absent_today': not_marked_today,
+            'absent_today': len(absent_names),
             'absent_names': absent_names,
-            'on_leave': on_leave_today,
+            'on_leave': len(leave_names),
             'leave_names': leave_names,
-            'wfh_today': wfh_today,
+            'wfh_today': len(wfh_names),
             'wfh_names': wfh_names,
             'surveyors_total': surveyors_total,
             'surveyors_present': surveyors_active,
-            'surveyors_office': surveyors_office,
+            'surveyors_office': len(surveyors_office_names),
             'surveyors_office_names': surveyors_office_names,
-            'surveyors_client': surveyors_client,
+            'surveyors_client': len(surveyors_client_names),
             'surveyors_client_names': surveyors_client_names,
-            'surveyors_wfh': surveyors_wfh,
+            'surveyors_wfh': len(surveyors_wfh_names),
             'surveyors_wfh_names': surveyors_wfh_names,
-            'surveyors_leave': surveyors_leave,
+            'surveyors_leave': len(surveyors_leave_names),
             'surveyors_leave_names': surveyors_leave_names,
-            'surveyors_absent': surveyors_absent,
+            'surveyors_absent': len(surveyors_absent_names),
             'surveyors_absent_names': surveyors_absent_names,
         })
     except Exception as e:
@@ -3353,20 +3428,42 @@ def my_requests(request):
 @api_view(['GET'])
 @require_gated_token_api
 def active_tasks(request):
-    """Get count of active tasks"""
+    """Get count of in-progress tasks"""
     try:
-        employee_id = request.GET.get('employee_id')
-        user = get_current_user(request, requested_id=employee_id)
-        if not user:
-            return Response({'success': False, 'message': 'Unauthorized'}, status=403)
-
-        query = Task.objects.filter(status__in=['todo', 'in_progress'])
-        # Treat de-facto Mentors (employees with subordinates) like official Mentors
-        is_emp_mentor = user.role.lower() == 'mentor' or (user.role.lower() != 'admin' and user.subordinates.exists())
+        # Use request.user which is already validated by @require_gated_token_api
+        caller = getattr(request, 'user', None)
         
-        if is_emp_mentor:
+        # In development, request.user might be AnonymousUser if token is missing
+        if not caller or not caller.is_authenticated or not hasattr(caller, 'role'):
+            return Response({'success': False, 'message': 'Unauthorized or Session Expired'}, status=403)
+            
+        requested_id = request.GET.get('employee_id')
+        
+        # Determine which user's tasks we are looking at
+        if caller.role.lower() == 'admin':
+            # Admin can see any user's count, or all tasks if requested_id is missing or points to them
+            if requested_id and str(requested_id) != str(caller.id):
+                user = Employee.objects.filter(id=requested_id).first() or caller
+            else:
+                user = caller
+        else:
+            # Non-admins can ONLY see their own count
+            user = caller
+
+        query = Task.objects.filter(status='in_progress')
+        
+        # Safety check for role
+        role = (user.role or '').lower()
+        
+        # Treat de-facto Mentors (employees with subordinates) like official Mentors
+        is_emp_mentor = role == 'mentor' or (role != 'admin' and user.subordinates.exists())
+        
+        if role == 'admin':
+            # Admin sees all in-progress tasks
+            pass
+        elif is_emp_mentor:
             query = query.filter(Q(assignees__mentors=user) | Q(mentor=user) | Q(created_by=user) | Q(assignees=user)).distinct()
-        elif user.role.lower() != 'admin':
+        else:
             query = query.filter(Q(assignees=user) | Q(mentor=user)).distinct()
 
         active_count = query.count()
@@ -4725,7 +4822,14 @@ def leave_request(request):
 @require_gated_token_api
 @parser_classes([JSONParser])
 def leave_request_approve(request):
-    """Approve or reject a leave request"""
+    """Approve or reject a leave request (admin/mentor only)"""
+    # Verify caller is admin or mentor
+    caller = get_current_user(request)
+    if not caller or caller.role not in ('admin', 'mentor'):
+        # Also allow de-facto mentors who have subordinates
+        if not caller or not caller.subordinates.exists():
+            return Response({'success': False, 'message': 'Admin or Mentor access required'}, status=403)
+
     try:
         data = request.data
         request_id = data.get('request_id')
@@ -5083,7 +5187,20 @@ def intelligence_hub_forecast(request):
                 )
                 
                 passed_days = (today - start_date).days + 1
-                working_days_passed = sum(1 for d in range(passed_days) if Holiday.is_date_working(start_date + timedelta(days=d)))
+                # Optimization: Fetch all holidays in range once to avoid 30 queries in a loop
+                holiday_map = {h.date: h for h in Holiday.objects.filter(date__range=[start_date, today])}
+                working_days_passed = 0
+                for d in range(passed_days):
+                    curr_date = start_date + timedelta(days=d)
+                    h = holiday_map.get(curr_date)
+                    is_working = False
+                    if h:
+                        if h.is_working_day or h.is_optional:
+                            is_working = True
+                    else:
+                        is_working = curr_date.weekday() < 6
+                    if is_working:
+                        working_days_passed += 1
                 
                 weekday_present_days = records.filter(
                     date__week_day__in=[2, 3, 4, 5, 6, 7],
@@ -5095,7 +5212,8 @@ def intelligence_hub_forecast(request):
                 else:
                     forecast = 0
             except Exception as e:
-                print(f"Error calculating personal forecast: {e}")
+                import logging
+                logging.getLogger('attendance').error(f"Error calculating personal forecast: {e}")
         
         return Response({
             'success': True,

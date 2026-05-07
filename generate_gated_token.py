@@ -13,11 +13,14 @@ def load_env():
                 if line.strip() and not line.startswith('#'):
                     key_val = line.strip().split('=', 1)
                     if len(key_val) == 2: 
-                        os.environ[key_val[0]] = key_val[1]
+                        os.environ[key_val[0].strip()] = key_val[1].strip()
 
 def generate_gated_token(user_id=1):
     load_env()
-    secret_key = str(os.getenv('ATTENDANCE_SECRET_KEY', 'hanuai-attendance-secure-token-key-2024'))
+    secret_key = str(os.getenv('ATTENDANCE_SECRET_KEY', ''))
+    if not secret_key:
+        print("ERROR: ATTENDANCE_SECRET_KEY not found in .env")
+        return
     
     serializer = URLSafeTimedSerializer(secret_key)
     

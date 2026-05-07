@@ -1,60 +1,53 @@
 import time
+import logging
 from functools import wraps
 from django.conf import settings
 from django.http import HttpResponseForbidden, Http404
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 
+logger = logging.getLogger('attendance.security')
+
 def get_serializer():
     """Create a serializer using the shared secret key."""
-    secret = getattr(settings, "ATTENDANCE_SECRET_KEY", "hanuai-attendance-secret-shared-key")
+    secret = getattr(settings, "ATTENDANCE_SECRET_KEY", None)
+    if not secret:
+        raise RuntimeError("ATTENDANCE_SECRET_KEY is not configured")
     return URLSafeTimedSerializer(secret)
 
 def validate_gated_token(token):
     """
-    Validates an itsdangerous token.
-    Tries the configured ATTENDANCE_SECRET_KEY first,
-    then falls back to the default shared key for compatibility.
+    Validates an itsdangerous token using ONLY the configured secret.
+    No fallback keys — a single source of truth for signing.
     Returns (True, data) or (False, error_message).
     """
     if not token:
         return False, "Token Missing"
 
-    # List of secrets to try: [Configured Secret, Default Fallback]
     configured_secret = getattr(settings, "ATTENDANCE_SECRET_KEY", None)
-    default_secret = "hanuai-attendance-secret-shared-key"
-    
-    secrets_to_try = []
-    if configured_secret:
-        secrets_to_try.append(configured_secret)
-    if default_secret not in secrets_to_try:
-        secrets_to_try.append(default_secret)
+    if not configured_secret:
+        logger.error("ATTENDANCE_SECRET_KEY is not configured — token validation impossible")
+        return False, "Server configuration error"
 
-    last_error = "Invalid Token"
-    for i, secret in enumerate(secrets_to_try):
-        serializer = URLSafeTimedSerializer(secret)
-        try:
-            # Token is now valid for 1 hour for better security/ux balance
-            data = serializer.loads(token, max_age=3600)
-            if not isinstance(data, dict) or 'user_id' not in data or 'timestamp' not in data:
-                print(f"[SECURITY DEBUG] Attempt {i+1} failed: Invalid Payload Structure")
-                return False, "Invalid Token Payload"
-            return True, data
-        except SignatureExpired:
-            print(f"[SECURITY DEBUG] Attempt {i+1} failed: Token Expired (max_age=3600s)")
-            return False, "Token Expired"
-        except BadSignature:
-            print(f"[SECURITY DEBUG] Attempt {i+1} failed: Bad Signature (Secret Mismatch)")
-            last_error = "Invalid Token"
-            continue
-        except Exception as e:
-            print(f"[SECURITY DEBUG] Attempt {i+1} failed: Unexpected Error: {str(e)}")
-            last_error = str(e)
-            continue
-            
-    print(f"[SECURITY DEBUG] Token Validation Final Response: {last_error}")
-    return False, last_error
+    serializer = URLSafeTimedSerializer(configured_secret)
+    try:
+        # Token is valid for 1 hour
+        data = serializer.loads(token, max_age=3600)
+        if not isinstance(data, dict) or 'user_id' not in data or 'timestamp' not in data:
+            return False, "Invalid Token Payload"
+        return True, data
+    except SignatureExpired:
+        return False, "Token Expired"
+    except BadSignature:
+        return False, "Invalid Token"
+    except Exception as e:
+        logger.exception("Unexpected token validation error")
+        return False, "Token validation failed"
 
 from .models import Employee
+
+def _is_development():
+    """Check if we are in development mode using Django settings (not Host header)."""
+    return getattr(settings, 'DEBUG', False)
 
 def require_valid_token(view_func):
     """
@@ -65,9 +58,7 @@ def require_valid_token(view_func):
     @wraps(view_func)
     def _wrapped_view(request, *args, **kwargs):
         token = request.GET.get('token')
-        
-        host = request.get_host()
-        is_development = '127.0.0.1' in host or 'localhost' in host
+        is_development = _is_development()
 
         # Strictly require token presence for gated access, except in development
         if is_development:
@@ -135,8 +126,7 @@ def require_gated_token_api(view_func):
             if not token and hasattr(request, 'data') and isinstance(request.data, dict):
                 token = request.data.get('token')
         
-        host = request.get_host()
-        is_development = '127.0.0.1' in host or 'localhost' in host
+        is_development = _is_development()
 
         if is_development:
             # On local development, if a token is present, we try to bind the user
@@ -184,4 +174,3 @@ def require_gated_token_api(view_func):
         return view_func(request, *args, **kwargs)
 
     return _wrapped_view
-
