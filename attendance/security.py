@@ -43,10 +43,31 @@ def validate_gated_token(token):
         logger.exception("Unexpected token validation error")
         return False, "Token validation failed"
 
+def generate_gated_token(user_id, username=None):
+    """
+    Generates a signed itsdangerous token for a specific user.
+    Used during manual login to provide the frontend with a valid token
+    for subsequent gated API requests.
+    """
+    configured_secret = getattr(settings, "ATTENDANCE_SECRET_KEY", None)
+    if not configured_secret:
+        return None
+        
+    serializer = URLSafeTimedSerializer(configured_secret)
+    payload = {
+        "user_id": user_id,
+        "timestamp": int(time.time())
+    }
+    if username:
+        payload["username"] = username
+        
+    return serializer.dumps(payload)
+
 from .models import Employee
 
 def _is_development():
-    """Check if we are in development mode using Django settings (not Host header)."""
+    """Check if we are in development mode using Django settings."""
+    # We strictly use DEBUG as the source of truth for dev mode security.
     return getattr(settings, 'DEBUG', False)
 
 def require_valid_token(view_func):

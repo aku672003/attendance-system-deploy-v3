@@ -65,8 +65,15 @@ function formatTimeOnly(dateInput) {
 }
 
 // Initialize Application
-document.addEventListener('DOMContentLoaded', async function () {
-    console.log('MySQL Attendance System Initializing...');
+document.addEventListener('DOMContentLoaded', async function initApp() {
+    console.log('Initializing Attendance System...');
+    
+    // Load persisted token if available
+    const savedToken = sessionStorage.getItem('gatedToken');
+    if (savedToken && (!window.GATED_TOKEN || window.GATED_TOKEN === "None")) {
+        window.GATED_TOKEN = savedToken;
+    }
+
     refreshPrimaryOfficeSelects();
     // Check for stored user session
     const tokenVerified = sessionStorage.getItem('attendanceTokenVerified');
@@ -960,6 +967,13 @@ async function handleLogin(event) {
 
         if (result.success) {
             currentUser = result.user;
+            
+            // Save token if returned (manual login in production)
+            if (result.token) {
+                window.GATED_TOKEN = result.token;
+                sessionStorage.setItem('gatedToken', result.token);
+            }
+
             sessionStorage.setItem('attendanceUser', JSON.stringify(currentUser));
             sessionStorage.setItem('attendanceLoginTime', Date.now().toString());
             showLoading("Initializing your workspace...");
@@ -1107,6 +1121,8 @@ function logout() {
     sessionStorage.removeItem('attendanceUser');
     sessionStorage.removeItem('attendanceTokenVerified');
     sessionStorage.removeItem('attendanceLoginTime');
+    sessionStorage.removeItem('gatedToken');
+    window.GATED_TOKEN = null;
 
     // Show the login screen instead of reloading/redirecting
     // This allows the login page to be "restored" within the existing session

@@ -185,6 +185,11 @@ def login(request):
         if check_password(password, employee.password):
             profile = EmployeeProfile.objects.filter(employee=employee).first()
             assignment = employee.get_current_assignment()
+            
+            # Generate a gated token for this session
+            from .security import generate_gated_token
+            session_token = generate_gated_token(employee.id, employee.username)
+
             user_data = {
                 'id': employee.id,
                 'username': employee.username,
@@ -208,6 +213,7 @@ def login(request):
             return Response({
                 'success': True,
                 'user': user_data,
+                'token': session_token,
                 'message': 'Login successful'
             })
         else:
