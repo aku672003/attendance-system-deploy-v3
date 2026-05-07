@@ -163,7 +163,7 @@ def get_current_user(request, requested_id=None, require_admin=False):
     return token_user
 
 @api_view(['POST'])
-@require_gated_token_api
+# @require_gated_token_api
 @parser_classes([JSONParser])
 def login(request):
     """Authenticate user credentials and return profile data"""
