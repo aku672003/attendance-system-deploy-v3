@@ -74,7 +74,7 @@ def send_otp(request):
     cache.set(cache_key, otp, timeout=300)
 
     # Send email
-    subject = 'Password Reset OTP - HanuAI Attendance System'
+    subject = 'Password Reset OTP - HANUSPHERE Attendance System'
     message = f'Your OTP for password reset is: {otp}. It is valid for 5 minutes.'
     from_email = settings.DEFAULT_FROM_EMAIL
     recipient_list = [email]
@@ -6849,7 +6849,7 @@ def export_holidays_ics(request):
         import pytz
 
         cal = Calendar()
-        cal.add('prodid', '-//HanuAI Holiday Calendar//EN')
+        cal.add('prodid', '-//HANUSPHERE Holiday Calendar//EN')
         cal.add('version', '2.0')
         cal.add('calscale', 'GREGORIAN')
         cal.add('x-wr-calname', f'Holidays {year}')

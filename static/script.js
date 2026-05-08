@@ -130,7 +130,7 @@ document.addEventListener('DOMContentLoaded', async function initApp() {
         console.log('Production token detected. Attempting auto-login...');
         const loginScreen = document.getElementById('loginScreen');
         if (loginScreen) loginScreen.classList.remove('active');
-        showLoading('Authenticating with HanuAI Portal...');
+        showLoading('Authenticating with HANUSPHERE Portal...');
 
         try {
             const verifyRes = await fetch(`${apiBaseUrl}/verify-token`, {
@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', async function initApp() {
                 console.warn('Auto-login failed:', result.message);
                 if (loginScreen) loginScreen.classList.add('active');
                 hideLoading();
-                showNotification('Session expired. Please login through HanuAI portal again.', 'warning');
+                showNotification('Session expired. Please login through HANUSPHERE portal again.', 'warning');
             }
         } catch (err) {
             console.error('Auto-login error:', err);
@@ -182,7 +182,7 @@ document.addEventListener('DOMContentLoaded', async function initApp() {
             console.log('Deployment mode: Hiding login screen as requested.');
             const loginScreen = document.getElementById('loginScreen');
             if (loginScreen) loginScreen.classList.remove('active');
-            showLoading('Please access this system through the HanuAI Portal.');
+            showLoading('Please access this system through the HANUSPHERE Portal.');
         }
     }
 
@@ -7676,31 +7676,36 @@ function renderAssignMentorList(employees) {
     if (!listEl) return;
 
     if (employees.length === 0) {
-        listEl.innerHTML = `<div style="padding:40px;text-align:center;color:#64748b;">No employees found matching your search.</div>`;
+        listEl.innerHTML = `<div style="padding:40px;text-align:center;color:var(--gray-500);font-weight:600;">No employees found matching your search.</div>`;
         return;
     }
 
     listEl.innerHTML = employees.map(emp => `
-        <div class="assign-Mentor-row" style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #f1f5f9; background:white; transition:background 0.2s;">
+        <div class="assign-Mentor-row">
             <div style="flex:1; min-width:0; margin-right:20px;">
-                <div style="font-weight:600; color:#1e293b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${emp.name}</div>
-                <div style="font-size:0.8rem; color:#64748b; text-transform:uppercase; letter-spacing:0.5px;">${emp.role}</div>
+                <div style="font-weight:700; color:var(--gray-900); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:1.1rem;">${emp.name}</div>
+                <div style="font-size:0.75rem; color:var(--gray-500); text-transform:uppercase; letter-spacing:1px; font-weight:700; margin-top:2px;">${emp.role}</div>
             </div>
             
-            <div style="flex:2; display:flex; gap:12px; align-items:center;">
+            <div style="flex:2; display:flex; gap:16px; align-items:center;">
                 <div class="Mentor-select-container" style="flex:1; position:relative;">
-                    <div class="bulk-Mentor-chips" id="chips-${emp.id}" style="display:flex; flex-wrap:wrap; gap:4px; min-height:42px; padding:6px 12px; border:1px solid #e2e8f0; border-radius:8px; cursor:pointer; background:white; align-items:center;" onclick="toggleMentorDropdown(${emp.id})">
+                    <div class="Mentor-select-chips" id="chips-${emp.id}" onclick="toggleMentorDropdown(${emp.id})">
                         ${renderMentorChips(emp.mentor_ids || [])}
-                        <span style="margin-left:auto; color:#94a3b8; font-size:10px;">▼</span>
+                        <span style="margin-left:auto; color:var(--gray-400); font-size:12px;">▼</span>
                     </div>
-                    <div class="bulk-Mentor-dropdown hidden" id="dropdown-${emp.id}" style="position:absolute; top:100%; left:0; width:100%; max-height:250px; overflow-y:auto; background:white; border:1px solid #e2e8f0; border-radius:8px; box-shadow:0 10px 15px -3px rgba(0,0,0,0.1); z-index:100; margin-top:4px; padding:4px;">
-                        <input type="text" class="form-control" placeholder="Search Mentors..." style="height:34px; font-size:0.85rem; margin-bottom:8px; border-radius:6px; padding:0 8px;" oninput="filterMentorOptions(this, ${emp.id})" onclick="event.stopPropagation()">
-                        <div class="Mentor-options" id="options-${emp.id}">
+                    <div class="Mentor-dropdown-premium hidden" id="dropdown-${emp.id}">
+                        <div style="padding:8px; border-bottom:1px solid var(--gray-100); margin-bottom:8px;">
+                            <input type="text" class="form-control" placeholder="Search Mentors..." 
+                                style="height:38px; font-size:0.9rem; border-radius:8px; padding:0 12px; background:var(--gray-50); border:1px solid var(--gray-200);" 
+                                oninput="filterMentorOptions(this, ${emp.id})" onclick="event.stopPropagation()">
+                        </div>
+                        <div class="Mentor-options" id="options-${emp.id}" style="padding:0 4px 4px;">
                             ${renderMentorOptions(emp.id, emp.mentor_ids || [])}
                         </div>
                     </div>
                 </div>
-                <button class="btn btn-primary btn-sm" id="btn-save-${emp.id}" onclick="saveMentorsForEmployee(${emp.id})" style="height:42px; padding:0 16px; border-radius:8px; font-size:14px; min-width:80px;">
+                <button class="btn btn-primary" id="btn-save-${emp.id}" onclick="saveMentorsForEmployee(${emp.id})" 
+                    style="height:48px; padding:0 20px; border-radius:12px; font-weight:700; font-size:14px; min-width:90px; box-shadow:0 4px 6px rgba(var(--primary-rgb), 0.2);">
                     💾 Save
                 </button>
             </div>
@@ -7709,12 +7714,12 @@ function renderAssignMentorList(employees) {
 }
 
 function renderMentorChips(MentorIds) {
-    if (!MentorIds || MentorIds.length === 0) return `<span style="color:#94a3b8; font-size:0.85rem;">No Mentors</span>`;
+    if (!MentorIds || MentorIds.length === 0) return `<span style="color:var(--gray-400); font-size:0.85rem; font-weight:500;">No Mentors</span>`;
     return MentorIds.map(id => {
         const mgr = bulkMentorPotentials.find(m => m.id === id);
         if (!mgr) return '';
         return `
-            <div style="background:#eff6ff; color:#1e40af; padding:2px 8px; border-radius:4px; font-size:0.75rem; display:flex; align-items:center; gap:4px; border:1px solid #dbeafe; font-weight:500;">
+            <div class="Mentor-chip-premium">
                 ${mgr.name}
             </div>
         `;
@@ -7724,14 +7729,14 @@ function renderMentorChips(MentorIds) {
 function renderMentorOptions(empId, currentMentorIds, filter = '') {
     const Mentors = !filter ? bulkMentorPotentials : bulkMentorPotentials.filter(m => m.name.toLowerCase().includes(filter.toLowerCase()));
 
-    if (Mentors.length === 0) return `<div style="padding:10px; text-align:center; color:#94a3b8; font-size:0.85rem;">No Mentors found</div>`;
+    if (Mentors.length === 0) return `<div style="padding:20px; text-align:center; color:var(--gray-400); font-size:0.85rem; font-weight:500;">No Mentors found</div>`;
 
     return Mentors.map(mgr => {
         const isChecked = currentMentorIds.includes(mgr.id);
         return `
-            <div class="Mentor-option" style="display:flex; align-items:center; padding:8px 10px; cursor:pointer; border-radius:6px; transition:background 0.2s;" onclick="toggleMentorSelection(event, ${empId}, ${mgr.id})">
-                <input type="checkbox" style="margin-right:10px; width:16px; height:16px; cursor:pointer;" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleMentorSelection(event, ${empId}, ${mgr.id})">
-                <span style="font-size:0.85rem; color:#334155; user-select:none;">${mgr.name}</span>
+            <div class="Mentor-option-premium" onclick="toggleMentorSelection(event, ${empId}, ${mgr.id})">
+                <input type="checkbox" style="margin-right:12px; width:18px; height:18px; cursor:pointer;" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleMentorSelection(event, ${empId}, ${mgr.id})">
+                <span style="font-size:0.9rem; font-weight:600; user-select:none;">${mgr.name}</span>
             </div>
         `;
     }).join('');
@@ -7762,7 +7767,7 @@ function toggleMentorDropdown(empId) {
     const isHidden = dropdown.classList.contains('hidden');
 
     // Close other dropdowns
-    document.querySelectorAll('.bulk-Mentor-dropdown').forEach(d => d.classList.add('hidden'));
+    document.querySelectorAll('.Mentor-dropdown-premium').forEach(d => d.classList.add('hidden'));
 
     if (isHidden) {
         dropdown.classList.remove('hidden');
@@ -7777,7 +7782,7 @@ function toggleMentorDropdown(empId) {
 // Global click handler to close dropdowns
 document.addEventListener('click', (e) => {
     if (!e.target.closest('.Mentor-select-container')) {
-        document.querySelectorAll('.bulk-Mentor-dropdown').forEach(d => d.classList.add('hidden'));
+        document.querySelectorAll('.Mentor-dropdown-premium').forEach(d => d.classList.add('hidden'));
     }
 });
 
@@ -7797,7 +7802,7 @@ function toggleMentorSelection(event, empId, MentorId) {
     // Update chips
     const chipsEl = document.getElementById(`chips-${empId}`);
     if (chipsEl) {
-        chipsEl.innerHTML = renderMentorChips(emp.mentor_ids) + '<span style="margin-left:auto; color:#94a3b8; font-size:10px;">▼</span>';
+        chipsEl.innerHTML = renderMentorChips(emp.mentor_ids) + '<span style="margin-left:auto; color:var(--gray-400); font-size:12px;">▼</span>';
     }
 
     // Update options list (to sync checkboxes)

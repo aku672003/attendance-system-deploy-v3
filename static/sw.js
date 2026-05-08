@@ -1,5 +1,5 @@
 /**
- * HanuAI Attendance System – Service Worker
+ * HANUSPHERE Attendance System – Service Worker
  * Handles Web Push notifications for check-in / check-out reminders.
  */
 
@@ -16,7 +16,7 @@ self.addEventListener('activate', (event) => {
 
 // ── Push Event ───────────────────────────────────────────────────────────────
 self.addEventListener('push', (event) => {
-  let data = { title: 'HanuAI Attendance', body: 'You have an attendance reminder.' };
+  let data = { title: 'HANUSPHERE Attendance', body: 'You have an attendance reminder.' };
 
   if (event.data) {
     try {
