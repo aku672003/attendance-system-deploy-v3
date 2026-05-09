@@ -1899,8 +1899,25 @@ body.dark-mode .multi-select-dropdown div {
         margin: 10px auto;
     }
 
-    .calendar-modal-content {
-        padding: 15px 10px !important;
+    .calendar-items-legend {
+        display: flex;
+        flex-wrap: wrap !important;
+        gap: 4px !important;
+        justify-content: center !important;
+    }
+
+    .legend-chip {
+        padding: 4px 8px !important;
+        font-size: 9px !important;
+    }
+
+    .calendar-modal-content h3 {
+        font-size: 0.95rem !important;
+    }
+
+    .btn-calendar-nav {
+        padding: 4px 8px !important;
+        font-size: 12px !important;
     }
 }
 
@@ -1910,23 +1927,48 @@ body.dark-mode .multi-select-dropdown div {
     }
 
     .action-card {
-        padding: 24px;
+        padding: 15px !important;
     }
 
     .stat-card {
-        padding: 20px;
+        padding: 15px !important;
     }
 
-    .btn {
-        padding: 10px 20px;
-        font-size: 14px;
-        min-height: 44px;
+    .calendar-modal-content {
+        padding: 15px 5px !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        border-radius: 0 !important;
+    }
+
+    .calendar-grid {
+        gap: 2px !important;
+        padding: 4px !important;
+        margin-top: 10px !important;
+    }
+
+    .calendar-day-label {
+        font-size: 9px !important;
+        padding-bottom: 2px !important;
+        letter-spacing: 0.05em !important;
     }
 
     .calendar-day {
-        min-height: 38px;
-        padding: 8px 2px;
-        font-size: 11px;
+        min-height: 32px !important;
+        padding: 4px 0 !important;
+        font-size: 10px !important;
+        border-radius: 4px !important;
+    }
+
+    .calendar-dot {
+        width: 4px !important;
+        height: 4px !important;
+    }
+
+    .btn {
+        padding: 8px 16px;
+        font-size: 13px;
+        min-height: 40px;
     }
 
     .admin-date-header .date-full {
@@ -1936,6 +1978,11 @@ body.dark-mode .multi-select-dropdown div {
     .month-header {
         font-size: 18px;
         padding: 16px 20px;
+    }
+
+    .calendar-day-details-panel {
+        padding: 10px !important;
+        margin-top: 12px !important;
     }
 }
 
