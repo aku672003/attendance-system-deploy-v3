@@ -496,14 +496,25 @@ def mark_attendance(request):
             'message': 'Attendance already marked for today'
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    # 1.5 WFH Approval Check
-    if data.get('status') == 'wfh' or data.get('type') == 'wfh':
-        wfh_check = check_wfh_eligibility(user.id, att_date.isoformat())
-        if not wfh_check.get('has_approved_request'):
-            return Response({
-                'success': False,
-                'message': 'You need an approved WFH request to check in for Work From Home today.'
-            }, status=status.HTTP_403_FORBIDDEN)
+    # 1.5 WFH/Half Day Approval Check
+    is_wfh = (data.get('status') == 'wfh' or data.get('type') == 'wfh')
+    is_half = (data.get('status') == 'half_day')
+    
+    wfh_check = check_wfh_eligibility(user.id, att_date.isoformat())
+    has_approved = wfh_check.get('has_approved_request')
+    
+    # Check for half day approval as well
+    if is_half and not has_approved:
+        half_day_check = EmployeeRequest.objects.filter(
+            employee_id=user.id,
+            start_date=att_date,
+            request_type='half_day',
+            status='approved'
+        ).exists()
+        has_approved = half_day_check
+
+    status_note = "Pre-approved" if has_approved else "Self-marked"
+    record_note = f"{status_note} {data.get('status')}"
 
     # 2. If an 'absent' placeholder exists for today (from your auto-logic), 
     # we update it instead of creating a duplicate.
@@ -515,6 +526,10 @@ def mark_attendance(request):
             absent_record.status = data.get('status')
             absent_record.type = data.get('type')
             absent_record.check_in_location = data.get('location')
+            absent_record.check_in_photo = data.get('photo')
+            absent_record.office_id = data.get('office_id')
+            absent_record.is_half_day = is_half
+            absent_record.notes = record_note
             absent_record.save()
             record = absent_record
         else:
@@ -526,7 +541,9 @@ def mark_attendance(request):
                 status=data.get('status'),
                 check_in_location=data.get('location'),
                 check_in_photo=data.get('photo'),
-                office_id=data.get('office_id')
+                office_id=data.get('office_id'),
+                is_half_day=is_half,
+                notes=record_note
             )
         return Response({'success': True, 'message': 'Checked in successfully'})
     except Exception as e:

@@ -4231,7 +4231,9 @@ async function loadTodayAttendance(isUserInRange = false) {
             const record = result.record;
             // Store for UI updates
             currentAttendanceRecord = record;
-            window.currentAttendanceRecord = record;            // Helper to format time (HH:MM AM/PM)
+            window.currentAttendanceRecord = record;
+
+            // Helper to format time (HH:MM AM/PM)
             const formatTime = (timeStr) => {
                 if (!timeStr) return '';
                 const [h, m] = timeStr.split(':');
@@ -4239,6 +4241,17 @@ async function loadTodayAttendance(isUserInRange = false) {
                 date.setHours(parseInt(h), parseInt(m));
                 return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             };
+
+            // Handle Leave status first
+            if (record.status === 'leave') {
+                statusElement.textContent = 'On Leave';
+                statusElement.className = 'stat-card-value warning';
+                timingElement.innerHTML = '<div style="font-size:0.9em; opacity:0.8;">Approved Leave for today</div>';
+                
+                checkInCard.classList.add('hidden');
+                checkOutCard.classList.add('hidden');
+                return;
+            }
 
             if (record.check_out_time) {
                 statusElement.textContent = 'Completed';
@@ -4254,7 +4267,8 @@ async function loadTodayAttendance(isUserInRange = false) {
 
                 checkInCard.classList.add('hidden');
                 checkOutCard.classList.add('hidden');
-            } else {
+            } else if (record.check_in_time) {
+                // User has checked in but not checked out
                 statusElement.textContent = 'Checked In';
                 statusElement.className = 'stat-card-value success';
 
@@ -4349,6 +4363,24 @@ async function loadTodayAttendance(isUserInRange = false) {
                 checkInCard.classList.add('hidden');
                 checkOutCard.classList.remove('hidden');
                 updateCheckOutButtonState();
+            } else {
+                // Record exists (e.g. approved WFH/Half Day) but user HAS NOT checked in yet
+                const isApproved = record.notes && record.notes.includes('Pre-approved');
+                let statusText = '';
+                if (record.status === 'wfh') {
+                    statusText = isApproved ? 'WFH Approved' : 'WFH (Self-Marked)';
+                } else if (record.status === 'half_day') {
+                    statusText = isApproved ? 'Half Day Approved' : 'Half Day (Self-Marked)';
+                } else {
+                    statusText = isApproved ? 'Approved' : 'Self-Marked';
+                }
+                
+                statusElement.textContent = statusText;
+                statusElement.className = 'stat-card-value warning';
+                timingElement.innerHTML = `<div style="font-size:0.9em; opacity:0.8;">${isApproved ? 'Awaiting check-in' : 'Marked but pending approval'}</div>`;
+                
+                checkInCard.classList.remove('hidden');
+                checkOutCard.classList.add('hidden');
             }
         } else {
             currentAttendanceRecord = null;
@@ -4359,7 +4391,7 @@ async function loadTodayAttendance(isUserInRange = false) {
             checkOutCard.classList.add('hidden');
         }
         
-        // Setup shift reminder for 8.95 hours
+        // Setup shift reminder
         if (currentAttendanceRecord) {
             setupShiftReminder(currentAttendanceRecord);
         }
@@ -5122,27 +5154,25 @@ async function refreshWFHAvailability() {
         }
     }
 
-    // Apply geofence result now (so UI updates even if server call fails)
+    // Apply geofence result now
     if (geoChecked && inAnyOffice) {
-        // inside office → WFH disabled regardless of monthly limit
-        wfhOption.classList.add('disabled');
-        wfhStatus.textContent = 'WFH not allowed while at office';
-        wfhStatus.style.color = 'var(--error-color)';
-        if (requestBtn) requestBtn.style.display = 'none';
-        return; // we can stop here (limit doesn't matter when inside office)
-    } else if (!geoChecked) {
-        // location unknown → allow WFH but label appropriately
-        wfhOption.classList.remove('disabled');
-        wfhStatus.textContent = 'Availability unknown (no location)';
-        wfhStatus.style.color = 'var(--warning-color)';
+        // inside office → Hide WFH card as per user request
+        wfhOption.style.display = 'none';
+        return; 
     } else {
-        // outside any office → tentatively available, refine with server limit next
-        wfhOption.classList.remove('disabled');
-        wfhStatus.textContent = 'Checking monthly limit...';
-        wfhStatus.style.color = 'var(--gray-600)';
+        // outside any office or location unknown → show WFH card
+        wfhOption.style.display = 'flex';
+        
+        if (!geoChecked) {
+            wfhStatus.textContent = 'Location unknown (GPS needed)';
+            wfhStatus.style.color = 'var(--warning-color)';
+        } else {
+            wfhStatus.textContent = 'Checking approval...';
+            wfhStatus.style.color = 'var(--gray-600)';
+        }
     }
 
-    // ---------- 3) Re-Enforce Pre-Approval Requirement ----------
+    // ---------- 3) Check Approval Status ----------
     try {
         const today = getCurrentDateTime().date;
         const r = await apiCall('wfh-eligibility', 'GET', { employee_id: currentUser.id, date: today });
@@ -5154,7 +5184,8 @@ async function refreshWFHAvailability() {
                 wfhOption.classList.remove('disabled');
                 if (requestBtn) requestBtn.style.display = 'none';
             } else {
-                wfhStatus.textContent = 'Approval Required';
+                // Not approved -> show requirement message and disable card
+                wfhStatus.textContent = 'Need to approve WFH by mentor/admin';
                 wfhStatus.style.color = 'var(--error-color)';
                 wfhOption.classList.add('disabled');
                 if (requestBtn) requestBtn.style.display = 'block';
@@ -5162,7 +5193,6 @@ async function refreshWFHAvailability() {
         }
     } catch (e) {
         console.error("WFH check failed", e);
-        // Fallback: disable and show error
         wfhStatus.textContent = 'Availability unknown';
         wfhOption.classList.add('disabled');
     }
@@ -5252,6 +5282,12 @@ async function selectType(type, e) {
             }
         }
 
+        await loadOfficeSelection();
+        document.getElementById('cameraSection').classList.add('hidden');
+    } else if (type === 'half_day') {
+        // Half Day -> default to Office type for location check, but mark status as half_day
+        selectedOffice = null;
+        document.getElementById('officeBlock').style.display = 'grid'; // Show offices for half day too
         await loadOfficeSelection();
         document.getElementById('cameraSection').classList.add('hidden');
     } else {
@@ -6132,9 +6168,9 @@ async function markAttendance() {
             employee_id: currentUser.id,
             date: now.date,
             check_in: now.time,
-            type: selectedType,
+            type: selectedType === 'half_day' ? 'office' : selectedType,
             status: selectedType === 'office' ? 'present' : selectedType,
-            office_id: selectedType === 'office' ? selectedOffice : null,
+            office_id: (selectedType === 'office' || selectedType === 'half_day') ? selectedOffice : null,
             location: loc,
             photo: capturedPhotoData
         };
