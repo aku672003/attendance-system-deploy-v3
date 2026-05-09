@@ -626,7 +626,7 @@ body {
     font-size: 0.85rem;
     font-weight: 600;
     color: var(--gray-500);
-    margin-top: -2px;
+    margin-top: 2px;
     letter-spacing: 0.5px;
     opacity: 0.8;
 }
@@ -1434,7 +1434,32 @@ body.modal-open .modal {
 .header-title-group {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 16px;
+}
+
+.header-branding {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+@media (max-width: 768px) {
+    .header-branding {
+        align-items: flex-start; /* Keep tagline left-aligned under title */
+        text-align: left;
+    }
+    
+    .header-title-group {
+        flex-direction: row !important; /* Keep items side-by-side */
+        justify-content: space-between !important;
+        width: 100% !important;
+        align-items: center !important;
+        gap: 8px;
+    }
+
+    .notif-bell-label {
+        display: none !important; /* Hide text on mobile to save space */
+    }
 }
 
 /* ==================== NOTIFICATION BELL BUTTON ==================== */
