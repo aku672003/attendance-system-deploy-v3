@@ -3788,16 +3788,16 @@ function updateCalendarDayDetails(record, day) {
         html = `
             <div style="width: 100%;">
                 <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">${dateStr}</div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 10px;">
-                    <div style="background: #f0fdf4; padding: 8px 12px; border-radius: 12px; border: 1px solid #dcfce7;">
+                <div class="calendar-details-grid">
+                    <div class="calendar-details-item" style="background: #f0fdf4; padding: 8px 12px; border-radius: 12px; border: 1px solid #dcfce7;">
                         <div style="font-size: 9px; color: #15803d; font-weight: 700; text-transform: uppercase;">Check In</div>
                         <div style="font-size: 15px; font-weight: 800; color: #166534;">${checkIn}</div>
                     </div>
-                    <div style="background: #fff1f2; padding: 8px 12px; border-radius: 12px; border: 1px solid #ffe4e6;">
+                    <div class="calendar-details-item" style="background: #fff1f2; padding: 8px 12px; border-radius: 12px; border: 1px solid #ffe4e6;">
                         <div style="font-size: 9px; color: #be123c; font-weight: 700; text-transform: uppercase;">Check Out</div>
                         <div style="font-size: 15px; font-weight: 800; color: #9f1239;">${checkOut}</div>
                     </div>
-                    <div style="background: #eef2ff; padding: 8px 12px; border-radius: 12px; border: 1px solid #e0e7ff;">
+                    <div class="calendar-details-item" style="background: #eef2ff; padding: 8px 12px; border-radius: 12px; border: 1px solid #e0e7ff;">
                         <div style="font-size: 9px; color: #4338ca; font-weight: 700; text-transform: uppercase;">Working Hrs</div>
                         <div style="font-size: 15px; font-weight: 800; color: #3730a3;">${hrs}</div>
                     </div>
@@ -4985,7 +4985,7 @@ async function startAttendanceFlow() {
     if (officeBlock) officeBlock.style.display = 'none';
     document.getElementById('cameraSection').classList.add('hidden');
 
-    await refreshWFHAvailability();
+    await refreshAttendanceAvailability();
 
     // 9 AM - 6 PM Restriction (Except Surveyors and Admins) - Aligned to Synchronized IST
     if (currentUser && currentUser.department !== 'Surveyors' && currentUser.role !== 'admin') {
@@ -5108,28 +5108,39 @@ function _enableCheckInCard(card) {
 
 /* ---------------- WFH availability: no more "stuck checking" ---------------- */
 
-async function refreshWFHAvailability() {
+async function refreshAttendanceAvailability() {
     const wfhOption = document.getElementById('wfhOption');
     const wfhStatus = document.getElementById('wfhStatus');
-    const requestBtn = document.getElementById('wfhRequestBtn');
+    const wfhRequestBtn = document.getElementById('wfhRequestBtn');
+    
+    const halfDayOption = document.getElementById('halfDayOption');
+    const halfDayStatus = halfDayOption ? halfDayOption.querySelector('p') : null;
 
     // Always start from a determinate UI state
-    wfhStatus.textContent = 'Checking availability...';
-    wfhStatus.style.color = 'var(--gray-600)';
-    wfhOption.classList.remove('disabled');
-    if (requestBtn) requestBtn.style.display = 'none';
+    if (wfhStatus) {
+        wfhStatus.textContent = 'Checking availability...';
+        wfhStatus.style.color = 'var(--gray-600)';
+    }
+    if (wfhOption) wfhOption.classList.remove('disabled');
+    if (wfhRequestBtn) wfhRequestBtn.style.display = 'none';
+
+    if (halfDayOption) {
+        halfDayOption.classList.add('disabled');
+        if (halfDayStatus) {
+            halfDayStatus.textContent = 'Checking availability...';
+            halfDayStatus.style.color = 'var(--gray-600)';
+        }
+    }
 
     // ---------- 1) Get offices (for geofence check) ----------
     let offices = [];
     try {
         const res = await apiCall('offices', 'GET', { active: 1, department: currentUser.department });
         offices = (res && res.success && Array.isArray(res.offices)) ? res.offices : [];
-    } catch (e) {
-        // ignore; we'll proceed with unknown geofence
-    }
+    } catch (e) { }
 
-    // ---------- 2) Check geofence with a timeout (never hang) ----------
-    let inAnyOffice = false;    // default
+    // ---------- 2) Check geofence ----------
+    let inAnyOffice = false;
     let geoChecked = false;
 
     if (navigator.geolocation && offices.length > 0) {
@@ -5150,51 +5161,66 @@ async function refreshWFHAvailability() {
             }
             geoChecked = true;
         } catch {
-            geoChecked = false; // user denied or timeout → treat as unknown but do not block
+            geoChecked = false;
         }
     }
 
-    // Apply geofence result now
-    if (geoChecked && inAnyOffice) {
-        // inside office → Hide WFH card as per user request
-        wfhOption.style.display = 'none';
-        return; 
-    } else {
-        // outside any office or location unknown → show WFH card
-        wfhOption.style.display = 'flex';
-        
-        if (!geoChecked) {
-            wfhStatus.textContent = 'Location unknown (GPS needed)';
-            wfhStatus.style.color = 'var(--warning-color)';
+    // Apply geofence result for WFH
+    if (wfhOption) {
+        if (geoChecked && inAnyOffice) {
+            wfhOption.style.display = 'none';
         } else {
-            wfhStatus.textContent = 'Checking approval...';
-            wfhStatus.style.color = 'var(--gray-600)';
+            wfhOption.style.display = 'flex';
+            if (!geoChecked && wfhStatus) {
+                wfhStatus.textContent = 'Location unknown (GPS needed)';
+                wfhStatus.style.color = 'var(--warning-color)';
+            }
         }
     }
 
-    // ---------- 3) Check Approval Status ----------
+    // ---------- 3) Check Approval Status for WFH & Half Day ----------
     try {
         const today = getCurrentDateTime().date;
         const r = await apiCall('wfh-eligibility', 'GET', { employee_id: currentUser.id, date: today });
 
         if (r && r.success) {
-            if (r.has_approved_request) {
-                wfhStatus.textContent = 'Approved for today';
-                wfhStatus.style.color = 'var(--success-color)';
-                wfhOption.classList.remove('disabled');
-                if (requestBtn) requestBtn.style.display = 'none';
-            } else {
-                // Not approved -> show requirement message and disable card
-                wfhStatus.textContent = 'Need to approve WFH by mentor/admin';
-                wfhStatus.style.color = 'var(--error-color)';
-                wfhOption.classList.add('disabled');
-                if (requestBtn) requestBtn.style.display = 'block';
+            // WFH Logic
+            if (wfhOption && wfhOption.style.display !== 'none') {
+                if (r.has_approved_request) {
+                    wfhStatus.textContent = 'Approved for today';
+                    wfhStatus.style.color = 'var(--success-color)';
+                    wfhOption.classList.remove('disabled');
+                } else {
+                    wfhStatus.textContent = 'Need to approve WFH by mentor/admin';
+                    wfhStatus.style.color = 'var(--error-color)';
+                    wfhOption.classList.add('disabled');
+                    if (wfhRequestBtn) wfhRequestBtn.style.display = 'block';
+                }
+            }
+
+            // Half Day Logic
+            if (halfDayOption) {
+                if (r.half_day && r.half_day.requested) {
+                    halfDayOption.style.display = 'flex';
+                    if (r.half_day.approved) {
+                        halfDayStatus.textContent = 'Approved for today';
+                        halfDayStatus.style.color = 'var(--success-color)';
+                        halfDayOption.classList.remove('disabled');
+                    } else {
+                        halfDayStatus.textContent = 'Awaiting approval';
+                        halfDayStatus.style.color = 'var(--warning-color)';
+                        halfDayOption.classList.add('disabled');
+                    }
+                } else {
+                    // Not requested -> hide card
+                    halfDayOption.style.display = 'none';
+                }
             }
         }
     } catch (e) {
-        console.error("WFH check failed", e);
-        wfhStatus.textContent = 'Availability unknown';
-        wfhOption.classList.add('disabled');
+        console.error("Availability check failed", e);
+        if (wfhOption) wfhOption.classList.add('disabled');
+        if (halfDayOption) halfDayOption.classList.add('disabled');
     }
 }
 
@@ -5208,7 +5234,7 @@ function onWFHCardClick(e) {
         return;
     }
     // Refresh once more (fast) so the Request button can appear if quota just reached.
-    refreshWFHAvailability().then(() => {
+    refreshAttendanceAvailability().then(() => {
         // If still enabled after refresh, proceed to select type and open camera.
         const disabled = document.getElementById('wfhOption').classList.contains('disabled');
         if (!disabled) selectType('wfh', e);

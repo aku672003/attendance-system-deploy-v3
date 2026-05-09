@@ -692,11 +692,23 @@ def check_wfh_eligibility(employee_id, check_date):
             start_date__month=check_date_obj.month
         ).count()
 
+        # Check for half day requests
+        half_day_request = EmployeeRequest.objects.filter(
+            employee_id=employee_id,
+            request_type='half_day',
+            start_date__lte=check_date_obj,
+            end_date__gte=check_date_obj
+        ).first()
+
         return {
             'has_approved_request': has_approved_request,
-            'can_request': has_approved_request, # Only allow if approved
+            'can_request': has_approved_request, 
             'current_count': current_month_requests,
-            'max_limit': 1 # Hardcoded limit as per frontend logic
+            'max_limit': 1,
+            'half_day': {
+                'requested': half_day_request is not None,
+                'approved': half_day_request.status == 'approved' if half_day_request else False
+            }
         }
     except Exception as e:
         print(f"Error checking WFH eligibility: {e}")
