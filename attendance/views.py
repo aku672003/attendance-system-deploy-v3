@@ -935,10 +935,10 @@ def attendance_records(request):
 
     search = request.GET.get('search', '').strip().lower()
 
-    # Auto-mark absentees only after 6 PM (scheduler handles the main trigger)
+    # Auto-mark absentees only after 7 PM (scheduler handles the main trigger)
     now = timezone.localtime(timezone.now())
     today = now.date()
-    if now.hour >= 18:
+    if now.hour >= 19:
         mark_absentees_for_date(today)
 
     try:
@@ -1077,9 +1077,9 @@ def mark_absentees_for_date(target_date):
             AttendanceRecord.objects.bulk_create(new_records, ignore_conflicts=True)
 
         # 2. Mark employees who checked in but forgot to check out as 'absent'
-        # This applies if the day has ended (6 PM for today, or any past day)
+        # This applies if the day has ended (7 PM for today, or any past day)
         now = timezone.localtime(timezone.now())
-        if target_date < now.date() or (target_date == now.date() and now.hour >= 18):
+        if target_date < now.date() or (target_date == now.date() and now.hour >= 19):
             AttendanceRecord.objects.filter(
                 date=target_date,
                 check_in_time__isnull=False,
@@ -1088,6 +1088,16 @@ def mark_absentees_for_date(target_date):
                 status='absent',
                 notes="Absent marked: Forgot to check out"
             )
+        elif target_date == now.date() and now.hour < 19:
+            # RESTORE logic: If they were accidentally marked absent (e.g. by the old 6 PM rule)
+            # but it's not 7 PM yet, restore them to 'present' so they can check out.
+            AttendanceRecord.objects.filter(
+                date=target_date,
+                status='absent',
+                notes__icontains="Forgot to check out",
+                check_in_time__isnull=False,
+                check_out_time__isnull=True
+            ).update(status='present', notes="Status restored (Workday ongoing)")
     except Exception as e:
         print(f"Error marking absentees: {e}")
 
@@ -4328,9 +4338,8 @@ def task_detail_api(request, task_id):
         if request.method in ['POST', 'PATCH']:
             # Check for DELETE method simulation
             if data.get('_method') == 'DELETE':
-                is_task_mentor = task.mentors.filter(id=requesting_user.id).exists()
-                if requesting_user.role != 'admin' and not is_task_mentor:
-                    return Response({'success': False, 'message': 'Unauthorized to delete this task'}, status=status.HTTP_403_FORBIDDEN)
+                if str(requesting_user.role).lower() != 'admin':
+                    return Response({'success': False, 'message': 'Only administrators can delete tasks'}, status=status.HTTP_403_FORBIDDEN)
 
                 task.delete()
                 return Response({'success': True, 'message': 'Task deleted'})
@@ -4488,7 +4497,8 @@ def bulk_update_tasks(request):
 
         # Legacy list-based updates (Priority ranking)
         # Only allow Admin/Mentor for this
-        if user.role != 'admin' and user.role != 'Mentor':
+        role_lower = str(user.role).lower()
+        if role_lower != 'admin' and role_lower != 'mentor':
             return Response({'success': False, 'message': 'Admin or Mentor access required for priority updates'}, status=status.HTTP_403_FORBIDDEN)
 
         for item in updates:
