@@ -3881,6 +3881,8 @@ async function buildAttendanceCalendar(year, month) {
     }
 
     grid.innerHTML = '';
+    const todayDate = getCurrentISTDate();
+    todayDate.setHours(0, 0, 0, 0);
 
     const monthName = new Date(year, month, 1).toLocaleString('default', {
         month: 'long',
@@ -3944,7 +3946,6 @@ async function buildAttendanceCalendar(year, month) {
                 const reqStatus = req.status; // 'pending', 'approved'
 
                 if (type === 'full_day' || type === 'half_day') {
-                    // Overwrite if empty OR if currently says 'absent'
                     if (!byDay[dayNum] || byDay[dayNum].status === 'absent') {
                         byDay[dayNum] = {
                             ...req,
@@ -3954,13 +3955,22 @@ async function buildAttendanceCalendar(year, month) {
                         };
                     }
                 } else if (type === 'wfh') {
-                    if (!byDay[dayNum]) {
+                    if (!byDay[dayNum] || byDay[dayNum].status === 'absent') {
                         byDay[dayNum] = {
                             ...req,
                             status: 'wfh',
                             request_status: reqStatus,
                             source: 'request'
                         };
+                    }
+                }
+
+                // Apply Strict rule only for MISSING attendance on past request dates
+                if (curr < todayDate && byDay[dayNum]) {
+                    const rec = byDay[dayNum];
+                    if (rec.source === 'request') {
+                        // Approved request but no attendance found -> Absent
+                        rec.status = 'absent';
                     }
                 }
             }
@@ -4040,8 +4050,6 @@ async function buildAttendanceCalendar(year, month) {
     }
 
     // Actual days
-    const todayDate = getCurrentISTDate();
-    todayDate.setHours(0, 0, 0, 0);
 
     for (let day = 1; day <= daysInMonth; day++) {
         const cell = document.createElement('div');
@@ -4368,16 +4376,16 @@ async function loadTodayAttendance(isUserInRange = false) {
                 const isApproved = record.notes && record.notes.includes('Pre-approved');
                 let statusText = '';
                 if (record.status === 'wfh') {
-                    statusText = isApproved ? 'WFH Approved' : 'WFH (Self-Marked)';
+                    statusText = 'WFH Approved!';
                 } else if (record.status === 'half_day') {
-                    statusText = isApproved ? 'Half Day Approved' : 'Half Day (Self-Marked)';
+                    statusText = 'Half Day Approved!';
                 } else {
-                    statusText = isApproved ? 'Approved' : 'Self-Marked';
+                    statusText = 'Approved!';
                 }
                 
                 statusElement.textContent = statusText;
                 statusElement.className = 'stat-card-value warning';
-                timingElement.innerHTML = `<div style="font-size:0.9em; opacity:0.8;">${isApproved ? 'Awaiting check-in' : 'Marked but pending approval'}</div>`;
+                timingElement.innerHTML = `<div style="font-size:0.9em; opacity:0.8;">${isApproved ? 'Please check in to mark attendance' : 'Marked but pending approval'}</div>`;
                 
                 checkInCard.classList.remove('hidden');
                 checkOutCard.classList.add('hidden');
@@ -4404,17 +4412,35 @@ function updateCheckOutButtonState() {
     const checkOutCard = document.getElementById('checkOutCard');
     if (!checkOutCard || !currentAttendanceRecord) return;
 
-    // Only apply geofence logic if it's an OFFICE check-in
+    // Calculate worked hours so far based on server-provided date and time
+    const checkInDateStr = currentAttendanceRecord.date; // YYYY-MM-DD
+    const checkInTimeStr = currentAttendanceRecord.check_in_time; // HH:MM:SS
+    
+    // Create Date object correctly handling the server's date and time
+    const checkInDate = new Date(`${checkInDateStr}T${checkInTimeStr}`);
+
+    const now = new Date();
+    const diffMs = now - checkInDate;
+    const workedHours = diffMs / (1000 * 60 * 60);
+
+    // 1. Block if less than 4.5 hours worked
+    if (workedHours < 4.5) {
+        checkOutCard.classList.add('disabled');
+        checkOutCard.onclick = () => {
+            showNotification(`Minimum 4.5 hours required for check-out. Current: ${workedHours.toFixed(2)}h`, 'warning');
+        };
+        return;
+    }
+
+    // 2. Geofence logic for OFFICE check-ins
     if (currentAttendanceRecord.type === 'office' && !isUserGeoInRange) {
-        // User is checked in for "office" but is NOT in range
-        checkOutCard.classList.add('disabled'); // Add 'disabled' CSS class
-        checkOutCard.onclick = () => { // Remove original onclick
+        checkOutCard.classList.add('disabled');
+        checkOutCard.onclick = () => {
             showNotification('You must be in the office geofence to check out.', 'error');
         };
     } else {
-        // User is WFH, Client, or in range
         checkOutCard.classList.remove('disabled');
-        checkOutCard.onclick = () => showCheckOut(); // Restore original onclick
+        checkOutCard.onclick = () => showCheckOut();
     }
 }
 
@@ -5170,7 +5196,7 @@ async function refreshAttendanceAvailability() {
         if (geoChecked && inAnyOffice) {
             wfhOption.style.display = 'none';
         } else {
-            wfhOption.style.display = 'flex';
+            wfhOption.style.display = 'block';
             if (!geoChecked && wfhStatus) {
                 wfhStatus.textContent = 'Location unknown (GPS needed)';
                 wfhStatus.style.color = 'var(--warning-color)';
@@ -5185,35 +5211,52 @@ async function refreshAttendanceAvailability() {
 
         if (r && r.success) {
             // WFH Logic
-            if (wfhOption && wfhOption.style.display !== 'none') {
-                if (r.has_approved_request) {
-                    wfhStatus.textContent = 'Approved for today';
+            if (wfhOption) {
+                const status = r.request_status;
+                if (status === 'approved') {
+                    wfhStatus.textContent = 'WFH Approved! Please check in.';
                     wfhStatus.style.color = 'var(--success-color)';
                     wfhOption.classList.remove('disabled');
-                } else {
-                    wfhStatus.textContent = 'Need to approve WFH by mentor/admin';
-                    wfhStatus.style.color = 'var(--error-color)';
+                    wfhOption.style.display = 'block';
+                    if (wfhRequestBtn) wfhRequestBtn.style.display = 'none';
+                } else if (status === 'pending') {
+                    wfhStatus.textContent = 'WFH Request Pending';
+                    wfhStatus.style.color = 'var(--warning-color)';
                     wfhOption.classList.add('disabled');
-                    if (wfhRequestBtn) wfhRequestBtn.style.display = 'block';
+                    wfhOption.style.display = 'block';
+                    if (wfhRequestBtn) wfhRequestBtn.style.display = 'none';
+                } else {
+                    // No request or rejected
+                    wfhOption.style.display = 'none';
                 }
             }
 
-            // Half Day Logic
-            if (halfDayOption) {
+            // Half Day Logic (Integrated into Office Card)
+            const officeOption = document.getElementById('officeOption');
+            const officeStatus = document.getElementById('officeStatus');
+            if (officeOption && officeStatus) {
                 if (r.half_day && r.half_day.requested) {
-                    halfDayOption.style.display = 'flex';
                     if (r.half_day.approved) {
-                        halfDayStatus.textContent = 'Approved for today';
-                        halfDayStatus.style.color = 'var(--success-color)';
-                        halfDayOption.classList.remove('disabled');
+                        officeStatus.textContent = 'Half Day Approved! Please check in.';
+                        officeStatus.style.color = 'var(--success-color)';
+                        officeOption.classList.remove('disabled');
+                        officeOption.setAttribute('data-type', 'half_day');
+                    } else if (r.half_day.status === 'rejected') {
+                        officeStatus.textContent = 'Half Day Rejected. Marking as Full Day.';
+                        officeStatus.style.color = 'var(--error-color)';
+                        officeOption.classList.remove('disabled');
+                        officeOption.setAttribute('data-type', 'office');
                     } else {
-                        halfDayStatus.textContent = 'Awaiting approval';
-                        halfDayStatus.style.color = 'var(--warning-color)';
-                        halfDayOption.classList.add('disabled');
+                        officeStatus.textContent = 'Half Day Request Pending';
+                        officeStatus.style.color = 'var(--warning-color)';
+                        officeOption.classList.add('disabled');
+                        officeOption.setAttribute('data-type', 'half_day');
                     }
                 } else {
-                    // Not requested -> hide card
-                    halfDayOption.style.display = 'none';
+                    officeStatus.textContent = 'Shows offices after you tap';
+                    officeStatus.style.color = 'var(--gray-600)';
+                    officeOption.classList.remove('disabled');
+                    officeOption.setAttribute('data-type', 'office');
                 }
             }
         }
@@ -5227,10 +5270,16 @@ async function refreshAttendanceAvailability() {
 /* Tapping the WFH card rechecks availability (and can reveal the Request button immediately) */
 function onWFHCardClick(e) {
     e && e.stopPropagation && e.stopPropagation();
-    // If it looks disabled already (inside geofence), show a message and do nothing.
     const wfhOption = document.getElementById('wfhOption');
+    const wfhStatus = document.getElementById('wfhStatus');
+    
     if (wfhOption.classList.contains('disabled')) {
-        showNotification('WFH not available right now.', 'warning');
+        const statusText = wfhStatus ? wfhStatus.textContent : '';
+        if (statusText.includes('Pending')) {
+            showNotification('Your WFH request is pending approval by your mentor or admin.', 'warning');
+        } else {
+            showNotification('WFH is not available at this time.', 'warning');
+        }
         return;
     }
     // Refresh once more (fast) so the Request button can appear if quota just reached.
@@ -5273,12 +5322,26 @@ async function requestWFHExtension(ev) {
 
 /* When user taps WFH / Office / Client */
 async function selectType(type, e) {
-    // block if WFH disabled (inside geofence)
-    if (type === 'wfh' && document.getElementById('wfhOption').classList.contains('disabled')) {
-        showNotification('You are within an office geofence. WFH is not allowed.', 'warning');
+    // block if WFH disabled
+    const wfhOption = document.getElementById('wfhOption');
+    if (type === 'wfh' && wfhOption && wfhOption.classList.contains('disabled')) {
+        const wfhStatus = document.getElementById('wfhStatus');
+        const statusText = wfhStatus ? wfhStatus.textContent : '';
+        if (statusText.includes('Pending')) {
+            showNotification('WFH Request is pending approval.', 'warning');
+        } else {
+            showNotification('WFH is not available. Ensure you have an approved request.', 'warning');
+        }
         return;
     }
-    selectedType = type;
+    let actualType = type;
+    if (type === 'office') {
+        const officeOption = document.getElementById('officeOption');
+        if (officeOption && officeOption.getAttribute('data-type') === 'half_day') {
+            actualType = 'half_day';
+        }
+    }
+    selectedType = actualType;
 
     // highlight the chosen card
     document.querySelectorAll('#typeSelection .office-card').forEach(c => c.classList.remove('selected'));
@@ -5288,7 +5351,7 @@ async function selectType(type, e) {
         if (el) el.classList.add('selected');
     }
 
-    if (type === 'office') {
+    if (actualType === 'office' || actualType === 'half_day') {
         // Show notification about location requirement
         showNotification('Checking location for office attendance...', 'info');
 

@@ -500,6 +500,10 @@ def mark_attendance(request):
     is_wfh = (data.get('status') == 'wfh' or data.get('type') == 'wfh')
     is_half = (data.get('status') == 'half_day')
     
+    # Enforce camera and geolocation for WFH and Half Day
+    if (is_wfh or is_half) and (not data.get('location') or not data.get('photo')):
+        return Response({'success': False, 'message': 'Camera photo and Geolocation are mandatory for this attendance type.'}, status=status.HTTP_400_BAD_REQUEST)
+    
     wfh_check = check_wfh_eligibility(user.id, att_date.isoformat())
     has_approved = wfh_check.get('has_approved_request')
     
@@ -512,6 +516,13 @@ def mark_attendance(request):
             status='approved'
         ).exists()
         has_approved = half_day_check
+
+    # Strictly block if WFH/Half Day is attempted without approval
+    if (is_wfh or is_half) and not has_approved:
+        return Response({
+            'success': False, 
+            'message': f'Your {data.get("status", "WFH/Half Day").replace("_", " ")} request must be approved by a Mentor or Admin first.'
+        }, status=status.HTTP_403_FORBIDDEN)
 
     status_note = "Pre-approved" if has_approved else "Self-marked"
     record_note = f"{status_note} {data.get('status')}"
@@ -674,14 +685,16 @@ def check_wfh_eligibility(employee_id, check_date):
     try:
         check_date_obj = datetime.strptime(check_date, '%Y-%m-%d').date()
         
-        # Check if there is an APPROVED WFH request for this date
-        has_approved_request = EmployeeRequest.objects.filter(
+        # Check if there is any WFH request for this date
+        wfh_request = EmployeeRequest.objects.filter(
             employee_id=employee_id,
             request_type='wfh',
             start_date__lte=check_date_obj,
-            end_date__gte=check_date_obj,
-            status='approved'
-        ).exists()
+            end_date__gte=check_date_obj
+        ).first()
+
+        has_approved_request = wfh_request.status == 'approved' if wfh_request else False
+        request_status = wfh_request.status if wfh_request else None
 
         # Count approved WFH requests for the current month (for dashboard stats)
         current_month_requests = EmployeeRequest.objects.filter(
@@ -702,17 +715,19 @@ def check_wfh_eligibility(employee_id, check_date):
 
         return {
             'has_approved_request': has_approved_request,
-            'can_request': has_approved_request, 
+            'request_status': request_status,
+            'can_request': not wfh_request or request_status == 'rejected', 
             'current_count': current_month_requests,
-            'max_limit': 1,
+            'max_limit': 2, # User mentioned 2 in dashboard earlier
             'half_day': {
                 'requested': half_day_request is not None,
+                'status': half_day_request.status if half_day_request else None,
                 'approved': half_day_request.status == 'approved' if half_day_request else False
             }
         }
     except Exception as e:
         print(f"Error checking WFH eligibility: {e}")
-        return {'has_approved_request': False, 'can_request': False, 'current_count': 0, 'max_limit': 1}
+        return {'has_approved_request': False, 'request_status': None, 'can_request': True, 'current_count': 0, 'max_limit': 2}
 
 
 @api_view(['POST'])
@@ -778,22 +793,20 @@ def check_out(request):
             worked_hours = round(max(0.0, raw_hours), 2)
         
         # Min hours requirement (e.g. 4.5h for a valid day)
-        # Note: If it's a legitimate short day, user might need to check out anyway, 
-        # but system might flag it. 4.5h is standard for half-day or minimal presence.
         if worked_hours < 4.5:
-            # We allow it but maybe flag it? Actually, user said fix logic to be simple.
-            # Let's keep the min check if it's already there.
-            if worked_hours < 0.1: # Practically zero
-                 return Response({'success': False, 'message': 'Minimum 0.1h required for check-out.'}, status=400)
+             return Response({'success': False, 'message': 'Minimum 4.5 hours of work required for check-out.'}, status=400)
 
         record.check_out_time = now_local.time().strftime('%H:%M:%S')
         record.total_hours = worked_hours
         
         if record.type == 'wfh':
-            record.status = 'wfh'
+            # 9 Hours strict for Full WFH Day. Between 4.5 and 9 is marked as half_day.
+            record.status = 'wfh' if worked_hours >= 9.0 else 'half_day'
+            record.is_half_day = True if worked_hours < 9.0 else False
+            
             # Check tasks completed for today
             from .models import Task
-            today_tasks = Task.objects.filter(assignees=user.id, due_date=record.date)
+            today_tasks = Task.objects.filter(assignees=record.employee.id, due_date=record.date)
             total_tasks = today_tasks.count()
             completed_tasks = today_tasks.filter(status='completed').count()
             
@@ -811,7 +824,7 @@ def check_out(request):
             # Automate an approval request for Mentor/Admin to verify tasks at the end of the day
             # If a manual request already exists, update its reason to include task status
             wfh_req, created = EmployeeRequest.objects.get_or_create(
-                employee_id=employee_id,
+                employee_id=record.employee.id,
                 request_type='wfh',
                 start_date=record.date,
                 end_date=record.date,
@@ -829,9 +842,11 @@ def check_out(request):
             for mentor in record.employee.mentors.all():
                 _send_task_notification(mentor, notification_msg, wfh_req.id, type="request")
         elif record.type == 'client':
-            record.status = 'client'
+            record.status = 'half_day' if worked_hours < 9.0 else 'client'
+            record.is_half_day = True if worked_hours < 9.0 else False
         else:
             # 9 Hours strict: Less than 9 hours is marked as half day
+            # (requested half_day is also naturally caught here or handled by backend)
             record.status = 'half_day' if worked_hours < 9.0 else 'present'
             record.is_half_day = True if worked_hours < 9.0 else False
             
