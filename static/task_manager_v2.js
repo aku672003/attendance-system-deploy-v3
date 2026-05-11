@@ -39,8 +39,7 @@ const TaskManagerV2 = {
         const taskForm = document.getElementById('newTaskV2Form');
         if (taskForm) {
             taskForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.saveTask();
+                this.saveNewTask(e);
             });
         }
     },
