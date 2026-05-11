@@ -1721,6 +1721,8 @@ body.dark-mode .multi-select-dropdown div {
     color: white;
     width: 26px;
     height: 26px;
+    min-width: 26px;
+    min-height: 26px;
     border-radius: 50%;
     cursor: pointer;
     font-size: 0.85rem;
@@ -1729,6 +1731,8 @@ body.dark-mode .multi-select-dropdown div {
     justify-content: center;
     transition: background 0.2s;
     flex-shrink: 0;
+    padding: 0;
+    line-height: 0;
 }
 
 .notif-dropdown-close:hover {
@@ -1943,6 +1947,52 @@ body.dark-mode .multi-select-dropdown div {
     .btn-calendar-nav {
         padding: 4px 8px !important;
         font-size: 12px !important;
+    }
+
+    /* Records Screen Mobile Adjustments */
+    #recordsContent {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .records-toolbar {
+        order: 1; /* Search at top */
+        margin-top: 10px;
+        margin-bottom: 20px;
+    }
+
+    #attendanceListContainer {
+        order: 2; /* List below search */
+    }
+
+    .attendance-load-more-wrap {
+        order: 3; /* Load more at bottom */
+    }
+
+    .records-toolbar-left {
+        display: none;
+    }
+
+    .records-search-group {
+        width: 100%;
+        max-width: 100% !important;
+    }
+
+    .records-search-group .btn-text {
+        display: none;
+    }
+
+    .records-search-group .btn {
+        padding: 0 12px !important;
+        min-width: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .records-search-group .btn i {
+        margin: 0 !important;
+        font-size: 1.1rem;
     }
 }
 

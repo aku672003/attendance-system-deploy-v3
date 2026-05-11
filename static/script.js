@@ -1183,9 +1183,11 @@ setInterval(loadNotifications, 120000);
 
 function displayNotifications(notifications) {
     const container = document.getElementById('notificationItems');
+    const markAllBtn = document.getElementById('markAllReadBtn');
     if (!container) return;
 
     if (notifications.length === 0) {
+        if (markAllBtn) markAllBtn.style.display = 'none';
         container.innerHTML = `
             <div style="padding: 32px; text-align: center; color: var(--gray-500);">
                 <div style="font-size: 3rem; margin-bottom: 8px;">🔕</div>
@@ -1195,6 +1197,7 @@ function displayNotifications(notifications) {
         return;
     }
 
+    if (markAllBtn) markAllBtn.style.display = 'block';
     container.innerHTML = notifications.map((notif, idx) => `
         <div class="notification-item" data-id="${notif.id}" onclick='handleNotificationClick(${JSON.stringify(notif).replace(/'/g, "&apos;")})'>
             <div class="notification-item-icon">${notif.icon}</div>
@@ -6781,6 +6784,9 @@ function renderAttendanceTable(records) {
     const recordsContent = document.getElementById('recordsContent');
     const oldSearchVal = document.getElementById('attendanceSearchInput')?.value || '';
 
+    const isMobile = window.innerWidth <= 768;
+    const placeholderText = isMobile ? 'Search records...' : 'Search: name, Mar, 22-04-2026, wfh…';
+
     // Render the toolbar with a dedicated Search button
     recordsContent.innerHTML = `
         <div class="records-toolbar">
@@ -6788,21 +6794,21 @@ function renderAttendanceTable(records) {
             <div class="records-search-group" style="display: flex; gap: 8px; flex: 1; max-width: 600px;">
                 <input id="attendanceSearchInput"
                         class="form-control records-search-input"
-                        placeholder="Search: name, Mar, 22-04-2026, wfh…"
+                        placeholder="${placeholderText}"
                         value="${oldSearchVal}"
                         onkeydown="if(event.key === 'Enter') applyAttendanceSearch();"
                         style="flex: 1;">
                 <button class="btn btn-primary" onclick="applyAttendanceSearch()" style="border-radius: 12px; padding: 0 20px;">
-                    <i class="fas fa-search"></i> Search
+                    <i class="fas fa-search"></i> <span class="btn-text">Search</span>
                 </button>
                 <button class="btn btn-secondary" onclick="clearAttendanceSearch()" style="border-radius: 12px; padding: 0 20px; background: var(--gray-100); color: var(--gray-700);">
-                    Clear
+                    <i class="fas fa-times"></i> <span class="btn-text">Clear</span>
                 </button>
             </div>
         </div>
         <div id="attendanceListContainer"></div>
         ${attendanceHasMore ? `
-            <div class="text-center" style="margin-top: 24px; margin-bottom: 40px;">
+            <div class="text-center attendance-load-more-wrap" style="margin-top: 24px; margin-bottom: 40px;">
                 <button id="loadMoreAttendanceBtn" class="btn btn-primary" onclick="loadMoreAttendanceRecords()" style="padding: 12px 32px; font-weight: 600; border-radius: 12px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);">
                     ${(currentUser.role === 'admin' || currentUser.role === 'Mentor' || currentUser.has_subordinates) ? 'Load Previous Day' : 'Load Previous 10 Days'}
                 </button>
