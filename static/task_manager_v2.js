@@ -614,7 +614,13 @@ const TaskManagerV2 = {
     },
 
     async saveNewTask(e) {
-        e.preventDefault();
+        if (e) e.preventDefault();
+        
+        const btn = document.getElementById('newTaskV2SubmitBtn');
+        if (btn && btn.disabled) return;
+        if (btn) btn.disabled = true;
+
+        console.log("saveNewTask triggered");
         
         const title = document.getElementById('newTaskV2Title').value;
         const priority = document.getElementById('newTaskV2Priority').value;
@@ -634,6 +640,7 @@ const TaskManagerV2 = {
                 if (hasDuplicate) {
                     const emp = this.allEmployees.find(e => e.id == empId);
                     showNotification(`${emp ? emp.name : 'Employee'} already has an active ${priority.toUpperCase()} task. Only one task of this priority level is allowed at a time.`, "warning");
+                    if (btn) btn.disabled = false;
                     return;
                 }
             }
@@ -678,18 +685,9 @@ const TaskManagerV2 = {
             const endpoint = `/api/tasks?token=${window.GATED_TOKEN}`;
             const method = 'POST';
 
-            // Wait, fetch doesn't fully support FormData with PATCH/PUT in all Django backends if not properly parsed.
-            // Let's use json if we are patching without files. 
-            let bodyData = formData;
-            let headers = {};
-            
-            // Note: Since we are using multipart/form-data (FormData), we don't set Content-Type manually
-            // to let the browser set the boundary.
-
             const res = await fetch(endpoint, {
                 method: method,
-                headers: headers,
-                body: bodyData
+                body: formData
             });
             const data = await res.json();
             if (data.success) {
@@ -701,7 +699,9 @@ const TaskManagerV2 = {
             }
         } catch (err) {
             console.error(err);
+            showNotification("Network error while saving task", "error");
         } finally {
+            if (btn) btn.disabled = false;
             hideLoading();
         }
     },
