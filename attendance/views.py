@@ -483,39 +483,31 @@ def mark_attendance(request):
         notes="Auto-marked absent: New check-in started on a later date"
     )
 
-    # 1. Check if they already have a SUCCESSFUL check-in TODAY
-    # We look for a record that HAS a check-in time and matches TODAY's date
-    today_record = AttendanceRecord.objects.filter(
-        employee_id=user.id, 
-        date=att_date
-    ).exclude(status='absent').first()
+    # 1. Check if ANY record exists for today to avoid unique constraint violations
+    existing_record = AttendanceRecord.objects.filter(employee_id=user.id, date=att_date).first()
 
-    if today_record and today_record.check_in_time:
+    if existing_record and existing_record.check_in_time:
         return Response({
             'success': False,
             'message': 'Attendance already marked for today'
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    # 1.5 WFH/Half Day Approval Check
+    # 1.5 WFH/Half Day Approval & Verification Check
     is_wfh = (data.get('status') == 'wfh' or data.get('type') == 'wfh')
     is_half = (data.get('status') == 'half_day')
     
-    # Enforce camera and geolocation for WFH and Half Day
-    if (is_wfh or is_half) and (not data.get('location') or not data.get('photo')):
-        return Response({'success': False, 'message': 'Camera photo and Geolocation are mandatory for this attendance type.'}, status=status.HTTP_400_BAD_REQUEST)
-    
     wfh_check = check_wfh_eligibility(user.id, att_date.isoformat())
-    has_approved = wfh_check.get('has_approved_request')
+    has_approved = False
     
-    # Check for half day approval as well
-    if is_half and not has_approved:
-        half_day_check = EmployeeRequest.objects.filter(
+    if is_wfh:
+        has_approved = wfh_check.get('has_approved_request')
+    elif is_half:
+        has_approved = EmployeeRequest.objects.filter(
             employee_id=user.id,
             start_date=att_date,
             request_type='half_day',
             status='approved'
         ).exists()
-        has_approved = half_day_check
 
     # Strictly block if WFH/Half Day is attempted without approval
     if (is_wfh or is_half) and not has_approved:
@@ -523,31 +515,36 @@ def mark_attendance(request):
             'success': False, 
             'message': f'Your {data.get("status", "WFH/Half Day").replace("_", " ")} request must be approved by a Mentor or Admin first.'
         }, status=status.HTTP_403_FORBIDDEN)
+    
+    # Enforce camera and geolocation for WFH and Half Day
+    if (is_wfh or is_half) and (not data.get('location') or not data.get('photo')):
+        return Response({
+            'success': False, 
+            'message': 'Camera photo and Geolocation are mandatory for this attendance type.'
+        }, status=status.HTTP_400_BAD_REQUEST)
 
     status_note = "Pre-approved" if has_approved else "Self-marked"
     record_note = f"{status_note} {data.get('status')}"
 
-    # 2. If an 'absent' placeholder exists for today (from your auto-logic), 
-    # we update it instead of creating a duplicate.
-    absent_record = AttendanceRecord.objects.filter(employee_id=user.id, date=att_date, status='absent').first()
-    
     try:
-        if absent_record:
-            absent_record.check_in_time = now_local.time().strftime('%H:%M:%S')
-            absent_record.status = data.get('status')
-            absent_record.type = data.get('type')
-            absent_record.check_in_location = data.get('location')
-            absent_record.check_in_photo = data.get('photo')
-            absent_record.office_id = data.get('office_id')
-            absent_record.is_half_day = is_half
-            absent_record.notes = record_note
-            absent_record.save()
-            record = absent_record
+        check_in_time = now_local.time().strftime('%H:%M:%S')
+        if existing_record:
+            # Update existing record (placeholder like 'absent', 'leave', or 'holiday')
+            existing_record.check_in_time = check_in_time
+            existing_record.status = data.get('status')
+            existing_record.type = data.get('type')
+            existing_record.check_in_location = data.get('location')
+            existing_record.check_in_photo = data.get('photo')
+            existing_record.office_id = data.get('office_id')
+            existing_record.is_half_day = is_half
+            existing_record.notes = record_note
+            existing_record.save()
         else:
-            record = AttendanceRecord.objects.create(
+            # Create New
+            AttendanceRecord.objects.create(
                 employee_id=user.id,
                 date=att_date,
-                check_in_time=now_local.time().strftime('%H:%M:%S'),
+                check_in_time=check_in_time,
                 type=data.get('type'),
                 status=data.get('status'),
                 check_in_location=data.get('location'),
