@@ -3686,7 +3686,7 @@ def _create_task_admin(data, creator, files=None):
     mentor_ids = [mid for mid in mentor_ids if mid and mid != 'none']
     
     # REQUIREMENT: If mentor creates task for team, they get selected automatically as mentor
-    if (creator.role == 'mentor' or creator.role == 'admin' or creator.has_subordinates):
+    if (creator.role == 'mentor' or creator.role == 'admin' or creator.subordinates.exists()):
         if str(creator.id) not in [str(mid) for mid in mentor_ids]:
             mentor_ids.append(creator.id)
 
