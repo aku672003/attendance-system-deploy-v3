@@ -3545,21 +3545,21 @@ def active_tasks(request):
 
 def _get_admin_task_mentor_data():
     """Helper: Get all tasks for Admin Task Mentor"""
-    tasks = Task.objects.select_related('created_by', 'mentor').prefetch_related('assignees').order_by('-created_at')
+    tasks = Task.objects.select_related('created_by').prefetch_related('assignees', 'mentors').order_by('-created_at')
     return _serialize_tasks(tasks)
 
 def _get_employee_my_tasks_data(employee):
     """Helper: Get assigned tasks + overseen tasks for Employee My Tasks"""
     tasks = Task.objects.filter(
-        Q(assignees=employee) | Q(mentor=employee) | Q(overseers=employee)
-    ).distinct().select_related('created_by', 'mentor').prefetch_related('assignees').order_by('-created_at')
+        Q(assignees=employee) | Q(mentors=employee) | Q(overseers=employee)
+    ).distinct().select_related('created_by').prefetch_related('assignees', 'mentors').order_by('-created_at')
     return _serialize_tasks(tasks)
 
 def _get_mentor_employees_tasks_data(mentor):
     """Helper: Get tasks for employees reporting to this mentor + tasks explicitly managed by them"""
     # Exclude tasks where the mentor themselves is an assignee to keep Team Tasks focused on management
-    query = (Q(assignees__mentors=mentor) | Q(mentor=mentor) | Q(overseers=mentor))
-    tasks = Task.objects.filter(query).exclude(assignees=mentor).distinct().select_related('created_by', 'mentor').prefetch_related('assignees').order_by('-created_at')
+    query = (Q(assignees__mentors=mentor) | Q(mentors=mentor) | Q(overseers=mentor))
+    tasks = Task.objects.filter(query).exclude(assignees=mentor).distinct().select_related('created_by').prefetch_related('assignees', 'mentors').order_by('-created_at')
     return _serialize_tasks(tasks)
 
 def _serialize_tasks(tasks):
@@ -3622,10 +3622,11 @@ def _serialize_tasks(tasks):
             'priority': task.priority,
             'assignees': assignees_info,
             'overseers': [{'id': o.id, 'name': o.name} for o in task.overseers.all()],
-            'Mentor_id': task.mentor.id if task.mentor else None,
-            'Mentor_name': task.mentor.name if task.mentor else None,
-            'mentor_id': task.mentor.id if task.mentor else None,
-            'mentor_name': task.mentor.name if task.mentor else None,
+            'mentors': [{'id': m.id, 'name': m.name} for m in task.mentors.all()],
+            'mentor_id': task.mentors.first().id if task.mentors.exists() else None,
+            'mentor_name': task.mentors.first().name if task.mentors.exists() else None,
+            'Mentor_id': task.mentors.first().id if task.mentors.exists() else None,
+            'Mentor_name': task.mentors.first().name if task.mentors.exists() else None,
             'created_by': task.created_by.id,
             'created_by_name': task.created_by.name,
             'start_date': str(task.start_date) if task.start_date else None,
@@ -3642,67 +3643,70 @@ def _serialize_tasks(tasks):
     return data
 
 def _create_task_admin(data, creator, files=None):
-    """Helper: Admin creates a task"""
-    required_fields = ['title'] # assignees handled below
+    """Helper: Create a task with multi-mentor and multi-assignee support"""
+    required_fields = ['title']
     for field in required_fields:
         if not data.get(field):
             raise ValueError(f'{field} is required')
 
     import json
+    # Process Assignees
     assigned_input = data.get('assignees') or data.get('assigned_to')
     if isinstance(assigned_input, str):
-        try:
-            assigned_input = json.loads(assigned_input)
-        except json.JSONDecodeError:
-            assigned_input = [assigned_input]
+        try: assigned_input = json.loads(assigned_input)
+        except: assigned_input = [assigned_input]
     assigned_ids = assigned_input if isinstance(assigned_input, list) else [assigned_input] if assigned_input else []
     
-    mentor_id = data.get('mentor_id')
-    overseer_ids = data.get('overseer_ids') or []
-    if isinstance(overseer_ids, str):
-        try:
-            overseer_ids = json.loads(overseer_ids)
-        except json.JSONDecodeError:
-            overseer_ids = [overseer_ids]
+    # REQUIREMENT: Creator is auto-selected as employee (assignee)
+    if str(creator.id) not in [str(aid) for aid in assigned_ids]:
+        assigned_ids.append(creator.id)
+
+    # Process Mentors
+    mentor_input = data.get('mentor_ids') or data.get('overseer_ids') or data.get('mentor_id')
+    if isinstance(mentor_input, str):
+        try: mentor_input = json.loads(mentor_input)
+        except: mentor_input = [mentor_input]
+    mentor_ids = mentor_input if isinstance(mentor_input, list) else [mentor_input] if mentor_input else []
+    priority = data.get('priority', 'medium').lower()
+    
+    # REQUIREMENT: P1 to P4 tags should be selected single time per task (per user active tasks)
+    restricted_priorities = ['p1', 'p2', 'p3', 'p4']
+    if priority in restricted_priorities:
+        for emp_id in assigned_ids:
+            if not emp_id: continue
+            duplicate_exists = Task.objects.filter(
+                assignees=emp_id,
+                priority=priority,
+            ).exclude(status='completed').exists()
             
-    if not overseer_ids and mentor_id and mentor_id != 'none':
-        overseer_ids = [mentor_id]
+            if duplicate_exists:
+                emp_name = Employee.objects.filter(id=emp_id).values_list('name', flat=True).first() or "User"
+                raise ValueError(f"{emp_name} already has an active {priority.upper()} task. Only one task of this priority level is allowed at a time.")
 
-    Mentor_employee = None
-    if mentor_id and mentor_id != 'none':
-        try:
-            Mentor_employee = Employee.objects.get(id=mentor_id)
-        except:
-            pass
-    elif overseer_ids:
-        try:
-            Mentor_employee = Employee.objects.get(id=overseer_ids[0])
-        except:
-            pass
+    mentor_ids = [mid for mid in mentor_ids if mid and mid != 'none']
+    
+    # REQUIREMENT: If mentor creates task for team, they get selected automatically as mentor
+    if (creator.role == 'mentor' or creator.role == 'admin' or creator.has_subordinates):
+        if str(creator.id) not in [str(mid) for mid in mentor_ids]:
+            mentor_ids.append(creator.id)
 
-    start_date = data.get('start_date')
-    if not start_date:
-        start_date = None
-
-    due_date = data.get('due_date')
-    if not due_date:
-        due_date = None
+    start_date = data.get('start_date') or None
+    due_date = data.get('due_date') or None
 
     task = Task.objects.create(
         title=data['title'],
         description=data.get('description', ''),
         status=data.get('status', 'todo'),
         priority=data.get('priority', 'medium'),
-        mentor=Mentor_employee,
         created_by=creator,
         start_date=start_date,
         due_date=due_date
     )
     
     task.assignees.set(Employee.objects.filter(id__in=assigned_ids))
-    if overseer_ids:
-        task.overseers.set(Employee.objects.filter(id__in=overseer_ids))
+    task.mentors.set(Employee.objects.filter(id__in=mentor_ids))
 
+    # Clean up pending task requests
     EmployeeRequest.objects.filter(
         employee_id__in=assigned_ids,
         request_type='task_request',
@@ -3714,25 +3718,16 @@ def _create_task_admin(data, creator, files=None):
         for f in attachments:
             TaskAttachment.objects.create(task=task, file=f)
 
-    # Notification Logic (Consolidated)
+    # Notifications to Assignees
     task_title = str(task.title or "Untitled Task")
     is_mom = any(kw in task_title.upper() for kw in ["MOM", "MEETING"]) or task_title.startswith("MoM Tasks")
-
     assignee_objs = Employee.objects.filter(id__in=assigned_ids)
     for assignee in assignee_objs:
+        if assignee.id == creator.id: continue # Skip creator
         msg = f"New Minutes/Task: {task_title}" if is_mom else f"New task assigned: {task_title}"
         notif_type = "meeting" if is_mom else "task"
-        try:
-            Notification.objects.create(
-                user_id=assignee.id,
-                type=notif_type,
-                message=msg,
-                link_id=str(task.id)
-            )
-            # Sync Global Utility (Defined in this file)
-            _trigger_push_notification(assignee, "Meeting MoM" if is_mom else "Task Assignment", msg, f"task_{task.id}")
-        except Exception as e:
-            print(f"Failed notif for {assignee.id}: {e}")
+        Notification.objects.create(user_id=assignee.id, type=notif_type, message=msg, link_id=str(task.id))
+        _trigger_push_notification(assignee, "Meeting MoM" if is_mom else "Task Assignment", msg, f"task_{task.id}")
 
     return task
 
@@ -3757,7 +3752,7 @@ def tasks_api(request):
                     scope = request.GET.get('scope')
                     if scope == 'my':
                         # Tasks assigned TO the admin
-                        tasks = Task.objects.filter(assignees=emp).distinct().select_related('created_by', 'mentor').prefetch_related('assignees').order_by('-created_at')
+                        tasks = Task.objects.filter(assignees=emp).distinct().select_related('created_by').prefetch_related('assignees', 'mentors').order_by('-created_at')
                         tasks_data = _serialize_tasks(tasks)
                     else:
                         # Full view for admin (Team/All)
@@ -3767,7 +3762,7 @@ def tasks_api(request):
                     scope = request.GET.get('scope')
                     if scope == 'my':
                         # Strictly tasks assigned TO the mentor
-                        tasks = Task.objects.filter(assignees=emp).distinct().select_related('created_by', 'mentor').prefetch_related('assignees').order_by('-created_at')
+                        tasks = Task.objects.filter(assignees=emp).distinct().select_related('created_by').prefetch_related('assignees', 'mentors').order_by('-created_at')
                         tasks_data = _serialize_tasks(tasks)
                     elif scope == 'team':
                         # Subordinates' tasks (Excludes mentor's personal tasks)
@@ -3782,7 +3777,7 @@ def tasks_api(request):
                     scope = request.GET.get('scope')
                     if scope == 'my':
                         # Strictly tasks assigned TO the employee
-                        tasks = Task.objects.filter(assignees=emp).distinct().select_related('created_by', 'mentor').prefetch_related('assignees').order_by('-created_at')
+                        tasks = Task.objects.filter(assignees=emp).distinct().select_related('created_by').prefetch_related('assignees', 'mentors').order_by('-created_at')
                         tasks_data = _serialize_tasks(tasks)
                     else:
                         tasks_data = _get_employee_my_tasks_data(emp)
@@ -3804,29 +3799,34 @@ def tasks_api(request):
     elif request.method == 'POST':
         try:
             data = request.data
+            task_id = data.get('task_id')
             creator_id = data.get('created_by')
 
-            # Identify creator
-            if creator_id:
-                creator = Employee.objects.get(id=creator_id)
-            else:
-                creator = Employee.objects.filter(role='admin').first()
-                if not creator:
-                    return Response({'success': False, 'message': 'No creator found'}, status=status.HTTP_400_BAD_REQUEST)
+            # Security: Prefer the authenticated user from the gated token
+            user = getattr(request, 'user', None)
+            if not isinstance(user, Employee):
+                if creator_id:
+                    user = Employee.objects.get(id=creator_id)
+                else:
+                    return Response({'success': False, 'message': 'User session not found'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Dispatch creation logic
-            if creator.role == 'admin':
-                task = _create_task_admin(data, creator, request.FILES)
+            if task_id:
+                # UPDATE PATH
+                task = Task.objects.get(id=task_id)
+                _update_task_admin(task, data, user)
+                return Response({
+                    'success': True,
+                    'message': 'Task updated successfully',
+                    'task_id': task.id
+                })
             else:
-                # Re-use admin logic for now as employee creation wasn't strictly defined different yet, 
-                # but valid separation point.
-                task = _create_task_admin(data, creator, request.FILES) 
-
-            return Response({
-                'success': True,
-                'message': 'Task created successfully',
-                'task_id': task.id
-            })
+                # CREATE PATH
+                task = _create_task_admin(data, user, request.FILES)
+                return Response({
+                    'success': True,
+                    'message': 'Task created successfully',
+                    'task_id': task.id
+                })
 
         except ValueError as e:
             return Response({'success': False, 'message': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -3847,7 +3847,7 @@ def _update_task_admin(task, data, user=None):
     """Helper: Admin/Overseer/Reporting Mentor updates task details"""
     user_role = str(user.role).lower() if user else 'none'
     is_admin = user_role == 'admin'
-    is_overseer = task.mentor and user and task.mentor.id == user.id
+    is_overseer = user and task.mentors.filter(id=user.id).exists()
     
     # Mentor check: user manages at least one of the assignees
     is_reporting_mentor = False
@@ -3869,6 +3869,19 @@ def _update_task_admin(task, data, user=None):
         old_priority = str(task.priority).lower() if task.priority else 'medium'
         new_priority = str(data['priority']).lower()
         if old_priority != new_priority:
+            # REQUIREMENT: P1 to P4 tags should be selected single time per task (per user active tasks)
+            restricted_priorities = ['p1', 'p2', 'p3', 'p4']
+            if new_priority in restricted_priorities:
+                assignees = task.assignees.all()
+                for emp in assignees:
+                    duplicate_exists = Task.objects.filter(
+                        assignees=emp,
+                        priority=new_priority,
+                    ).exclude(id=task.id).exclude(status='completed').exists()
+                    
+                    if duplicate_exists:
+                        raise ValueError(f"{emp.name} already has an active {new_priority.upper()} task. Only one task of this priority level is allowed at a time.")
+
             from .models import TaskHistory
             
             last_24h = timezone.now() - timedelta(hours=24)
@@ -3969,43 +3982,66 @@ def _update_task_admin(task, data, user=None):
     if 'assignees' in data or 'assigned_to' in data:
         assigned_input = data.get('assignees') or data.get('assigned_to')
         if isinstance(assigned_input, str):
-            try:
-                assigned_input = json.loads(assigned_input)
-            except json.JSONDecodeError:
-                assigned_input = [assigned_input]
+            try: assigned_input = json.loads(assigned_input)
+            except: assigned_input = [assigned_input]
         assigned_ids = assigned_input if isinstance(assigned_input, list) else [assigned_input] if assigned_input else []
-        task.assignees.set(Employee.objects.filter(id__in=assigned_ids))
-
-    if 'mentor_id' in data or 'overseer_ids' in data:
-        overseer_ids = data.get('overseer_ids')
-        if isinstance(overseer_ids, str):
-            try:
-                overseer_ids = json.loads(overseer_ids)
-            except json.JSONDecodeError:
-                overseer_ids = [overseer_ids]
-        mentor_id = data.get('mentor_id')
         
-        if overseer_ids is not None:
-            # Multi-overseer update
-            overseer_qs = Employee.objects.filter(id__in=overseer_ids)
-            task.overseers.set(overseer_qs)
-            # Sync backward compatibility field 'Mentor'
-            if overseer_qs.exists():
-                task.mentor = overseer_qs.first()
-            else:
-                task.mentor = None
-        elif mentor_id:
-            if mentor_id == 'none':
-                task.mentor = None
-                task.overseers.clear()
-            else:
-                try:
-                    Mentor_emp = Employee.objects.get(id=mentor_id)
-                    task.mentor = Mentor_emp
-                    task.overseers.set([Mentor_emp])
-                except:
-                    pass
+        # History Logging for Assignees
+        old_assignees = task.assignees.all()
+        old_names = ", ".join([a.name for a in old_assignees])
+        
+        new_assignee_objs = Employee.objects.filter(id__in=assigned_ids)
+        new_names = ", ".join([a.name for a in new_assignee_objs])
+
+        if set(old_assignees.values_list('id', flat=True)) != set([int(aid) for aid in assigned_ids]):
+            from .models import TaskHistory
+            TaskHistory.objects.create(
+                task=task,
+                field_changed='assignees',
+                old_value=old_names or "None",
+                new_value=new_names or "None",
+                changed_by=user
+            )
+            task.assignees.set(new_assignee_objs)
+
+    if 'mentor_ids' in data or 'overseer_ids' in data or 'mentor_id' in data:
+        mentor_input = data.get('mentor_ids') or data.get('overseer_ids') or data.get('mentor_id')
+        if isinstance(mentor_input, str):
+            try: mentor_input = json.loads(mentor_input)
+            except: mentor_input = [mentor_input]
+        new_mentor_ids = mentor_input if isinstance(mentor_input, list) else [mentor_input] if mentor_input else []
+        new_mentor_ids = [mid for mid in new_mentor_ids if mid and mid != 'none']
+        
+        # History Logging for Mentors
+        old_mentors = task.mentors.all()
+        old_names = ", ".join([m.name for m in old_mentors])
+        
+        new_mentors = Employee.objects.filter(id__in=new_mentor_ids)
+        new_names = ", ".join([m.name for m in new_mentors])
+
+        if set(old_mentors.values_list('id', flat=True)) != set([int(mid) for mid in new_mentor_ids]):
+            from .models import TaskHistory
+            TaskHistory.objects.create(
+                task=task,
+                field_changed='mentors',
+                old_value=old_names or "None",
+                new_value=new_names or "None",
+                changed_by=user
+            )
+            task.mentors.set(new_mentors)
+
     task.save()
+
+    # REQUIREMENT: Mentors get notification of the edited task
+    task_title = str(task.title or "Untitled Task")
+    editor_name = user.name if user else "Someone"
+    mentor_objs = task.mentors.all()
+    for mnt in mentor_objs:
+        if user and mnt.id == user.id: continue # Skip if editor is the mentor
+        msg = f"Task '{task_title}' was updated by {editor_name}"
+        Notification.objects.create(user_id=mnt.id, type="task", message=msg, link_id=str(task.id))
+        _trigger_push_notification(mnt, "Task Updated", msg, f"task_{task.id}")
+
     return True
 
 def _update_task_employee(task, data, user=None):
@@ -4065,6 +4101,19 @@ def _update_task_employee(task, data, user=None):
         old_priority = str(task.priority).lower() if task.priority else 'medium'
         new_priority = str(data['priority']).lower()
         if old_priority != new_priority:
+            # REQUIREMENT: P1 to P4 tags should be selected single time per task (per user active tasks)
+            restricted_priorities = ['p1', 'p2', 'p3', 'p4']
+            if new_priority in restricted_priorities:
+                assignees = task.assignees.all()
+                for emp in assignees:
+                    duplicate_exists = Task.objects.filter(
+                        assignees=emp,
+                        priority=new_priority,
+                    ).exclude(id=task.id).exclude(status='completed').exists()
+                    
+                    if duplicate_exists:
+                        raise ValueError(f"{emp.name} already has an active {new_priority.upper()} task. Only one task of this priority level is allowed at a time.")
+
             from .models import TaskHistory
             
             last_24h = timezone.now() - timedelta(hours=24)
@@ -4246,7 +4295,7 @@ def meeting_detail_api(request, meeting_id):
 def task_detail_api(request, task_id):
     """Update, delete or fetch a task (Separated Admin/Employee Logic)"""
     try:
-        task = Task.objects.prefetch_related('assignees').select_related('mentor').get(id=task_id)
+        task = Task.objects.prefetch_related('assignees').prefetch_related('mentors').get(id=task_id)
     except Task.DoesNotExist:
         return Response({
             'success': False,
@@ -4262,19 +4311,24 @@ def task_detail_api(request, task_id):
         })
 
     data = request.data
-    requesting_user_id = data.get('user_id') # Must be passed from frontend
+    requesting_user_id = data.get('user_id')
 
-    if not requesting_user_id:
-        return Response({'success': False, 'message': 'User verification required'}, status=status.HTTP_403_FORBIDDEN)
-
+    # Security: Prefer the authenticated user from the gated token
+    requesting_user = getattr(request, 'user', None)
+    if not isinstance(requesting_user, Employee):
+        if not requesting_user_id:
+            return Response({'success': False, 'message': 'User verification required'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            requesting_user = Employee.objects.get(id=requesting_user_id)
+        except Employee.DoesNotExist:
+            return Response({'success': False, 'message': 'User not found'}, status=status.HTTP_403_FORBIDDEN)
+    
+    # Check permissions and dispatch
     try:
-        requesting_user = Employee.objects.get(id=requesting_user_id)
-
-        # Check permissions and dispatch
         if request.method in ['POST', 'PATCH']:
             # Check for DELETE method simulation
             if data.get('_method') == 'DELETE':
-                is_task_mentor = task.mentor and task.mentor.id == requesting_user.id
+                is_task_mentor = task.mentors.filter(id=requesting_user.id).exists()
                 if requesting_user.role != 'admin' and not is_task_mentor:
                     return Response({'success': False, 'message': 'Unauthorized to delete this task'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -4285,12 +4339,13 @@ def task_detail_api(request, task_id):
             role = str(requesting_user.role).lower()
             is_assignee = task.assignees.filter(id=requesting_user.id).exists()
             is_mentor_of_assignee = task.assignees.filter(mentors=requesting_user).exists()
+            is_task_mentor = task.mentors.filter(id=requesting_user.id).exists()
 
             if role == 'admin':
                 _update_task_admin(task, data, requesting_user)
                 return Response({'success': True, 'message': 'Task updated (Admin)'})
 
-            elif task.mentor and task.mentor.id == requesting_user.id:
+            elif is_task_mentor:
                 # Task Overseer can also perform full updates
                 _update_task_admin(task, data, requesting_user)
                 return Response({'success': True, 'message': 'Task updated (Overseer)'})
@@ -4323,13 +4378,17 @@ def bulk_update_tasks(request):
     user_id = data.get('user_id')
     task_ids = data.get('task_ids', [])
 
-    if not user_id:
-        return Response({'success': False, 'message': 'User ID required'}, status=status.HTTP_403_FORBIDDEN)
+    # Security: Prefer the authenticated user from the gated token
+    user = getattr(request, 'user', None)
+    if not isinstance(user, Employee):
+        if not user_id:
+            return Response({'success': False, 'message': 'User ID required'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            user = Employee.objects.get(id=user_id)
+        except Employee.DoesNotExist:
+            return Response({'success': False, 'message': 'User not found'}, status=status.HTTP_403_FORBIDDEN)
 
     try:
-        user = Employee.objects.get(id=user_id)
-        
-        # If it's a dictionary, it's a special V2 single-task update (steps, etc.)
         if isinstance(updates, dict):
             if not task_ids:
                 return Response({'success': False, 'message': 'task_ids required for this update type'}, status=status.HTTP_400_BAD_REQUEST)
@@ -4471,7 +4530,7 @@ def task_comment_api(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        task = Task.objects.prefetch_related('assignees').select_related('mentor').get(id=task_id)
+        task = Task.objects.prefetch_related('assignees').prefetch_related('mentors').get(id=task_id)
         author = Employee.objects.get(id=author_id)
 
         # Updated permission checks for hybrid assignment
@@ -4482,7 +4541,7 @@ def task_comment_api(request):
         role = str(author.role).lower()
         if role == 'admin':
             can_comment = True
-        elif task.mentor and task.mentor.id == author.id:
+        elif task.mentors.filter(id=author.id).exists():
             can_comment = True
         elif is_assignee:
             can_comment = True
@@ -4513,8 +4572,10 @@ def task_comment_api(request):
                 if overseer.id != author.id:
                     _send_task_notification(overseer, f"New comment on task: {task.title}", task.id, "task_comment")
             
-            if task.mentor and task.mentor.id != author.id and not task.overseers.filter(id=task.mentor.id).exists():
-                _send_task_notification(task.mentor, f"New comment on task: {task.title}", task.id, "task_comment")
+            # Notify all mentors except the author
+            for m in task.mentors.all():
+                if m.id != author.id:
+                    _send_task_notification(m, f"New comment on task: {task.title}", task.id, "task_comment")
 
         except Exception as e:
             print(f"Notification error: {e}")
@@ -4581,10 +4642,14 @@ def wfh_request_reject(request):
         wfh_request.status = 'rejected'
         wfh_request.admin_response = reason
         wfh_request.reviewed_at = timezone.now()
-        # Set reviewed_by to admin user
-        admin_user = Employee.objects.filter(role='admin').first()
-        if admin_user:
-            wfh_request.reviewed_by = admin_user
+        # Set reviewed_by to current authenticated user
+        request_user = getattr(request, 'user', None)
+        if isinstance(request_user, Employee):
+            wfh_request.reviewed_by = request_user
+        else:
+            admin_user = Employee.objects.filter(role='admin').first()
+            if admin_user:
+                wfh_request.reviewed_by = admin_user
         wfh_request.save()
 
         # Notify Employee of rejection
@@ -4664,9 +4729,13 @@ def wfh_request_approve(request):
                 pass
 
         if not request_obj.reviewed_by:
-            admin_user = Employee.objects.filter(role='admin').first()
-            if admin_user:
-                request_obj.reviewed_by = admin_user
+            request_user = getattr(request, 'user', None)
+            if isinstance(request_user, Employee):
+                request_obj.reviewed_by = request_user
+            else:
+                admin_user = Employee.objects.filter(role='admin').first()
+                if admin_user:
+                    request_obj.reviewed_by = admin_user
 
         request_obj.save()
 
@@ -4918,9 +4987,13 @@ def leave_request_approve(request):
                 pass
 
         if not req.reviewed_by:
-            admin_user = Employee.objects.filter(role='admin').first()
-            if admin_user:
-                req.reviewed_by = admin_user
+            request_user = getattr(request, 'user', None)
+            if isinstance(request_user, Employee):
+                req.reviewed_by = request_user
+            else:
+                admin_user = Employee.objects.filter(role='admin').first()
+                if admin_user:
+                    req.reviewed_by = admin_user
 
         req.save()
 

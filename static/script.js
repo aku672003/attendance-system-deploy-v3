@@ -1184,10 +1184,12 @@ setInterval(loadNotifications, 120000);
 function displayNotifications(notifications) {
     const container = document.getElementById('notificationItems');
     const markAllBtn = document.getElementById('markAllReadBtn');
+    const footer = document.querySelector('.notif-dropdown-footer');
     if (!container) return;
 
-    if (notifications.length === 0) {
+    if (!notifications || notifications.length === 0) {
         if (markAllBtn) markAllBtn.style.display = 'none';
+        if (footer) footer.style.display = 'none';
         container.innerHTML = `
             <div style="padding: 32px; text-align: center; color: var(--gray-500);">
                 <div style="font-size: 3rem; margin-bottom: 8px;">🔕</div>
@@ -1198,6 +1200,7 @@ function displayNotifications(notifications) {
     }
 
     if (markAllBtn) markAllBtn.style.display = 'block';
+    if (footer) footer.style.display = 'block';
     container.innerHTML = notifications.map((notif, idx) => `
         <div class="notification-item" data-id="${notif.id}" onclick='handleNotificationClick(${JSON.stringify(notif).replace(/'/g, "&apos;")})'>
             <div class="notification-item-icon">${notif.icon}</div>

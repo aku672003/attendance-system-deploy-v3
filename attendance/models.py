@@ -326,7 +326,7 @@ class Task(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='todo')
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='medium')
 
-    mentor = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='supervised_tasks')
+    mentors = models.ManyToManyField(Employee, related_name='supervised_tasks', blank=True)
     created_by = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='created_tasks')
     start_date = models.DateField(null=True, blank=True)
     due_date = models.DateField(null=True, blank=True)

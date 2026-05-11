@@ -1,6 +1,7 @@
 /**
  * Task Manager V2 - Enhanced Logic
  */
+console.log("Loading TaskManagerV2 script...");
 
 const TaskManagerV2 = {
     activeTab: 'todo',
@@ -9,9 +10,10 @@ const TaskManagerV2 = {
     newFiles: [],
     allEmployees: [], // Cache for searchable lists
     selectedAssignees: [], // IDs of selected assignees for new task
+    selectedMentors: [], // IDs of selected mentors for new task
 
     init() {
-        console.log("TaskManagerV2 Initialized");
+        console.log("TaskManagerV2 Initialized. Methods:", Object.keys(this).filter(k => typeof this[k] === 'function'));
         this.setupEventListeners();
     },
 
@@ -30,6 +32,15 @@ const TaskManagerV2 = {
             searchInput.addEventListener('input', (e) => {
                 this.searchQuery = e.target.value.toLowerCase();
                 this.render();
+            });
+        }
+
+        // Form Submission
+        const taskForm = document.getElementById('newTaskV2Form');
+        if (taskForm) {
+            taskForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.saveTask();
             });
         }
     },
@@ -117,20 +128,25 @@ const TaskManagerV2 = {
             if (!q) return true;
             const matchText = t.title.toLowerCase().includes(q) || (t.description || '').toLowerCase().includes(q);
             const matchUser = (t.assignees || []).some(a => a.name.toLowerCase().includes(q));
+            const matchPriority = (t.priority || '').toLowerCase().includes(q);
             const matchDate = (t.due_date && t.due_date.includes(q)) || (t.created_at && t.created_at.includes(q));
-            return matchText || matchUser || matchDate;
+            return matchText || matchUser || matchDate || matchPriority;
         });
 
-        const priorityOrder = { 'high': 1, 'p1': 1, 'medium': 2, 'p2': 2, 'low': 3, 'p3': 3, 'p4': 4 };
+        const priorityOrder = { 'p1': 1, 'high': 2, 'p2': 3, 'medium': 4, 'p3': 5, 'low': 6, 'p4': 7 };
         const sortedTasks = [...filteredTasks].sort((a, b) => {
             if (this.activeTab === 'completed') {
                 const dateA = new Date(a.updated_at || a.created_at);
                 const dateB = new Date(b.updated_at || b.created_at);
                 return dateB - dateA; // Newest first
             } else {
-                const pA = priorityOrder[(a.priority || 'P3').toLowerCase()] || 99;
-                const pB = priorityOrder[(b.priority || 'P3').toLowerCase()] || 99;
-                return pA - pB; // Urgency first
+                const pA = priorityOrder[(a.priority || 'medium').toLowerCase()] || 99;
+                const pB = priorityOrder[(b.priority || 'medium').toLowerCase()] || 99;
+                if (pA !== pB) return pA - pB;
+                // Secondary sort: due date
+                const d1 = a.due_date ? new Date(a.due_date) : new Date('2099-01-01');
+                const d2 = b.due_date ? new Date(b.due_date) : new Date('2099-01-01');
+                return d1 - d2;
             }
         });
 
@@ -263,7 +279,7 @@ const TaskManagerV2 = {
             const user = window.currentUser || currentUser;
             const isAssignee = (task.assignees || []).some(a => a.id === user.id);
             const isAdmin = user.role === 'admin';
-            const isMentor = task.mentor && task.mentor.id === user.id;
+            const isMentor = (task.mentors || []).some(m => m.id === user.id);
 
             if (task.status !== 'completed' || isAdmin) {
                 btns += `<button class="btn btn-secondary btn-sm" onclick="TaskManagerV2.openEditTaskModal()"><i class="fas fa-edit"></i> Edit</button> `;
@@ -305,37 +321,37 @@ const TaskManagerV2 = {
 
         // History
         const historyContainer = document.getElementById('detailV2History');
-        historyContainer.innerHTML = (task.history || []).map(h => `
-            <div class="tm-v2-history-item">
-                <span class="tm-v2-history-time">${this.formatDateTime(h.at || h.timestamp)}</span>
-                <strong>${h.by || h.user_name}</strong> changed <em>${h.field}</em>: 
-                <span class="tm-v2-history-val">${h.old || 'None'}</span> → 
-                <span class="tm-v2-history-val">${h.new || 'None'}</span>
-            </div>
-        `).join('') || '<p class="text-muted">No history logs.</p>';
+        historyContainer.innerHTML = (task.history || []).map(h => {
+            const field = h.field || 'Task';
+            const icon = field === 'priority' ? '🏷️' : field === 'status' ? '🔄' : field === 'title' ? '✏️' : '📝';
+            return `
+                <div class="tm-v2-history-item">
+                    <div class="tm-v2-history-icon">${icon}</div>
+                    <div class="tm-v2-history-content">
+                        <div class="tm-v2-history-main">
+                            <strong>${h.by || 'System'}</strong> changed <em>${field}</em>
+                        </div>
+                        <div class="tm-v2-history-details">
+                            <span class="tm-v2-history-val old">${h.old || 'None'}</span>
+                            <span class="tm-v2-history-arrow">→</span>
+                            <span class="tm-v2-history-val new">${h.new || 'None'}</span>
+                        </div>
+                        <div class="tm-v2-history-time">${this.formatDateTime(h.at || h.timestamp)}</div>
+                    </div>
+                </div>
+            `;
+        }).join('') || '<div class="tm-v2-empty-state small">No activity logs found.</div>';
 
-        // Overseer
-        const overseerContainer = document.getElementById('detailV2Overseer');
-        if (overseerContainer) {
-            if (task.overseer_id && task.overseer_name) {
-                overseerContainer.innerHTML = `
-                    <div class="tm-v2-detail-assignee-item">
-                        <div class="tm-v2-avatar" title="${task.overseer_name}">${task.overseer_name.charAt(0).toUpperCase()}</div>
-                        <span class="tm-v2-detail-assignee-name">${task.overseer_name}</span>
-                    </div>
-                `;
-            } else if (task.overseer) {
-                // If it's an object
-                const o = task.overseer;
-                overseerContainer.innerHTML = `
-                    <div class="tm-v2-detail-assignee-item">
-                        <div class="tm-v2-avatar" title="${o.name}">${o.name.charAt(0).toUpperCase()}</div>
-                        <span class="tm-v2-detail-assignee-name">${o.name}</span>
-                    </div>
-                `;
-            } else {
-                overseerContainer.innerHTML = '<p class="text-muted">None</p>';
-            }
+        // Mentors
+        const mentorsContainer = document.getElementById('detailV2Overseer');
+        if (mentorsContainer) {
+            const mentors = task.mentors || [];
+            mentorsContainer.innerHTML = mentors.map(m => `
+                <div class="tm-v2-detail-assignee-item">
+                    <div class="tm-v2-avatar" title="${m.name}">${m.name.charAt(0).toUpperCase()}</div>
+                    <span class="tm-v2-detail-assignee-name">${m.name}</span>
+                </div>
+            `).join('') || '<p class="text-muted">None</p>';
         }
 
         // Assignees
@@ -369,7 +385,33 @@ const TaskManagerV2 = {
             if (typeof hideLoading === 'function') hideLoading();
         }
 
+        const user = window.currentUser || (typeof currentUser !== 'undefined' ? currentUser : null);
         this.selectedAssignees = assigneeId ? [parseInt(assigneeId)] : [];
+        this.selectedMentors = [];
+
+        // REQUIREMENT: First who create the task get auto selected him as employee
+        if (user && !this.selectedAssignees.includes(Number(user.id))) {
+            this.selectedAssignees.push(Number(user.id));
+        }
+
+        // REQUIREMENT: If mentor create task for team, they get selected automatically as mentor
+        if (user && (user.role === 'mentor' || user.role === 'admin' || user.has_subordinates)) {
+            if (!this.selectedMentors.includes(Number(user.id))) {
+                this.selectedMentors.push(Number(user.id));
+            }
+        }
+
+        // If assigneeId is provided, auto-select their mentor if possible
+        if (assigneeId) {
+            const emp = this.allEmployees.find(e => e.id == assigneeId);
+            if (emp && emp.mentor_ids && emp.mentor_ids.length > 0) {
+                emp.mentor_ids.forEach(mid => {
+                    if (!this.selectedMentors.includes(Number(mid))) {
+                        this.selectedMentors.push(Number(mid));
+                    }
+                });
+            }
+        }
 
         // Set min date for task dates to today (prevent past dates for NEW tasks)
         const today = new Date().toISOString().split('T')[0];
@@ -378,43 +420,13 @@ const TaskManagerV2 = {
         if (startDateInput) startDateInput.setAttribute('min', today);
         if (dueDateInput) dueDateInput.setAttribute('min', today);
 
-        // Populate Overseer Select
-        const overseerSelect = document.getElementById('newTaskV2Overseer');
-        if (overseerSelect) {
-            // Clear existing options except the first one
-            while (overseerSelect.options.length > 1) {
-                overseerSelect.remove(1);
-            }
-            this.allEmployees.forEach(emp => {
-                const opt = document.createElement('option');
-                opt.value = emp.id;
-                opt.textContent = emp.name;
-                overseerSelect.appendChild(opt);
-            });
-
-            // If assigneeId is provided, auto-select their mentor if possible
-            if (assigneeId) {
-                const emp = this.allEmployees.find(e => e.id == assigneeId);
-                if (emp && emp.mentor_ids && emp.mentor_ids.length > 0) {
-                    Array.from(overseerSelect.options).forEach(opt => {
-                        if (emp.mentor_ids.includes(Number(opt.value))) {
-                            // If current user is one of the mentors, prioritize them
-                            const user = window.currentUser || (typeof currentUser !== 'undefined' ? currentUser : null);
-                            if (user && Number(opt.value) === Number(user.id)) {
-                                opt.selected = true;
-                            } else if (!overseerSelect.value) {
-                                opt.selected = true;
-                            }
-                        }
-                    });
-                }
-            }
-        }
-
-        // Render searchable Assignee List
+        // Render searchable Lists
         this.renderAssigneeList();
         this.updateAssigneeCount();
+        this.renderMentorList();
+        this.updateMentorCount();
 
+        document.getElementById('newTaskV2SubmitBtn').textContent = 'Create Task';
         document.getElementById('newTaskV2HeaderTitle').innerHTML = '<i class="fas fa-plus-circle"></i> Create New Task';
         document.getElementById('newTaskV2Id').value = '';
         document.getElementById('newTaskV2Modal').classList.add('active');
@@ -425,26 +437,15 @@ const TaskManagerV2 = {
         const task = this.currentTask;
 
         this.selectedAssignees = (task.assignees || []).map(a => Number(a.id));
+        this.selectedMentors = (task.mentors || []).map(m => Number(m.id));
         
         // Fetch employees if not cached
         if (this.allEmployees.length === 0) {
-            const res = await apiCall('employees-simple', 'GET');
-            if (res && res.success) {
-                this.allEmployees = res.employees;
-            }
-        }
-
-        const overseerSelect = document.getElementById('newTaskV2Overseer');
-        if (overseerSelect.options.length <= 1) {
-            this.allEmployees.forEach(emp => {
-                const opt = document.createElement('option');
-                opt.value = emp.id;
-                opt.textContent = emp.name;
-                overseerSelect.appendChild(opt);
-            });
+            await this.fetchEmployees();
         }
 
         document.getElementById('newTaskV2HeaderTitle').innerHTML = '<i class="fas fa-edit"></i> Edit Task';
+        document.getElementById('newTaskV2SubmitBtn').textContent = 'Update Task';
         
         // Remove min date restriction when editing existing tasks
         const startDateInput = document.getElementById('newTaskV2StartDate');
@@ -458,15 +459,65 @@ const TaskManagerV2 = {
         document.getElementById('newTaskV2Priority').value = (task.priority || 'p3').toLowerCase();
         document.getElementById('newTaskV2DueDate').value = task.due_date || '';
         document.getElementById('newTaskV2StartDate').value = task.start_date || '';
-        if (task.mentor) {
-            document.getElementById('newTaskV2Overseer').value = task.mentor.id;
-        }
 
         this.renderAssigneeList();
         this.updateAssigneeCount();
+        this.renderMentorList();
+        this.updateMentorCount();
         
         this.closeDetail();
         document.getElementById('newTaskV2Modal').classList.add('active');
+    },
+
+    renderMentorList(filter = '') {
+        const container = document.getElementById('newTaskV2MentorList');
+        if (!container) return;
+
+        const q = filter.toLowerCase();
+        let list = this.allEmployees;
+        
+        if (q) {
+            list = list.filter(emp => emp.name.toLowerCase().includes(q));
+        }
+
+        // Reorder: Selected items first
+        list.sort((a, b) => {
+            const aSel = this.selectedMentors.includes(a.id);
+            const bSel = this.selectedMentors.includes(b.id);
+            if (aSel && !bSel) return -1;
+            if (!aSel && bSel) return 1;
+            return 0;
+        });
+
+        container.innerHTML = list.map(emp => {
+            const isSelected = this.selectedMentors.includes(emp.id);
+            return `
+                <div class="tm-v2-list-item ${isSelected ? 'selected' : ''}" onclick="TaskManagerV2.toggleMentorSelection(${emp.id})">
+                    <input type="checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); TaskManagerV2.toggleMentorSelection(${emp.id})">
+                    <span class="tm-v2-list-item-name">${emp.name}</span>
+                </div>
+            `;
+        }).join('');
+    },
+
+    toggleMentorSelection(empId) {
+        const idx = this.selectedMentors.indexOf(empId);
+        if (idx > -1) {
+            this.selectedMentors.splice(idx, 1);
+        } else {
+            this.selectedMentors.push(empId);
+        }
+        this.renderMentorList(document.getElementById('newTaskV2MentorSearch').value);
+        this.updateMentorCount();
+    },
+
+    filterMentors(q) {
+        this.renderMentorList(q);
+    },
+
+    updateMentorCount() {
+        const badge = document.getElementById('newTaskV2MentorCount');
+        if (badge) badge.textContent = this.selectedMentors.length;
     },
 
     renderAssigneeList(filter = '') {
@@ -513,14 +564,13 @@ const TaskManagerV2 = {
             // Auto-fill mentor section if the employee has mentors
             const emp = this.allEmployees.find(e => e.id == empId);
             if (emp && emp.mentor_ids && emp.mentor_ids.length > 0) {
-                const overseerSelect = document.getElementById('newTaskV2Overseer');
-                if (overseerSelect) {
-                    Array.from(overseerSelect.options).forEach(opt => {
-                        if (emp.mentor_ids.includes(Number(opt.value))) {
-                            opt.selected = true;
-                        }
-                    });
-                }
+                emp.mentor_ids.forEach(mid => {
+                    if (!this.selectedMentors.includes(Number(mid))) {
+                        this.selectedMentors.push(Number(mid));
+                    }
+                });
+                this.renderMentorList(document.getElementById('newTaskV2MentorSearch').value);
+                this.updateMentorCount();
             }
         }
         
@@ -544,7 +594,9 @@ const TaskManagerV2 = {
         document.getElementById('newTaskV2HeaderTitle').innerHTML = '<i class="fas fa-plus-circle"></i> Create New Task';
         this.newFiles = [];
         this.selectedAssignees = [];
+        this.selectedMentors = [];
         document.getElementById('newTaskV2AssigneeSearch').value = '';
+        document.getElementById('newTaskV2MentorSearch').value = '';
         document.getElementById('newTaskV2AttachmentsList').innerHTML = '';
         if (typeof updateScrollLock === 'function') updateScrollLock();
     },
@@ -570,8 +622,9 @@ const TaskManagerV2 = {
         const selectedAssignees = this.selectedAssignees;
         const editId = document.getElementById('newTaskV2Id').value;
         
-        // Priority Duplicacy Check
-        if (this.tasks) {
+        // Priority Duplicacy Check - ONLY for P1, P2, P3, P4
+        const restrictedPriorities = ['p1', 'p2', 'p3', 'p4'];
+        if (this.tasks && restrictedPriorities.includes(priority.toLowerCase())) {
             for (const empId of selectedAssignees) {
                 const hasDuplicate = this.tasks.some(t => 
                     t.id != editId &&
@@ -581,7 +634,7 @@ const TaskManagerV2 = {
                 );
                 if (hasDuplicate) {
                     const emp = this.allEmployees.find(e => e.id == empId);
-                    showNotification(`${emp ? emp.name : 'Employee'} already has an active ${priority.toUpperCase()} task.`, "warning");
+                    showNotification(`${emp ? emp.name : 'Employee'} already has an active ${priority.toUpperCase()} task. Only one task of this priority level is allowed at a time.`, "warning");
                     return;
                 }
             }
@@ -596,6 +649,7 @@ const TaskManagerV2 = {
             formData.append('description', document.getElementById('newTaskV2Desc').value);
             formData.append('priority', priority);
             formData.append('due_date', document.getElementById('newTaskV2DueDate').value);
+            console.log("Saving task as user:", user.id, user.name);
             formData.append('user_id', user.id); // For editing permissions
             
             const startDate = document.getElementById('newTaskV2StartDate').value;
@@ -613,30 +667,25 @@ const TaskManagerV2 = {
             }
 
             formData.append('assignees', JSON.stringify(selectedAssignees));
-            if (!editId) {
+            formData.append('mentor_ids', JSON.stringify(this.selectedMentors));
+            
+            if (editId) {
+                formData.append('task_id', editId); // Pass task_id for backend to recognize update
+            } else {
                 this.newFiles.forEach(f => formData.append('attachments', f));
             }
 
-            const endpoint = editId ? `/api/tasks/${editId}?token=${window.GATED_TOKEN}` : `/api/tasks?token=${window.GATED_TOKEN}`;
-            const method = editId ? 'PATCH' : 'POST';
+            // ALWAYS use POST for creation and updates (backend handles task_id)
+            const endpoint = `/api/tasks?token=${window.GATED_TOKEN}`;
+            const method = 'POST';
 
             // Wait, fetch doesn't fully support FormData with PATCH/PUT in all Django backends if not properly parsed.
             // Let's use json if we are patching without files. 
             let bodyData = formData;
             let headers = {};
             
-            if (editId) {
-                const jsonObj = {};
-                formData.forEach((value, key) => {
-                    if(key === 'assignees') {
-                        jsonObj[key] = JSON.parse(value);
-                    } else {
-                        jsonObj[key] = value;
-                    }
-                });
-                bodyData = JSON.stringify(jsonObj);
-                headers = {'Content-Type': 'application/json'};
-            }
+            // Note: Since we are using multipart/form-data (FormData), we don't set Content-Type manually
+            // to let the browser set the boundary.
 
             const res = await fetch(endpoint, {
                 method: method,
@@ -909,3 +958,4 @@ if (document.readyState === 'loading') {
 }
 
 window.TaskManagerV2 = TaskManagerV2;
+console.log("TaskManagerV2 assigned to window. Methods available:", Object.keys(window.TaskManagerV2).filter(k => typeof window.TaskManagerV2[k] === 'function'));

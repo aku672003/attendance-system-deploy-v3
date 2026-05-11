@@ -201,9 +201,12 @@
                 <div class="tm-v2-form-group">
                     <label>Priority</label>
                     <select id="newTaskV2Priority">
+                        <option value="high">High</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="low">Low</option>
                         <option value="p1">P1 (Urgent/Critical)</option>
                         <option value="p2">P2 (High)</option>
-                        <option value="p3" selected>P3 (Medium)</option>
+                        <option value="p3">P3 (Medium)</option>
                         <option value="p4">P4 (Low)</option>
                     </select>
                 </div>
@@ -230,13 +233,15 @@
                     </div>
                 </div>
                 <div class="tm-v2-form-group">
-                    <label>Overseer / Mentor</label>
-                    <div class="tm-v2-search-box">
-                        <i class="fas fa-user-shield"></i>
-                        <select id="newTaskV2Overseer">
-                            <option value="">Select Overseer (Optional)</option>
-                            <!-- Employees populated by JS -->
-                        </select>
+                    <label>Overseers / Mentors <span id="newTaskV2MentorCount" class="tm-v2-count-badge">0</span></label>
+                    <div class="tm-v2-searchable-list-wrap">
+                        <div class="tm-v2-search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="newTaskV2MentorSearch" placeholder="Search mentors..." oninput="TaskManagerV2.filterMentors(this.value)">
+                        </div>
+                        <div id="newTaskV2MentorList" class="tm-v2-searchable-list">
+                            <!-- Populated by JS with checkboxes -->
+                        </div>
                     </div>
                 </div>
             </div>
@@ -248,7 +253,7 @@
             </div>
             <div class="tm-v2-form-actions">
                 <button type="button" class="btn btn-secondary" onclick="TaskManagerV2.closeNewTask()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Create Task</button>
+                <button type="submit" id="newTaskV2SubmitBtn" class="btn btn-primary">Create Task</button>
             </div>
         </form>
     </div>
