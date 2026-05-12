@@ -12803,36 +12803,8 @@ function showLeaveDatesModal(mode = 'overview') {
  * Setup a timer to remind user to check out after 8.95 hours of work
  */
 function setupShiftReminder(record) {
-    if (!record || !record.check_in_time || record.check_out_time) return;
-    
-    try {
-        const [h, m] = record.check_in_time.split(':');
-        const checkInDate = new Date();
-        checkInDate.setHours(parseInt(h), parseInt(m), 0, 0);
-        
-        // Target is 8.95 hours after check-in
-        const targetTime = checkInDate.getTime() + (8.95 * 3600 * 1000);
-        const now = Date.now();
-        
-        const delay = targetTime - now;
-        
-        if (delay > 0) {
-            setTimeout(() => {
-                // Re-check if still not checked out (record might be stale, check window object)
-                if (window.currentAttendanceRecord && !window.currentAttendanceRecord.check_out_time) {
-                    const msg = "Shift Completion Reminder 🏃: You have completed 8.95 hours. Please wrap up and check out.";
-                    showNotification(msg, "info", 15000);
-                    if (Notification.permission === "granted") {
-                        new Notification("Shift Completion", { body: msg, icon: "/favicon.ico" });
-                    }
-                }
-            }, delay);
-        } else if (delay > -1800000) { // If it passed in the last 30 mins
-             showNotification("Reminder 🏃: You have completed over 8.95 hours. Don't forget to check out!", "info", 10000);
-        }
-    } catch (e) {
-        console.error("Error setting shift reminder:", e);
-    }
+    // Deprecated in favor of server-side 9-hour reminder
+    return;
 }
 
 /**

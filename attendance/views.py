@@ -562,6 +562,45 @@ def mark_attendance(request):
 def get_server_time(request):
     """Return the current server time in IST for frontend synchronization"""
     now_local = timezone.localtime(timezone.now())
+    
+    # 9 Hours completion reminder logic
+    if hasattr(request, 'user') and request.user:
+        try:
+            today = now_local.date()
+            record = AttendanceRecord.objects.filter(
+                employee=request.user, 
+                date=today, 
+                check_out_time__isnull=True
+            ).first()
+            
+            if record and record.check_in_time:
+                # Combine date and time for comparison
+                check_in_dt = timezone.make_aware(datetime.combine(today, record.check_in_time))
+                diff_hours = (now_local - check_in_dt).total_seconds() / 3600
+                
+                if diff_hours >= 9.0:
+                    # Check if notification already sent for this specific session reminder today
+                    notif_exists = Notification.objects.filter(
+                        user=request.user,
+                        type='attendance_reminder',
+                        created_at__date=today
+                    ).exists()
+                    
+                    if not notif_exists:
+                        msg = "You have completed 9 hours of working hours. Don't forget to check out!"
+                        Notification.objects.create(
+                            user=request.user,
+                            type='attendance_reminder',
+                            message=msg
+                        )
+                        # Attempt push notification
+                        try:
+                            _trigger_push_notification(request.user, "9 Hours Completed", msg)
+                        except: pass
+        except Exception as e:
+            # Silent fail for background logic to avoid breaking main API
+            print(f"Error in 9-hour reminder logic: {e}")
+
     return Response({
         'success': True,
         'timestamp': now_local.timestamp() * 1000, # Milliseconds
