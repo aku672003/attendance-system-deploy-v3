@@ -514,7 +514,7 @@ class IndividualPredictor:
             status__in=['present', 'wfh', 'client', 'half_day']
         ).aggregate(avg_h=Avg('total_hours'))
         
-        base_hours = float(history['avg_h'] or 8.5)
+        base_hours = float(history['avg_h'] or 9.0)
         
         # 2. Apply likelihood scaling (if 50% likely to attend, we expect 50% of the usual volume)
         predicted_h = (probability / 100.0) * base_hours
@@ -545,7 +545,7 @@ class IndividualPredictor:
 
         # Normalize working hours (0-12 range capped)
         hours = [float(r.total_hours) for r in records if r.total_hours and r.status != 'absent']
-        avg_hours = sum(hours) / len(hours) if hours else 8.0
+        avg_hours = sum(hours) / len(hours) if hours else 9.0
         normalized_hours = min(1.0, avg_hours / MAX_NORMALIZED_HOURS)
         
         # Consistency

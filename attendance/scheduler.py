@@ -48,15 +48,25 @@ def start():
         replace_existing=True,
     )
 
-    # Job 4: Check-out reminder at 5:30 PM IST for employees who haven't checked out
+    # Job 4: Check-out reminder at 6:30 PM IST for employees who haven't checked out
+    # (Aligns with 9 hours if they checked in at 9:30 AM)
     scheduler.add_job(
         lambda: run_attendance_reminders('check_out'),
-        trigger=CronTrigger(hour=17, minute=30, timezone='Asia/Kolkata'),
+        trigger=CronTrigger(hour=18, minute=30, timezone='Asia/Kolkata'),
         id='checkout_reminder',
-        name='Remind employees to check out at 5:30 PM IST',
+        name='Remind employees to check out at 6:30 PM IST',
+        replace_existing=True,
+    )
+
+    # Job 5: Periodic 9-hour check (every 5 minutes between 3 PM and 11 PM)
+    scheduler.add_job(
+        lambda: run_attendance_reminders(),
+        trigger=CronTrigger(minute='*/5', hour='15-23', timezone='Asia/Kolkata'),
+        id='periodic_checkout_check',
+        name='Check for 9-hour shift completion every 5 minutes',
         replace_existing=True,
     )
 
     scheduler.start()
-    logger.info("Scheduler started: auto-absent (18:00), model training (20:00), check-in reminder (09:30), check-out reminder (17:30).")
+    logger.info("Scheduler started: auto-absent (18:00), model training (20:00), check-in (09:30), check-out (18:30), periodic check (5min).")
 

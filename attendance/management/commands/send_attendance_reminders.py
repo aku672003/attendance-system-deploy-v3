@@ -31,7 +31,7 @@ def run_attendance_reminders(reminder_type=None):
                         link="/"
                     )
 
-    # 2. 8.95 Hours Check-out Reminder
+    # 2. 9.0 Hours Check-out Reminder
     if reminder_type == 'check_out' or reminder_type is None:
         active_records = AttendanceRecord.objects.filter(
             date=today,
@@ -45,8 +45,9 @@ def run_attendance_reminders(reminder_type=None):
                 check_in_dt = timezone.make_aware(datetime.combine(record.date, check_in_t))
                 elapsed_hours = (now_ist - check_in_dt).total_seconds() / 3600
                 
-                # If specific 'check_out' type requested (from scheduler), or natural 8.95 mark
-                if reminder_type == 'check_out' or (8.95 <= elapsed_hours < 8.98):
+                # If specific 'check_out' type requested (from scheduler), or natural 9.0 mark
+                # We check if elapsed_hours is at least 9.0 to avoid early notifications
+                if (reminder_type == 'check_out' and elapsed_hours >= 9.0) or (9.0 <= elapsed_hours < 9.1):
                     _trigger_push_notification(
                         record.employee,
                         "Shift Completion Reminder 🏃",
@@ -57,7 +58,7 @@ def run_attendance_reminders(reminder_type=None):
                 pass
 
 class Command(BaseCommand):
-    help = 'Send 9 AM check-in reminders and 8.95 hours check-out reminders'
+    help = 'Send 9 AM check-in reminders and 9.0 hours check-out reminders'
 
     def handle(self, *args, **options):
         self.stdout.write("Processing reminders...")

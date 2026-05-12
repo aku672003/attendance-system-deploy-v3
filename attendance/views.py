@@ -2795,8 +2795,8 @@ def employee_performance_analysis(request, employee_id):
                 'is_prediction': False
             })
 
-        # Calculate Prediction Peak scaling from history to avoid "stuck at 8h"
-        max_seen = max([p['hours'] for p in history_points] + [8.0])
+        # Calculate Prediction Peak scaling from history to avoid "stuck at 9h"
+        max_seen = max([p['hours'] for p in history_points] + [9.0])
         limit_hours = min(12.0, max_seen)
 
         from .intelligence_hub import calculate_multi_day_forecast, IndividualPredictor
@@ -2942,8 +2942,8 @@ def employee_performance_analysis(request, employee_id):
         total_ot_h = 0
         for r in records:
             h = float(r.total_hours or 0)
-            reg = min(h, 8.0)
-            ot = max(0.0, h - 8.0)
+            reg = min(h, 9.0)
+            ot = max(0.0, h - 9.0)
             total_reg_h += reg
             total_ot_h += ot
         

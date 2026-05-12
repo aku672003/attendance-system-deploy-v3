@@ -254,7 +254,7 @@ class AttendancePredictionEngine:
         
         # 3. Hours Consistency (30%) - meeting expected hours
         avg_hours = records.aggregate(Avg('total_hours'))['total_hours__avg'] or 0
-        expected_hours = 8.0
+        expected_hours = 9.0
         if avg_hours >= expected_hours:
             hours_score = 30
         else:
