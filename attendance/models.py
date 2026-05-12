@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 from django.core.validators import RegexValidator
 
@@ -331,7 +332,7 @@ class Task(models.Model):
     start_date = models.DateField(null=True, blank=True)
     due_date = models.DateField(null=True, blank=True)
     accuracy = models.IntegerField(null=True, blank=True) # Task accuracy score (0-100)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
     assignees = models.ManyToManyField(Employee, related_name='assigned_tasks')
     overseers = models.ManyToManyField(Employee, related_name='overseeing_tasks', blank=True)

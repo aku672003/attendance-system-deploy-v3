@@ -18,7 +18,7 @@
                 <span class="tm-v2-tab-count" id="tmV2Count-completed">0</span>
             </div>
         </div>
-        
+
         <div class="tm-v2-controls">
             <div class="tm-v2-search-wrapper">
                 <i class="fas fa-search tm-v2-search-icon"></i>
@@ -30,10 +30,12 @@
             <button class="btn btn-secondary btn-icon" onclick="TaskManagerV2.refresh()" title="Refresh">
                 <i class="fas fa-sync-alt"></i>
             </button>
-            <button id="tmV2RequestBtn" class="btn btn-secondary btn-icon" onclick="TaskManagerV2.requestTask()" title="Request New Task">
+            <button id="tmV2RequestBtn" class="btn btn-secondary btn-icon" onclick="TaskManagerV2.requestTask()"
+                title="Request New Task">
                 <i class="fas fa-rocket"></i>
             </button>
-            <button id="tmV2ExportBtn" class="btn btn-secondary btn-icon" onclick="TaskManagerV2.exportTasks()" title="Export Tasks" style="display: none;">
+            <button id="tmV2ExportBtn" class="btn btn-secondary btn-icon" onclick="TaskManagerV2.exportTasks()"
+                title="Export Tasks" style="display: none;">
                 <i class="fas fa-file-export"></i>
             </button>
             <div class="tm-v2-close-btn" onclick="TaskManagerV2.close()" title="Close Dashboard">
@@ -67,13 +69,14 @@
             <div class="tm-v2-detail-header-left">
                 <span id="detailV2Priority" class="tm-v2-priority"></span>
                 <h2 id="detailV2Title">Task Title</h2>
-                
+
                 <!-- Progress bar under title -->
                 <div id="detailV2ProgressSection" style="display:flex; align-items:center; gap: 12px; margin-top: 8px;">
                     <div class="tm-v2-progress" style="width: 200px; height: 8px; margin: 0;">
                         <div id="detailV2ProgressFill" class="tm-v2-progress-fill" style="width: 0%"></div>
                     </div>
-                    <span id="detailV2ProgressText" style="font-weight: 800; color: var(--tm-primary); font-size: 0.9rem;">0%</span>
+                    <span id="detailV2ProgressText"
+                        style="font-weight: 800; color: var(--tm-primary); font-size: 0.9rem;">0%</span>
                 </div>
 
                 <div id="detailV2Actions" style="display:flex; gap: 8px; margin-top: 12px;"></div>
@@ -95,7 +98,8 @@
                 <section>
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <h3>Steps / Milestones</h3>
-                        <button class="btn btn-sm btn-outline" onclick="TaskManagerV2.addStepPrompt()">+ Add Step</button>
+                        <button class="btn btn-sm btn-outline" onclick="TaskManagerV2.addStepPrompt()">+ Add
+                            Step</button>
                     </div>
                     <div id="detailV2Steps" class="tm-v2-steps-list">
                         <!-- Steps rendered here -->
@@ -161,14 +165,21 @@
                 <i class="fas fa-times"></i>
             </div>
         </div>
-        <div style="padding: 20px;">
+        <div style="padding: 24px;">
+            <div class="tm-v2-export-presets" style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button class="btn btn-subtle btn-sm" onclick="TaskManagerV2.setExportRange('today')">Today</button>
+                <button class="btn btn-subtle btn-sm" onclick="TaskManagerV2.setExportRange('lastMonth')">Last Month</button>
+                <button class="btn btn-subtle btn-sm" onclick="TaskManagerV2.setExportRange('allTime')">All Time</button>
+            </div>
             <div class="tm-v2-form-group">
                 <label>From Date</label>
-                <input type="date" id="exportTasksFromDate" class="form-control" style="width: 100%; box-sizing: border-box; padding: 8px;">
+                <input type="date" id="exportTasksFromDate" class="form-control"
+                    style="width: 100%; box-sizing: border-box; padding: 8px;">
             </div>
             <div class="tm-v2-form-group">
                 <label>To Date</label>
-                <input type="date" id="exportTasksToDate" class="form-control" style="width: 100%; box-sizing: border-box; padding: 8px;">
+                <input type="date" id="exportTasksToDate" class="form-control"
+                    style="width: 100%; box-sizing: border-box; padding: 8px;">
             </div>
             <div style="text-align: right; margin-top: 20px;">
                 <button class="btn btn-secondary" onclick="TaskManagerV2.closeExportTasks()">Cancel</button>
@@ -225,7 +236,8 @@
                     <div class="tm-v2-searchable-list-wrap">
                         <div class="tm-v2-search-box">
                             <i class="fas fa-search"></i>
-                            <input type="text" id="newTaskV2AssigneeSearch" placeholder="Search employees..." oninput="TaskManagerV2.filterAssignees(this.value)">
+                            <input type="text" id="newTaskV2AssigneeSearch" placeholder="Search employees..."
+                                oninput="TaskManagerV2.filterAssignees(this.value)">
                         </div>
                         <div id="newTaskV2AssigneeList" class="tm-v2-searchable-list">
                             <!-- Populated by JS with checkboxes -->
@@ -240,7 +252,7 @@
                             <input type="text" id="newTaskV2MentorSearch" placeholder="Search mentors..." oninput="TaskManagerV2.filterMentors(this.value)">
                         </div>
                         <div id="newTaskV2MentorList" class="tm-v2-searchable-list">
-                            <!-- Populated by JS with checkboxes -->
+                            <!-- Populated by JS -->
                         </div>
                     </div>
                 </div>
@@ -248,8 +260,10 @@
             <div class="tm-v2-form-group">
                 <label>Attachments</label>
                 <div id="newTaskV2AttachmentsList" class="tm-v2-attachments-preview"></div>
-                <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('newTaskV2FileUpload').click()">📎 Add Files</button>
-                <input type="file" id="newTaskV2FileUpload" hidden multiple onchange="TaskManagerV2.previewNewTaskFiles(event)">
+                <button type="button" class="btn btn-outline btn-sm"
+                    onclick="document.getElementById('newTaskV2FileUpload').click()">📎 Add Files</button>
+                <input type="file" id="newTaskV2FileUpload" hidden multiple
+                    onchange="TaskManagerV2.previewNewTaskFiles(event)">
             </div>
             <div class="tm-v2-form-actions">
                 <button type="button" class="btn btn-secondary" onclick="TaskManagerV2.closeNewTask()">Cancel</button>

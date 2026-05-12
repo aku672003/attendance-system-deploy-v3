@@ -55,7 +55,7 @@ const TaskManagerV2 = {
 
         document.getElementById('taskManagerV2Modal').classList.add('active');
         if (typeof updateScrollLock === 'function') updateScrollLock();
-        
+
         // Toggle buttons based on role
         const user = window.currentUser || (typeof currentUser !== 'undefined' ? currentUser : null);
         const requestBtn = document.getElementById('tmV2RequestBtn');
@@ -67,14 +67,14 @@ const TaskManagerV2 = {
 
         // Ensure the active tab is properly initialized
         this.switchTab(this.activeTab);
-        
+
         // Pre-fetch employees in background if not already loaded
         if (this.allEmployees.length === 0) {
             this.fetchEmployees();
         }
 
         // Refresh to get latest data
-        this.refresh(); 
+        this.refresh();
     },
 
     async fetchEmployees() {
@@ -119,8 +119,8 @@ const TaskManagerV2 = {
         document.getElementById('tmV2Count-inProgress').textContent = inProgressTasks.length;
         document.getElementById('tmV2Count-completed').textContent = completedTasks.length;
 
-        const currentTasks = this.activeTab === 'todo' ? todoTasks : 
-                             (this.activeTab === 'inProgress' ? inProgressTasks : completedTasks);
+        const currentTasks = this.activeTab === 'todo' ? todoTasks :
+            (this.activeTab === 'inProgress' ? inProgressTasks : completedTasks);
 
         const filteredTasks = currentTasks.filter(t => {
             const q = this.searchQuery.toLowerCase();
@@ -165,7 +165,7 @@ const TaskManagerV2 = {
         const steps = task.steps || [];
         const completedSteps = steps.filter(s => s.is_completed).length;
         const progress = steps.length > 0 ? Math.round((completedSteps / steps.length) * 100) : 0;
-        
+
         const assignees = task.assignees || [];
         const avatars = assignees.slice(0, 3).map(a => `
             <div class="tm-v2-avatar" title="${a.name}">${a.name.charAt(0).toUpperCase()}</div>
@@ -253,13 +253,13 @@ const TaskManagerV2 = {
         this.currentTask = task;
         document.getElementById('detailV2Title').textContent = task.title;
         document.getElementById('detailV2Desc').textContent = task.description || 'No description.';
-        
+
         const priorityEl = document.getElementById('detailV2Priority');
         const prio = (task.priority || 'P3').toUpperCase();
         priorityEl.textContent = prio;
         priorityEl.className = `tm-v2-priority ${prio.toLowerCase()}`;
 
-        document.getElementById('detailV2DueDate').textContent = task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A';
+        document.getElementById('detailV2DueDate').textContent = task.due_date ? this.formatDate(task.due_date) : 'N/A';
         document.getElementById('detailV2CreatedAt').textContent = this.formatDateTime(task.created_at);
 
         // Progress
@@ -437,7 +437,7 @@ const TaskManagerV2 = {
 
         this.selectedAssignees = (task.assignees || []).map(a => Number(a.id));
         this.selectedMentors = (task.mentors || []).map(m => Number(m.id));
-        
+
         // Fetch employees if not cached
         if (this.allEmployees.length === 0) {
             await this.fetchEmployees();
@@ -445,7 +445,7 @@ const TaskManagerV2 = {
 
         document.getElementById('newTaskV2HeaderTitle').innerHTML = '<i class="fas fa-edit"></i> Edit Task';
         document.getElementById('newTaskV2SubmitBtn').textContent = 'Update Task';
-        
+
         // Remove min date restriction when editing existing tasks
         const startDateInput = document.getElementById('newTaskV2StartDate');
         const dueDateInput = document.getElementById('newTaskV2DueDate');
@@ -463,7 +463,7 @@ const TaskManagerV2 = {
         this.updateAssigneeCount();
         this.renderMentorList();
         this.updateMentorCount();
-        
+
         this.closeDetail();
         document.getElementById('newTaskV2Modal').classList.add('active');
     },
@@ -474,7 +474,7 @@ const TaskManagerV2 = {
 
         const q = filter.toLowerCase();
         let list = this.allEmployees;
-        
+
         if (q) {
             list = list.filter(emp => emp.name.toLowerCase().includes(q));
         }
@@ -525,7 +525,7 @@ const TaskManagerV2 = {
 
         const q = filter.toLowerCase();
         let list = this.allEmployees;
-        
+
         if (q) {
             list = list.filter(emp => emp.name.toLowerCase().includes(q));
         }
@@ -572,7 +572,7 @@ const TaskManagerV2 = {
                 this.updateMentorCount();
             }
         }
-        
+
         this.renderAssigneeList(document.getElementById('newTaskV2AssigneeSearch').value);
         this.updateAssigneeCount();
     },
@@ -615,25 +615,25 @@ const TaskManagerV2 = {
 
     async saveNewTask(e) {
         if (e) e.preventDefault();
-        
+
         const btn = document.getElementById('newTaskV2SubmitBtn');
         if (btn && btn.disabled) return;
         if (btn) btn.disabled = true;
 
         console.log("saveNewTask triggered");
-        
+
         const title = document.getElementById('newTaskV2Title').value;
         const priority = document.getElementById('newTaskV2Priority').value;
         const selectedAssignees = this.selectedAssignees;
         const editId = document.getElementById('newTaskV2Id').value;
-        
+
         // Priority Duplicacy Check - ONLY for P1, P2, P3, P4
         const restrictedPriorities = ['p1', 'p2', 'p3', 'p4'];
         if (this.tasks && restrictedPriorities.includes(priority.toLowerCase())) {
             for (const empId of selectedAssignees) {
-                const hasDuplicate = this.tasks.some(t => 
+                const hasDuplicate = this.tasks.some(t =>
                     t.id != editId &&
-                    t.status !== 'completed' && 
+                    t.status !== 'completed' &&
                     t.priority.toLowerCase() === priority.toLowerCase() &&
                     (t.assignees || []).some(a => a.id == empId)
                 );
@@ -650,31 +650,21 @@ const TaskManagerV2 = {
         try {
             const formData = new FormData();
             const user = window.currentUser || currentUser;
-            
+
             formData.append('title', title);
             formData.append('description', document.getElementById('newTaskV2Desc').value);
             formData.append('priority', priority);
             formData.append('due_date', document.getElementById('newTaskV2DueDate').value);
             console.log("Saving task as user:", user.id, user.name);
             formData.append('user_id', user.id); // For editing permissions
-            
+
             const startDate = document.getElementById('newTaskV2StartDate').value;
             if (startDate) formData.append('started_at', startDate); // For backwards compat
             if (startDate) formData.append('start_date', startDate);
 
-            const overseerSelect = document.getElementById('newTaskV2Overseer');
-            if (overseerSelect) {
-                const selectedOverseers = Array.from(overseerSelect.selectedOptions).map(opt => opt.value).filter(v => v);
-                if (selectedOverseers.length > 0) {
-                    formData.append('overseer_ids', JSON.stringify(selectedOverseers));
-                    formData.append('overseer_id', selectedOverseers[0]); // fallback
-                    formData.append('mentor_id', selectedOverseers[0]);   // fallback
-                }
-            }
-
             formData.append('assignees', JSON.stringify(selectedAssignees));
             formData.append('mentor_ids', JSON.stringify(this.selectedMentors));
-            
+
             if (editId) {
                 formData.append('task_id', editId); // Pass task_id for backend to recognize update
             } else {
@@ -704,6 +694,12 @@ const TaskManagerV2 = {
             if (btn) btn.disabled = false;
             hideLoading();
         }
+    },
+
+    formatDate(dateStr) {
+        if (!dateStr) return '';
+        const d = new Date(dateStr);
+        return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     },
 
     formatDateTime(ts) {
@@ -776,16 +772,16 @@ const TaskManagerV2 = {
         const user = window.currentUser || (typeof currentUser !== 'undefined' ? currentUser : null);
         const empId = user ? user.id : '';
         const scope = this.currentScope || ((user && (user.role === 'admin' || user.role === 'Mentor' || user.has_subordinates)) ? 'team' : 'my');
-        
+
         const loader = document.getElementById('tmV2Loader');
         if (loader && !this.tasks) loader.style.display = 'flex';
 
-        const res = await apiCall(`tasks?employee_id=${empId}&scope=${scope}`, 'GET');
+        const res = await apiCall(`tasks?employee_id=${empId}&scope=${scope}&_cb=${Date.now()}`, 'GET');
         if (res && res.success) {
             this.tasks = res.tasks;
             this.render();
         }
-        
+
         if (loader) {
             loader.style.display = 'none';
             loader.classList.add('hidden');
@@ -800,6 +796,40 @@ const TaskManagerV2 = {
 
     closeExportTasks() {
         document.getElementById('exportTasksModal').classList.remove('active');
+    },
+
+    setExportRange(type) {
+        const fromInput = document.getElementById('exportTasksFromDate');
+        const toInput = document.getElementById('exportTasksToDate');
+        if (!fromInput || !toInput) return;
+
+        const now = new Date();
+        const todayStr = now.toISOString().split('T')[0];
+
+        if (type === 'today') {
+            fromInput.value = todayStr;
+            toInput.value = todayStr;
+        } else if (type === 'lastMonth') {
+            const lastMonthDate = new Date();
+            lastMonthDate.setMonth(now.getMonth() - 1);
+            fromInput.value = lastMonthDate.toISOString().split('T')[0];
+            toInput.value = todayStr;
+        } else if (type === 'allTime') {
+            // Find task with ID 1 to get the true start of history
+            let earliest = '2023-01-01'; 
+            if (this.tasks && this.tasks.length > 0) {
+                const task1 = this.tasks.find(t => String(t.id) === '1');
+                if (task1 && task1.created_at) {
+                    earliest = task1.created_at.split('T')[0];
+                } else {
+                    // Fallback to earliest available if ID 1 is not in current view
+                    const sorted = [...this.tasks].filter(t => t.created_at).sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+                    if (sorted.length > 0) earliest = sorted[0].created_at.split('T')[0];
+                }
+            }
+            fromInput.value = earliest;
+            toInput.value = todayStr;
+        }
     },
 
     confirmExportTasks() {
@@ -831,14 +861,14 @@ const TaskManagerV2 = {
 
             // CSV Header
             const headers = ['Task ID', 'Title', 'Description', 'Priority', 'Status', 'Start Date', 'Due Date', 'Created At', 'Created By', 'Assignees'];
-            let csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n";
+            let csvRows = [headers.join(",")];
 
             filteredTasks.forEach(t => {
                 const assignees = (t.assignees || []).map(a => a.name).join('; ');
-                const creator = t.created_by ? t.created_by.name : '';
-                const desc = (t.description || '').replace(/"/g, '""').replace(/\n/g, ' '); // escape quotes and newlines
+                const creator = t.created_by_name || (t.created_by ? (t.created_by.name || t.created_by) : '');
+                const desc = (t.description || '').replace(/"/g, '""').replace(/\n/g, ' ');
                 const title = (t.title || '').replace(/"/g, '""').replace(/\n/g, ' ');
-                
+
                 const row = [
                     t.id,
                     `"${title}"`,
@@ -847,20 +877,25 @@ const TaskManagerV2 = {
                     t.status,
                     t.start_date || '',
                     t.due_date || '',
-                    t.created_at ? new Date(t.created_at).toLocaleDateString() : '',
+                    t.created_at ? t.created_at.split('T')[0] : '',
                     `"${creator}"`,
                     `"${assignees}"`
                 ];
-                csvContent += row.join(",") + "\n";
+                csvRows.push(row.join(","));
             });
 
-            const encodedUri = encodeURI(csvContent);
+            const csvString = csvRows.join("\n");
+            const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            
             const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
+            link.setAttribute("href", url);
             link.setAttribute("download", `tasks_export_${fromDate}_to_${toDate}.csv`);
+            link.style.visibility = 'hidden';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            URL.revokeObjectURL(url);
 
             this.closeExportTasks();
             showNotification("Tasks exported successfully", "success");

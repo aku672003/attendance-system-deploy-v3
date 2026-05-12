@@ -78,11 +78,12 @@ class EmployeeDocumentAdmin(admin.ModelAdmin):
 
 @admin.register(Task)
 class TaskAdmin(admin.ModelAdmin):
-    list_display = ['id', 'title', 'status', 'priority', 'due_date']
+    list_display = ['id', 'title', 'status', 'priority', 'due_date', 'created_at']
     list_filter = ['status', 'priority', 'due_date']
     search_fields = ['title', 'description']
     date_hierarchy = 'created_at'
-    filter_horizontal = ('assignees',)
+    fields = ['title', 'description', 'status', 'priority', 'mentors', 'created_by', 'start_date', 'due_date', 'accuracy', 'created_at', 'assignees', 'overseers', 'started_at', 'completed_at']
+    filter_horizontal = ('assignees', 'mentors', 'overseers')
 
     def get_assignees(self, obj):
         try:

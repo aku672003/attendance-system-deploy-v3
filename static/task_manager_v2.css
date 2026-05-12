@@ -13,6 +13,15 @@
     --tm-danger: #ef4444;
 }
 
+body.dark-mode {
+    --tm-bg: #0f172a;
+    --tm-card-bg: #1e293b;
+    --tm-text: #f8fafc;
+    --tm-text-light: #94a3b8;
+    --tm-border: rgba(255, 255, 255, 0.1);
+    --tm-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+}
+
 .task-manager-v2-modal {
     position: fixed;
     top: 0;
@@ -998,3 +1007,197 @@ body.dark-mode .tm-v2-history-item:not(:last-child)::after { background: rgba(25
 
 
 
+
+/* Full Task Manager V2 Dark Mode Overrides */
+body.dark-mode .tm-v2-header {
+    background: #1e293b;
+    border-bottom-color: rgba(255,255,255,0.05);
+}
+
+body.dark-mode .tm-v2-tab:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+body.dark-mode .tm-v2-search-wrapper {
+    background: #0f172a;
+}
+
+body.dark-mode .tm-v2-search-wrapper:focus-within {
+    background: #0f172a;
+    border-color: var(--tm-primary);
+}
+
+body.dark-mode .tm-v2-close-btn {
+    background: #0f172a;
+}
+
+body.dark-mode .tm-v2-close-btn:hover {
+    background: #fee2e2;
+    color: #ef4444;
+}
+
+body.dark-mode .tm-v2-content {
+    background: #0f172a;
+}
+
+body.dark-mode .tm-v2-card {
+    background: #1e293b;
+    border-color: rgba(255, 255, 255, 0.05);
+    color: #f1f5f9;
+}
+
+body.dark-mode .tm-v2-card:hover {
+    border-color: var(--tm-primary);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+body.dark-mode .tm-v2-card-title {
+    color: #f8fafc;
+}
+
+body.dark-mode .tm-v2-card-desc {
+    color: #94a3b8;
+}
+
+body.dark-mode .tm-v2-card-footer {
+    border-top-color: rgba(255,255,255,0.05);
+}
+
+body.dark-mode .tm-v2-card-assignee-name {
+    background: #0f172a;
+    color: #f8fafc;
+}
+
+/* Searchable List Items (Assignees/Mentors) in Dark Mode */
+body.dark-mode .tm-v2-searchable-list-wrap {
+    background: #1e293b;
+    border-color: rgba(255,255,255,0.1);
+}
+
+body.dark-mode .tm-v2-list-item {
+    color: #cbd5e1;
+}
+
+body.dark-mode .tm-v2-list-item:hover {
+    background: rgba(255,255,255,0.05);
+}
+
+body.dark-mode .tm-v2-list-item.selected {
+    background: rgba(59, 130, 246, 0.2); /* var(--tm-primary) with transparency */
+    color: #fff;
+}
+
+body.dark-mode .tm-v2-search-box input {
+    background: #0f172a;
+    color: #fff;
+    border-color: rgba(255,255,255,0.1);
+}
+
+
+body.dark-mode .tm-v2-progress {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+body.dark-mode .tm-v2-detail-container {
+    background: #1e293b;
+    color: #f8fafc;
+}
+
+body.dark-mode .tm-v2-detail-header {
+    border-bottom-color: rgba(255,255,255,0.05);
+}
+
+body.dark-mode .tm-v2-detail-sidebar {
+    background: #0f172a;
+    border-color: rgba(255,255,255,0.05);
+}
+
+body.dark-mode .tm-v2-comment-input-wrap {
+    background: #0f172a;
+    border-color: rgba(255,255,255,0.1);
+}
+
+body.dark-mode #detailV2CommentInput {
+    color: #f8fafc;
+}
+
+body.dark-mode .tm-v2-searchable-list-wrap {
+    background: #0f172a;
+    border-color: rgba(255,255,255,0.1);
+}
+
+body.dark-mode .tm-v2-search-box {
+    background: #1e293b;
+    border-bottom-color: rgba(255,255,255,0.1);
+}
+
+body.dark-mode .tm-v2-list-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+body.dark-mode .tm-v2-empty-state.small {
+    background: #0f172a;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+body.dark-mode .tm-v2-tab-count {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+body.dark-mode .tm-v2-avatar {
+    border-color: #1e293b;
+}
+
+body.dark-mode .tm-v2-card.overdue {
+    border-left-color: #ef4444;
+}
+
+/* Export Presets Styling */
+.tm-v2-export-presets .btn-subtle {
+    background: #f1f5f9;
+    color: #475569;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tm-v2-export-presets .btn-subtle:hover {
+    background: var(--tm-primary);
+    color: white;
+}
+
+body.dark-mode .tm-v2-export-presets .btn-subtle {
+    background: #0f172a;
+    color: #94a3b8;
+}
+
+body.dark-mode .tm-v2-export-presets .btn-subtle:hover {
+    background: var(--tm-primary);
+    color: white;
+}
+
+/* Additional Dark Mode Refinements for Cards */
+body.dark-mode .tm-v2-card-meta {
+    color: #94a3b8;
+}
+
+body.dark-mode .tm-v2-card-meta-item i {
+    color: var(--tm-primary);
+}
+
+body.dark-mode .tm-v2-card-date {
+    background: rgba(255, 255, 255, 0.03);
+    color: #f1f5f9;
+}
+
+body.dark-mode .tm-v2-card-id {
+    color: #64748b;
+}
+
+body.dark-mode .tm-v2-list-item input[type="checkbox"] {
+    accent-color: var(--tm-primary);
+}
