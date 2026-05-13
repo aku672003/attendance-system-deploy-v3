@@ -67,7 +67,7 @@ function formatTimeOnly(dateInput) {
 // Initialize Application
 document.addEventListener('DOMContentLoaded', async function initApp() {
     console.log('Initializing Attendance System...');
-    
+
     // Load persisted token if available
     const savedToken = sessionStorage.getItem('gatedToken');
     if (savedToken && (!window.GATED_TOKEN || window.GATED_TOKEN === "None")) {
@@ -967,7 +967,7 @@ async function handleLogin(event) {
 
         if (result.success) {
             currentUser = result.user;
-            
+
             // Save token if returned (manual login in production)
             if (result.token) {
                 window.GATED_TOKEN = result.token;
@@ -4261,7 +4261,7 @@ async function loadTodayAttendance(isUserInRange = false) {
                 statusElement.textContent = 'On Leave';
                 statusElement.className = 'stat-card-value warning';
                 timingElement.innerHTML = '<div style="font-size:0.9em; opacity:0.8;">Approved Leave for today</div>';
-                
+
                 checkInCard.classList.add('hidden');
                 checkOutCard.classList.add('hidden');
                 return;
@@ -4388,11 +4388,11 @@ async function loadTodayAttendance(isUserInRange = false) {
                 } else {
                     statusText = 'Approved!';
                 }
-                
+
                 statusElement.textContent = statusText;
                 statusElement.className = 'stat-card-value warning';
                 timingElement.innerHTML = `<div style="font-size:0.9em; opacity:0.8;">${isApproved ? 'Please check in to mark attendance' : 'Marked but pending approval'}</div>`;
-                
+
                 checkInCard.classList.remove('hidden');
                 checkOutCard.classList.add('hidden');
             }
@@ -4404,7 +4404,7 @@ async function loadTodayAttendance(isUserInRange = false) {
             checkInCard.classList.remove('hidden');
             checkOutCard.classList.add('hidden');
         }
-        
+
         // Setup shift reminder
         if (currentAttendanceRecord) {
             setupShiftReminder(currentAttendanceRecord);
@@ -4421,7 +4421,7 @@ function updateCheckOutButtonState() {
     // Calculate worked hours so far based on server-provided date and time
     const checkInDateStr = currentAttendanceRecord.date; // YYYY-MM-DD
     const checkInTimeStr = currentAttendanceRecord.check_in_time; // HH:MM:SS
-    
+
     // Create Date object correctly handling the server's date and time
     const checkInDate = new Date(`${checkInDateStr}T${checkInTimeStr}`);
 
@@ -5144,7 +5144,7 @@ async function refreshAttendanceAvailability() {
     const wfhOption = document.getElementById('wfhOption');
     const wfhStatus = document.getElementById('wfhStatus');
     const wfhRequestBtn = document.getElementById('wfhRequestBtn');
-    
+
     const halfDayOption = document.getElementById('halfDayOption');
     const halfDayStatus = halfDayOption ? halfDayOption.querySelector('p') : null;
 
@@ -5278,7 +5278,7 @@ function onWFHCardClick(e) {
     e && e.stopPropagation && e.stopPropagation();
     const wfhOption = document.getElementById('wfhOption');
     const wfhStatus = document.getElementById('wfhStatus');
-    
+
     if (wfhOption.classList.contains('disabled')) {
         const statusText = wfhStatus ? wfhStatus.textContent : '';
         if (statusText.includes('Pending')) {
@@ -6413,7 +6413,7 @@ async function showCheckOut() {
         const checkInTime = new Date(`${record.date}T${record.check_in_time}`);
         const now = getCurrentISTDate();
         let workHours = (now - checkInTime) / (1000 * 60 * 60);
-        
+
         // Cap at 14.0 hours for safety/bug prevention
         if (workHours > 14.0) workHours = 14.0;
         if (workHours < 0) workHours = 0;
@@ -12587,36 +12587,6 @@ async function loadMentorStatus() {
     }
 }
 
-// ========== Office Management Functions ==========
-
-/**
- * Fetches office data from the API and populates the primary office select elements.
- * Targeted IDs: signupOffice, profilePrimaryOffice
- */
-async function refreshPrimaryOfficeSelects() {
-    try {
-        const result = await apiCall('offices', 'GET');
-        if (result.success && result.offices) {
-
-            const profileSelect = document.getElementById('profilePrimaryOffice');
-
-            const optionsHtml = '<option value="">Select Office</option>' +
-                result.offices.map(o => `<option value="${o.id}">${o.name}</option>`).join('');
-
-
-            if (profileSelect) profileSelect.innerHTML = optionsHtml;
-
-            // Re-select value if profile is loaded
-            if (currentUser && currentUser.primary_office_id && profileSelect) {
-                profileSelect.value = currentUser.primary_office_id;
-            }
-        }
-    } catch (error) {
-        console.error('Failed to refresh office selects:', error);
-    }
-}
-
-/**
  * Safely removes a manually created modal and restores background scroll
  * if no other modals are active.
  */
@@ -12812,18 +12782,18 @@ function setupShiftReminder(record) {
  */
 function setupCheckInReminder() {
     if (window.currentAttendanceRecord && window.currentAttendanceRecord.check_in_time) return;
-    
+
     const now = new Date();
     const target = new Date();
     target.setHours(9, 0, 0, 0);
-    
+
     const delay = target.getTime() - now.getTime();
     if (delay > 0) {
         setTimeout(() => {
             if (!window.currentAttendanceRecord || !window.currentAttendanceRecord.check_in_time) {
-                 const msg = "9 AM Reminder 📍: Good morning! Don't forget to mark your attendance.";
-                 showNotification(msg, "info", 15000);
-                 if (Notification.permission === "granted") {
+                const msg = "9 AM Reminder 📍: Good morning! Don't forget to mark your attendance.";
+                showNotification(msg, "info", 15000);
+                if (Notification.permission === "granted") {
                     new Notification("Attendance Reminder", { body: msg, icon: "/favicon.ico" });
                 }
             }

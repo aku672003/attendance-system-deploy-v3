@@ -30,8 +30,8 @@ def validate_gated_token(token):
 
     serializer = URLSafeTimedSerializer(configured_secret)
     try:
-        # Token is valid for 1 hour
-        data = serializer.loads(token, max_age=3600)
+        # Token is valid for 24 hours
+        data = serializer.loads(token, max_age=86400)
         if not isinstance(data, dict) or 'user_id' not in data or 'timestamp' not in data:
             return False, "Invalid Token Payload"
         return True, data
