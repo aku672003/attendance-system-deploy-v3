@@ -253,6 +253,7 @@ const TaskManagerV2 = {
         this.currentTask = task;
         document.getElementById('detailV2Title').textContent = task.title;
         document.getElementById('detailV2Desc').textContent = task.description || 'No description.';
+        this.hideAddStepInput();
 
         const priorityEl = document.getElementById('detailV2Priority');
         const prio = (task.priority || 'P3').toUpperCase();
@@ -962,8 +963,31 @@ const TaskManagerV2 = {
         }
     },
 
-    async addStepPrompt() {
-        const stepText = prompt("Enter step description:");
+    showAddStepInput() {
+        const wrap = document.getElementById('tmV2AddStepInputWrap');
+        const trigger = document.getElementById('tmV2AddStepTrigger');
+        const input = document.getElementById('tmV2NewStepInput');
+        if (wrap && trigger && input) {
+            wrap.classList.remove('hidden');
+            trigger.classList.add('hidden');
+            input.focus();
+        }
+    },
+
+    hideAddStepInput() {
+        const wrap = document.getElementById('tmV2AddStepInputWrap');
+        const trigger = document.getElementById('tmV2AddStepTrigger');
+        const input = document.getElementById('tmV2NewStepInput');
+        if (wrap && trigger && input) {
+            wrap.classList.add('hidden');
+            trigger.classList.remove('hidden');
+            input.value = '';
+        }
+    },
+
+    async saveNewStep() {
+        const input = document.getElementById('tmV2NewStepInput');
+        const stepText = input ? input.value.trim() : '';
         if (!stepText || !this.currentTask) return;
 
         showLoading("Adding step...");
@@ -974,10 +998,14 @@ const TaskManagerV2 = {
                 user_id: (window.currentUser || currentUser).id
             });
             if (res.success) {
+                this.hideAddStepInput();
                 this.openDetail(this.currentTask.id);
+            } else {
+                showNotification(res.message || "Failed to add step", "error");
             }
         } catch (err) {
             console.error(err);
+            showNotification("Error adding step", "error");
         } finally {
             hideLoading();
         }

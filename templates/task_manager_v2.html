@@ -98,8 +98,14 @@
                 <section>
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <h3>Steps / Milestones</h3>
-                        <button class="btn btn-sm btn-outline" onclick="TaskManagerV2.addStepPrompt()">+ Add
-                            Step</button>
+                        <button id="tmV2AddStepTrigger" class="btn btn-sm btn-outline" onclick="TaskManagerV2.showAddStepInput()">+ Add Step</button>
+                    </div>
+                    <div id="tmV2AddStepInputWrap" class="tm-v2-step-add-wrap hidden">
+                        <input type="text" id="tmV2NewStepInput" placeholder="Enter step description..." onkeyup="if(event.key==='Enter') TaskManagerV2.saveNewStep()">
+                        <div class="tm-v2-step-add-actions">
+                            <button class="btn btn-secondary btn-sm" onclick="TaskManagerV2.hideAddStepInput()">Cancel</button>
+                            <button class="btn btn-primary btn-sm" onclick="TaskManagerV2.saveNewStep()">Add Step</button>
+                        </div>
                     </div>
                     <div id="detailV2Steps" class="tm-v2-steps-list">
                         <!-- Steps rendered here -->

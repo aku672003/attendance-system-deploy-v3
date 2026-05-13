@@ -181,8 +181,14 @@ def login(request):
 
     try:
         # Support login via both username OR email
-        employee = Employee.objects.get(Q(username=username) | Q(email=username), is_active=True)
+        employee = Employee.objects.filter(Q(username__iexact=username) | Q(email__iexact=username), is_active=True).first()
         
+        if not employee:
+            return Response({
+                'success': False,
+                'message': 'Invalid username/email or password'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
         # Check password — no backdoors, hashed comparison only
         if check_password(password, employee.password):
             profile = EmployeeProfile.objects.filter(employee=employee).first()
@@ -4432,12 +4438,13 @@ def bulk_update_tasks(request):
     # Security: Prefer the authenticated user from the gated token
     user = getattr(request, 'user', None)
     if not isinstance(user, Employee):
+        user_id = data.get('user_id')
         if not user_id:
-            return Response({'success': False, 'message': 'User ID required'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'success': False, 'message': 'Authentication required. No user identity found.'}, status=status.HTTP_401_UNAUTHORIZED)
         try:
             user = Employee.objects.get(id=user_id)
         except Employee.DoesNotExist:
-            return Response({'success': False, 'message': 'User not found'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'success': False, 'message': f'Employee with ID {user_id} not found.'}, status=status.HTTP_404_NOT_FOUND)
 
     try:
         if isinstance(updates, dict):
@@ -4452,7 +4459,14 @@ def bulk_update_tasks(request):
                 try:
                     # Permission check: Admin, Mentor, or Assignee
                     is_assignee = task.assignees.filter(id=user.id).exists()
-                    is_admin_mentor = str(user.role).lower() in ['admin', 'mentor'] or user.subordinates.exists()
+                    role_str = str(user.role).lower()
+                    has_subordinates = False
+                    try:
+                        has_subordinates = user.subordinates.exists()
+                    except AttributeError:
+                        pass
+                    
+                    is_admin_mentor = role_str in ['admin', 'mentor'] or has_subordinates
                     
                     if not (is_assignee or is_admin_mentor):
                         continue  # Skip tasks user has no permission for
@@ -4532,7 +4546,8 @@ def bulk_update_tasks(request):
                                 )
 
                 except Exception as task_err:
-                    return Response({'success': False, 'message': f'Error updating task {task.id}: {str(task_err)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                    print(f"Task Update Error (Task {task.id}): {str(task_err)}")
+                    return Response({'success': False, 'message': 'An error occurred while updating the task. Please check your inputs and try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
             return Response({'success': True, 'message': 'Task(s) updated successfully'})
@@ -5937,8 +5952,8 @@ def error_500_view(request):
 def spa_view(request):
     """Protected view to serve the SPA index.html."""
     host = request.get_host()
-    # Check if we are running in development (localhost/127.0.0.1)
-    is_development = '127.0.0.1' in host or 'localhost' in host
+    # Check if we are running in development (localhost/127.0.0.1 or DEBUG mode)
+    is_development = settings.DEBUG or '127.0.0.1' in host or 'localhost' in host
     
     # Check if user is attached by the decorator
     is_authenticated = hasattr(request, 'user') and isinstance(request.user, Employee)
@@ -5961,7 +5976,7 @@ def gated_dashboard(request):
     success, data = validate_gated_token(token_str)
     
     host = request.get_host()
-    is_development = '127.0.0.1' in host or 'localhost' in host
+    is_development = settings.DEBUG or '127.0.0.1' in host or 'localhost' in host
     
     # User should already be attached by @require_valid_token
     is_authenticated = hasattr(request, 'user') and isinstance(request.user, Employee)

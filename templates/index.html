@@ -14,7 +14,7 @@
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Orbitron:wght@400;700;900&family=Dancing+Script:wght@700&family=Pacifico&family=Tilt+Prism&family=Bungee+Spice&family=Nabla&display=swap"
         rel="stylesheet">
     <!-- Maps API -->
-    <script src="https://maps.googleapis.com/maps/api/js?key={{ maps_api_key }}&libraries=places"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key={{ maps_api_key }}&libraries=places&loading=async" async></script>
     <script>
         window.MAPS_API_KEY = "{{ maps_api_key }}";
         window.GATED_TOKEN = "{{ gated_token|escapejs }}";
@@ -263,7 +263,7 @@
 
 <body>
     <!-- Login Screen -->
-    <div id="loginScreen" class="screen {% if not is_authenticated or is_development %}active{% endif %}">
+    <div id="loginScreen" class="screen {% if not is_authenticated %}active{% endif %}">
         <div class="login-container">
             <div class="login-card">
                 <div class="login-title">HANUSPHERE</div>
@@ -296,8 +296,6 @@
                 </div>
             </div>
         </div>
-    </div>
-
     </div>
 
     <!-- Forgot Password Screen -->
@@ -604,8 +602,8 @@
 
 
 
-    <!-- Dashboard Screen -->
-    <div id="dashboardScreen" class="screen {% if is_authenticated and not is_development %}active{% endif %}">
+        <!-- Dashboard Screen -->
+        <div id="dashboardScreen" class="screen {% if is_authenticated %}active{% endif %}">
         <div class="container">
             <div class="header">
                 <div class="header-title-group">

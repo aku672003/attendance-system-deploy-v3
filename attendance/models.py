@@ -365,6 +365,9 @@ class TaskStep(models.Model):
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='steps')
     text = models.CharField(max_length=255)
     is_completed = models.BooleanField(default=False)
+    actual_hours = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    estimated_hours = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

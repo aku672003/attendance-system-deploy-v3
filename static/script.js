@@ -80,9 +80,12 @@ document.addEventListener('DOMContentLoaded', async function initApp() {
     const today = getCurrentISTDate().toISOString().split('T')[0];
 
     const sessionUser = sessionStorage.getItem('attendanceUser');
-    // On local development, if a gated token is provided, we skip the session auto-login 
-    // to "enable" the login page as requested.
-    const shouldSkipSession = window.IS_DEVELOPMENT && window.GATED_TOKEN;
+    // On local development, we only skip the session auto-login if a REAL gated token 
+    // is provided in the URL (not "None", "", or "undefined").
+    const shouldSkipSession = window.IS_DEVELOPMENT && window.GATED_TOKEN && 
+                             window.GATED_TOKEN !== "None" && 
+                             window.GATED_TOKEN !== "undefined" && 
+                             window.GATED_TOKEN !== "";
 
     if (sessionUser && !shouldSkipSession) {
         try {
@@ -145,6 +148,7 @@ document.addEventListener('DOMContentLoaded', async function initApp() {
                 currentUser = result.user;
                 sessionStorage.setItem('attendanceUser', JSON.stringify(currentUser));
                 sessionStorage.setItem('attendanceLoginTime', Date.now().toString());
+                sessionStorage.setItem('gatedToken', window.GATED_TOKEN);
 
                 // Initialize session
                 if (currentUser.theme_settings) applyUserTheme(currentUser.theme_settings);
@@ -163,6 +167,12 @@ document.addEventListener('DOMContentLoaded', async function initApp() {
                 startDashboardLocationWatch();
                 checkAndUpdateLocationStatus(true);
                 setupPushNotifications(currentUser.id);
+                
+                // Clean the URL to remove the token from the address bar after successful login
+                if (window.history.replaceState) {
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+
                 hideLoading();
             } else {
                 console.warn('Auto-login failed:', result.message);
@@ -12587,6 +12597,7 @@ async function loadMentorStatus() {
     }
 }
 
+/**
  * Safely removes a manually created modal and restores background scroll
  * if no other modals are active.
  */
