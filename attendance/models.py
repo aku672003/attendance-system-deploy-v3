@@ -338,7 +338,9 @@ class Task(models.Model):
     overseers = models.ManyToManyField(Employee, related_name='overseeing_tasks', blank=True)
     started_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
-    
+    actual_total_hours = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    estimated_total_hours = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
     class Meta:
         db_table = 'tasks'
         indexes = [

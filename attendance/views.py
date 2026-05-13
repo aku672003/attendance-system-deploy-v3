@@ -153,11 +153,13 @@ def get_current_user(request, requested_id=None, require_admin=False):
 
     # 3. If token user exists, enforce that they only access their own data
     # (Unless they are an admin or it's an admin-level request)
+    user_role = (token_user.role or '').lower()
+    
     if requested_id and str(requested_id) != str(token_user.id):
-        if token_user.role != 'admin':
+        if user_role != 'admin':
             return None # Unauthorized
             
-    if require_admin and token_user.role != 'admin':
+    if require_admin and user_role != 'admin':
         return None
 
     return token_user
@@ -430,7 +432,7 @@ def mark_attendance(request):
     
     # 0. Restriction check: 9 AM - 6 PM for non-Surveyors
     assignment = user.get_current_assignment()
-    is_admin = user.role == 'admin'
+    is_admin = (user.role or '').lower() == 'admin'
     
     if assignment['department'] != 'Surveyors' and not is_admin:
         current_hour = now_local.hour
@@ -3205,7 +3207,7 @@ def get_notifications(request):
     # Real notifications are handled by the Notification model.
 
     # 3. Pending requests (for admins/mentors)
-    if user.role == 'admin':
+    if (user.role or '').lower() == 'admin':
         pending_requests_count = EmployeeRequest.objects.filter(
             status='pending'
         ).count()
@@ -3575,9 +3577,9 @@ def active_tasks(request):
             # Admin sees all in-progress tasks
             pass
         elif is_emp_mentor:
-            query = query.filter(Q(assignees__mentors=user) | Q(mentor=user) | Q(created_by=user) | Q(assignees=user)).distinct()
+            query = query.filter(Q(assignees__mentors=user) | Q(mentors=user) | Q(created_by=user) | Q(assignees=user)).distinct()
         else:
-            query = query.filter(Q(assignees=user) | Q(mentor=user)).distinct()
+            query = query.filter(Q(assignees=user) | Q(mentors=user)).distinct()
 
         active_count = query.count()
 
@@ -3735,7 +3737,8 @@ def _create_task_admin(data, creator, files=None):
     mentor_ids = [mid for mid in mentor_ids if mid and mid != 'none']
     
     # REQUIREMENT: If mentor creates task for team, they get selected automatically as mentor
-    if (creator.role == 'mentor' or creator.role == 'admin' or creator.subordinates.exists()):
+    creator_role = (creator.role or '').lower()
+    if (creator_role == 'mentor' or creator_role == 'admin' or creator.subordinates.exists()):
         if str(creator.id) not in [str(mid) for mid in mentor_ids]:
             mentor_ids.append(creator.id)
 
@@ -3796,7 +3799,7 @@ def tasks_api(request):
             try:
                 emp = Employee.objects.get(id=employee_id)
 
-                if emp.role == 'admin':
+                if (emp.role or '').lower() == 'admin':
                     # ADMIN PATH - Now respects scope for consistency with Mentor view
                     scope = request.GET.get('scope')
                     if scope == 'my':
