@@ -1,49 +1,49 @@
 {
-    "average_rate": 69.0,
+    "average_rate": 67.94,
     "stability_factor": 0.7573,
     "dow_patterns": {
-        "0": 68.39,
-        "1": 69.17,
-        "2": 74.44,
-        "3": 74.33,
-        "4": 71.37,
-        "5": 49.31
+        "0": 67.33,
+        "1": 68.1,
+        "2": 73.3,
+        "3": 73.19,
+        "4": 70.27,
+        "5": 48.55
     },
     "data_points": 81,
-    "last_trained": "2026-05-13 16:37:12",
+    "last_trained": "2026-05-13 17:51:40",
     "ml_model_active": true,
     "version": "2.0.0 (SLM Engine)",
     "logs": [
         {
-            "timestamp": "16:36:15",
+            "timestamp": "17:51:35",
             "message": "Initializing SLM-powered intelligence training sequence..."
         },
         {
-            "timestamp": "16:36:15",
-            "message": "Accessing history for 64 personnel."
+            "timestamp": "17:51:35",
+            "message": "Accessing history for 65 personnel."
         },
         {
-            "timestamp": "16:36:15",
+            "timestamp": "17:51:35",
             "message": "Retrieved 118 days of historical weighted vectors."
         },
         {
-            "timestamp": "16:36:15",
+            "timestamp": "17:51:35",
             "message": "Step 1/3: Training OrganizationSTLM..."
         },
         {
-            "timestamp": "16:36:17",
+            "timestamp": "17:51:37",
             "message": "STLM Organizational Model trained"
         },
         {
-            "timestamp": "16:36:17",
+            "timestamp": "17:51:37",
             "message": "Step 2/3: Training IndividualPredictor..."
         },
         {
-            "timestamp": "16:37:12",
+            "timestamp": "17:51:40",
             "message": "Individual RF Model Trained successfully"
         },
         {
-            "timestamp": "16:37:12",
+            "timestamp": "17:51:40",
             "message": "Step 3/3: Updating organizational performance metrics..."
         }
     ]
