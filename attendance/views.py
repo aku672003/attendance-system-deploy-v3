@@ -5958,20 +5958,26 @@ def spa_view(request):
     # Check if user is attached by the decorator
     is_authenticated = hasattr(request, 'user') and isinstance(request.user, Employee)
     
+    token_str = request.GET.get('token') or request.COOKIES.get('gated_token')
     context = {
         'maps_api_key': settings.MAPS_API_KEY,
-        'gated_token': request.GET.get('token'),
+        'gated_token': token_str,
         'is_development': is_development,
         'is_authenticated': is_authenticated
     }
-    return render(request, 'index.html', context)
+    response = render(request, 'index.html', context)
+    if token_str:
+        # Set cookie to expire in 1 hour (3600 seconds)
+        # Note: httponly=False to allow JS logout to clear it
+        response.set_cookie('gated_token', token_str, max_age=3600, samesite='Lax')
+    return response
 
 
 
 @require_valid_token
 def gated_dashboard(request):
     """Entry point for gated access with token from portal."""
-    token_str = request.GET.get('token')
+    token_str = request.GET.get('token') or request.COOKIES.get('gated_token')
     from .security import validate_gated_token
     success, data = validate_gated_token(token_str)
     
@@ -5992,7 +5998,12 @@ def gated_dashboard(request):
         context['gated_user_id'] = data.get('user_id')
         context['is_gated'] = True
         
-    return render(request, 'index.html', context)
+    response = render(request, 'index.html', context)
+    if success and token_str:
+        # Set cookie to expire in 1 hour (3600 seconds)
+        # Note: httponly=False to allow JS logout to clear it
+        response.set_cookie('gated_token', token_str, max_age=3600, samesite='Lax')
+    return response
 
 
 @api_view(['GET'])

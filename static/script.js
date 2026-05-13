@@ -1133,6 +1133,9 @@ function logout() {
     sessionStorage.removeItem('attendanceLoginTime');
     sessionStorage.removeItem('gatedToken');
     window.GATED_TOKEN = null;
+    
+    // Clear cookie to prevent auto-login on refresh after logout
+    document.cookie = "gated_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
 
     // Show the login screen instead of reloading/redirecting
     // This allows the login page to be "restored" within the existing session

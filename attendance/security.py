@@ -30,8 +30,8 @@ def validate_gated_token(token):
 
     serializer = URLSafeTimedSerializer(configured_secret)
     try:
-        # Token is valid for 24 hours
-        data = serializer.loads(token, max_age=86400)
+        # Token is valid for 1 hour
+        data = serializer.loads(token, max_age=3600)
         if not isinstance(data, dict) or 'user_id' not in data or 'timestamp' not in data:
             return False, "Invalid Token Payload"
         return True, data
@@ -78,7 +78,8 @@ def require_valid_token(view_func):
     """
     @wraps(view_func)
     def _wrapped_view(request, *args, **kwargs):
-        token = request.GET.get('token')
+        # Check priority: GET param > Cookie
+        token = request.GET.get('token') or request.COOKIES.get('gated_token')
         is_development = _is_development()
 
         # Strictly require token presence for gated access, except in development
@@ -140,7 +141,8 @@ def require_gated_token_api(view_func):
     def _wrapped_view(request, *args, **kwargs):
         from django.http import JsonResponse
         # Check priority: Header > GET param > POST param > JSON body
-        token = request.headers.get('X-Gated-Token') or request.GET.get('token')
+        # Check priority: Header > GET param > Cookie > POST param > JSON body
+        token = request.headers.get('X-Gated-Token') or request.GET.get('token') or request.COOKIES.get('gated_token')
         
         if not token and request.method in ['POST', 'PUT', 'PATCH']:
             token = request.POST.get('token')
