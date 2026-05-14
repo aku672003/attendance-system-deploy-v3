@@ -254,6 +254,12 @@ const TaskManagerV2 = {
         document.getElementById('detailV2Title').textContent = task.title;
         document.getElementById('detailV2Desc').textContent = task.description || 'No description.';
         this.hideAddStepInput();
+        
+        // Loophole fix: Hide add step button if completed
+        const addStepBtn = document.getElementById('tmV2AddStepTrigger');
+        if (addStepBtn) {
+            addStepBtn.style.display = task.status === 'completed' ? 'none' : 'block';
+        }
 
         const priorityEl = document.getElementById('detailV2Priority');
         const prio = (task.priority || 'P3').toUpperCase();
@@ -303,9 +309,12 @@ const TaskManagerV2 = {
 
         // Steps
         const stepsContainer = document.getElementById('detailV2Steps');
+        const isCompleted = task.status === 'completed';
         stepsContainer.innerHTML = (task.steps || []).map(s => `
             <div class="tm-v2-step-item">
-                <input type="checkbox" class="tm-v2-step-check" ${s.is_completed ? 'checked' : ''} onchange="TaskManagerV2.toggleStep(${task.id}, ${s.id}, this.checked)">
+                <input type="checkbox" class="tm-v2-step-check" ${s.is_completed ? 'checked' : ''} 
+                    ${isCompleted ? 'disabled' : ''}
+                    onchange="TaskManagerV2.toggleStep(${task.id}, ${s.id}, this.checked)">
                 <span class="tm-v2-step-text ${s.is_completed ? 'completed' : ''}">${s.text || s.title}</span>
             </div>
         `).join('') || '<p class="text-muted">No steps defined.</p>';
@@ -710,6 +719,10 @@ const TaskManagerV2 = {
     },
 
     async toggleStep(taskId, stepId, isCompleted) {
+        if (this.currentTask && this.currentTask.status === 'completed') {
+            showNotification("Cannot modify steps of a completed task", "warning");
+            return;
+        }
         try {
             const res = await apiCall(`bulk-update-tasks`, 'POST', {
                 task_ids: [taskId],
@@ -986,6 +999,11 @@ const TaskManagerV2 = {
     },
 
     async saveNewStep() {
+        if (this.currentTask && this.currentTask.status === 'completed') {
+            showNotification("Cannot add steps to a completed task", "warning");
+            this.hideAddStepInput();
+            return;
+        }
         const input = document.getElementById('tmV2NewStepInput');
         const stepText = input ? input.value.trim() : '';
         if (!stepText || !this.currentTask) return;

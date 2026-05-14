@@ -7456,7 +7456,7 @@ function openMapPicker() {
 function updatePickerMarker(lat, lng) {
     tempPickerLat = lat;
     tempPickerLng = lng;
-    if (officeMarker) officeMarker.setLatLng([lat, lng]);
+    if (officeMarker) officeMarker.setPosition({ lat: lat, lng: lng });
     document.getElementById('mapPickerStatus').textContent = `Selected: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
 }
 
@@ -7482,7 +7482,10 @@ function useCurrentLocation() {
             const lat = position.coords.latitude;
             const lng = position.coords.longitude;
             updatePickerMarker(lat, lng);
-            officeMap.setView([lat, lng], 16);
+            if (officeMap) {
+                officeMap.setCenter({ lat: lat, lng: lng });
+                officeMap.setZoom(16);
+            }
             btn.innerHTML = originalContent;
             btn.disabled = false;
             showNotification("Location detected", "success");

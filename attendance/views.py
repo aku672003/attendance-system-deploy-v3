@@ -4471,6 +4471,10 @@ def bulk_update_tasks(request):
                     if not (is_assignee or is_admin_mentor):
                         continue  # Skip tasks user has no permission for
 
+                    # Loophole Fix: Prevent modifications to completed tasks by standard users
+                    if task.status == 'completed' and not is_admin_mentor:
+                        continue # Skip modifications for completed tasks if not admin/mentor
+
                     # Handle Step Toggles
                     if 'steps_toggle' in updates:
                         for step_data in updates['steps_toggle']:
