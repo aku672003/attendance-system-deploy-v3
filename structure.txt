@@ -1,0 +1,499 @@
+.
+├── AI_CONTEXT.md
+├── attendance
+│   ├── admin.py
+│   ├── apps.py
+│   ├── attendance_prediction.py
+│   ├── fixtures
+│   │   └── office_locations.json
+│   ├── __init__.py
+│   ├── intelligence_hub.py
+│   ├── management
+│   │   ├── commands
+│   │   │   ├── auto_mark_absent.py
+│   │   │   ├── fix_attendance_hours.py
+│   │   │   ├── __init__.py
+│   │   │   ├── send_attendance_reminders.py
+│   │   │   └── train_forecast_model.py
+│   │   ├── __init__.py
+│   │   └── train_model.sh
+│   ├── migrations
+│   │   ├── 0001_initial.py
+│   │   ├── 0002_task.py
+│   │   ├── 0003_leaverequest.py
+│   │   ├── 0004_employeerequest_and_more.py
+│   │   ├── 0005_alter_employeerequest_request_type.py
+│   │   ├── 0006_employeerequest_half_day_period.py
+│   │   ├── 0007_birthdaywish.py
+│   │   ├── 0008_employee_manager_alter_employee_role_taskcomment.py
+│   │   ├── 0009_task_manager.py
+│   │   ├── 0010_task_accuracy_alter_attendancerecord_status.py
+│   │   ├── 0011_team.py
+│   │   ├── 0012_task_group_id.py
+│   │   ├── 0013_remove_task_tasks_assigne_00feb5_idx_task_assignees_and_more.py
+│   │   ├── 0014_task_assigned_to.py
+│   │   ├── 0015_remove_task_assigned_to.py
+│   │   ├── 0016_task_assigned_to.py
+│   │   ├── 0017_remove_task_assigned_to.py
+│   │   ├── 0018_attendancerecord_lunch_end_time_and_more.py
+│   │   ├── 0019_attendancerecord_lunch_end_lat_and_more.py
+│   │   ├── 0020_temporarytag.py
+│   │   ├── 0021_traininglog.py
+│   │   ├── 0022_task_completed_at_task_started_at.py
+│   │   ├── 0023_remove_attendancerecord_lunch_end_lat_and_more.py
+│   │   ├── 0024_multiple_managers_migration.py
+│   │   ├── 0025_alter_employeerequest_request_type.py
+│   │   ├── 0026_task_overseers.py
+│   │   ├── 0027_employeeprofile_avatar_emoji_and_more.py
+│   │   ├── 0028_alter_taskcomment_created_at.py
+│   │   ├── 0029_avatarasset_memoji.py
+│   │   ├── 0030_employeeprofile_avatar_url_memoji_avatar_url.py
+│   │   ├── 0031_rename_managers_employee_mentors_and_more.py
+│   │   ├── 0032_pushsubscription.py
+│   │   ├── 0033_alter_employeerequest_request_type.py
+│   │   ├── 0034_alter_task_priority_taskhistory_taskstep.py
+│   │   ├── 0035_notification.py
+│   │   ├── 0036_task_start_date.py
+│   │   ├── 0037_meeting.py
+│   │   ├── 0038_alter_attendancerecord_total_hours.py
+│   │   ├── 0039_holiday_holidayupload_userholiday.py
+│   │   ├── 0040_employeeprofile_taken_cl_employeeprofile_total_cl.py
+│   │   ├── 0041_holiday_is_working_day.py
+│   │   ├── 0042_taskattachment.py
+│   │   ├── 0043_remove_task_mentor_task_mentors.py
+│   │   ├── 0044_alter_task_created_at.py
+│   │   ├── 0045_task_actual_total_hours_task_estimated_total_hours.py
+│   │   └── __init__.py
+│   ├── ml_models
+│   │   ├── attendance_model.joblib
+│   │   ├── individual_rf_model.joblib
+│   │   ├── model_state.json
+│   │   ├── org_stlm_model.joblib
+│   │   └── org_stlm_state.json
+│   ├── models.py
+│   ├── scheduler.py
+│   ├── security.py
+│   ├── serializers.py
+│   ├── urls.py
+│   ├── vapid_setup.py
+│   └── views.py
+├── attendance_system
+│   ├── asgi.py
+│   ├── __init__.py
+│   ├── settings.py
+│   ├── urls.py
+│   └── wsgi.py
+├── check_db.py
+├── check_schema.py
+├── db.sqlite3
+├── generate_assets.sh
+├── generate_gated_token.py
+├── generate_vapid.py
+├── logs
+├── manage.py
+├── requirements.txt
+├── scripts
+│   └── train_model.sh
+├── static
+│   ├── assets
+│   │   └── memoji
+│   │       ├── body_type
+│   │       │   ├── body_athletic.svg
+│   │       │   ├── body_heavy.svg
+│   │       │   ├── body_slim.svg
+│   │       │   └── body_standard.svg
+│   │       ├── brows
+│   │       │   ├── brows_angular.svg
+│   │       │   ├── brows_curved.svg
+│   │       │   ├── brows_flat.svg
+│   │       │   ├── brows_thick.svg
+│   │       │   └── brows_thin.svg
+│   │       ├── clothing
+│   │       │   ├── cloth_dress.svg
+│   │       │   ├── cloth_hoodie.svg
+│   │       │   ├── cloth_shirt.svg
+│   │       │   ├── cloth_suit.svg
+│   │       │   └── cloth_tshirt.svg
+│   │       ├── ears
+│   │       │   ├── ears_large.svg
+│   │       │   ├── ears_medium.svg
+│   │       │   ├── ears_pierced.svg
+│   │       │   └── ears_small.svg
+│   │       ├── eyes
+│   │       │   ├── eyes_almond.svg
+│   │       │   ├── eyes_droopy.svg
+│   │       │   ├── eyes_hooded.svg
+│   │       │   ├── eyes_narrow.svg
+│   │       │   └── eyes_round.svg
+│   │       ├── eyewear
+│   │       │   ├── glass_aviator.svg
+│   │       │   ├── glass_none.svg
+│   │       │   ├── glass_rect.svg
+│   │       │   ├── glass_round.svg
+│   │       │   └── glass_square.svg
+│   │       ├── facial_hair
+│   │       │   ├── beard_goatee.svg
+│   │       │   ├── beard_heavy.svg
+│   │       │   ├── beard_light.svg
+│   │       │   ├── beard_mustache.svg
+│   │       │   └── beard_none.svg
+│   │       ├── hairstyle
+│   │       │   ├── hair_long_1.svg
+│   │       │   ├── hair_long_2.svg
+│   │       │   ├── hair_long_3.svg
+│   │       │   ├── hair_long_4.svg
+│   │       │   ├── hair_med_1.svg
+│   │       │   ├── hair_med_2.svg
+│   │       │   ├── hair_med_3.svg
+│   │       │   ├── hair_med_4.svg
+│   │       │   ├── hair_short_1.svg
+│   │       │   ├── hair_short_2.svg
+│   │       │   ├── hair_short_3.svg
+│   │       │   ├── hair_short_4.svg
+│   │       │   └── hair_short_5.svg
+│   │       ├── head
+│   │       │   ├── head_oval.svg
+│   │       │   ├── head_pointed.svg
+│   │       │   ├── head_round.svg
+│   │       │   ├── head_slim.svg
+│   │       │   └── head_square.svg
+│   │       ├── headwear
+│   │       │   ├── hat_beanie.svg
+│   │       │   ├── hat_beret.svg
+│   │       │   ├── hat_cap.svg
+│   │       │   ├── hat_fedora.svg
+│   │       │   └── hat_none.svg
+│   │       ├── mouth
+│   │       │   ├── mouth_full.svg
+│   │       │   ├── mouth_neutral.svg
+│   │       │   ├── mouth_pout.svg
+│   │       │   ├── mouth_smile.svg
+│   │       │   └── mouth_thin.svg
+│   │       ├── nose
+│   │       │   ├── nose_flat.svg
+│   │       │   ├── nose_large.svg
+│   │       │   ├── nose_medium.svg
+│   │       │   ├── nose_sharp.svg
+│   │       │   └── nose_small.svg
+│   │       └── skin
+│   │           ├── cheeks_blush.svg
+│   │           ├── cheeks_defined.svg
+│   │           ├── cheeks_none.svg
+│   │           ├── spot_forehead.svg
+│   │           ├── spot_left.svg
+│   │           ├── spot_none.svg
+│   │           ├── spot_right.svg
+│   │           ├── tone_dark.svg
+│   │           ├── tone_deep.svg
+│   │           ├── tone_light.svg
+│   │           ├── tone_medium_dark.svg
+│   │           ├── tone_medium_light.svg
+│   │           └── tone_medium.svg
+│   ├── images
+│   │   ├── marker-female.png
+│   │   └── marker-user.png
+│   ├── predictive_card.css
+│   ├── predictive_card.js
+│   ├── script.js
+│   ├── style.css
+│   ├── sw.js
+│   ├── task_manager_v2.css
+│   └── task_manager_v2.js
+├── staticfiles
+│   ├── admin
+│   │   ├── css
+│   │   │   ├── autocomplete.css
+│   │   │   ├── base.css
+│   │   │   ├── changelists.css
+│   │   │   ├── dark_mode.css
+│   │   │   ├── dashboard.css
+│   │   │   ├── forms.css
+│   │   │   ├── login.css
+│   │   │   ├── nav_sidebar.css
+│   │   │   ├── responsive.css
+│   │   │   ├── responsive_rtl.css
+│   │   │   ├── rtl.css
+│   │   │   ├── unusable_password_field.css
+│   │   │   ├── vendor
+│   │   │   │   └── select2
+│   │   │   │       ├── LICENSE-SELECT2.md
+│   │   │   │       ├── select2.css
+│   │   │   │       └── select2.min.css
+│   │   │   └── widgets.css
+│   │   ├── img
+│   │   │   ├── calendar-icons.svg
+│   │   │   ├── icon-addlink.svg
+│   │   │   ├── icon-alert-dark.svg
+│   │   │   ├── icon-alert.svg
+│   │   │   ├── icon-calendar.svg
+│   │   │   ├── icon-changelink.svg
+│   │   │   ├── icon-clock.svg
+│   │   │   ├── icon-debug-dark.svg
+│   │   │   ├── icon-debug.svg
+│   │   │   ├── icon-deletelink.svg
+│   │   │   ├── icon-hidelink.svg
+│   │   │   ├── icon-info-dark.svg
+│   │   │   ├── icon-info.svg
+│   │   │   ├── icon-no-dark.svg
+│   │   │   ├── icon-no.svg
+│   │   │   ├── icon-unknown-alt.svg
+│   │   │   ├── icon-unknown.svg
+│   │   │   ├── icon-viewlink.svg
+│   │   │   ├── icon-yes-dark.svg
+│   │   │   ├── icon-yes.svg
+│   │   │   ├── inline-delete.svg
+│   │   │   ├── README.md
+│   │   │   ├── search.svg
+│   │   │   ├── selector-icons.svg
+│   │   │   ├── sorting-icons.svg
+│   │   │   ├── tooltag-add.svg
+│   │   │   └── tooltag-arrowright.svg
+│   │   └── js
+│   │       ├── actions.js
+│   │       ├── admin
+│   │       │   ├── DateTimeShortcuts.js
+│   │       │   └── RelatedObjectLookups.js
+│   │       ├── autocomplete.js
+│   │       ├── calendar.js
+│   │       ├── cancel.js
+│   │       ├── change_form.js
+│   │       ├── core.js
+│   │       ├── filters.js
+│   │       ├── inlines.js
+│   │       ├── jquery.init.js
+│   │       ├── nav_sidebar.js
+│   │       ├── popup_response.js
+│   │       ├── prepopulate_init.js
+│   │       ├── prepopulate.js
+│   │       ├── SelectBox.js
+│   │       ├── SelectFilter2.js
+│   │       ├── theme.js
+│   │       ├── urlify.js
+│   │       └── vendor
+│   │           ├── jquery
+│   │           │   ├── jquery.js
+│   │           │   ├── jquery.min.js
+│   │           │   └── LICENSE.txt
+│   │           ├── select2
+│   │           │   ├── i18n
+│   │           │   │   ├── af.js
+│   │           │   │   ├── ar.js
+│   │           │   │   ├── az.js
+│   │           │   │   ├── bg.js
+│   │           │   │   ├── bn.js
+│   │           │   │   ├── bs.js
+│   │           │   │   ├── ca.js
+│   │           │   │   ├── cs.js
+│   │           │   │   ├── da.js
+│   │           │   │   ├── de.js
+│   │           │   │   ├── dsb.js
+│   │           │   │   ├── el.js
+│   │           │   │   ├── en.js
+│   │           │   │   ├── es.js
+│   │           │   │   ├── et.js
+│   │           │   │   ├── eu.js
+│   │           │   │   ├── fa.js
+│   │           │   │   ├── fi.js
+│   │           │   │   ├── fr.js
+│   │           │   │   ├── gl.js
+│   │           │   │   ├── he.js
+│   │           │   │   ├── hi.js
+│   │           │   │   ├── hr.js
+│   │           │   │   ├── hsb.js
+│   │           │   │   ├── hu.js
+│   │           │   │   ├── hy.js
+│   │           │   │   ├── id.js
+│   │           │   │   ├── is.js
+│   │           │   │   ├── it.js
+│   │           │   │   ├── ja.js
+│   │           │   │   ├── ka.js
+│   │           │   │   ├── km.js
+│   │           │   │   ├── ko.js
+│   │           │   │   ├── lt.js
+│   │           │   │   ├── lv.js
+│   │           │   │   ├── mk.js
+│   │           │   │   ├── ms.js
+│   │           │   │   ├── nb.js
+│   │           │   │   ├── ne.js
+│   │           │   │   ├── nl.js
+│   │           │   │   ├── pl.js
+│   │           │   │   ├── ps.js
+│   │           │   │   ├── pt-BR.js
+│   │           │   │   ├── pt.js
+│   │           │   │   ├── ro.js
+│   │           │   │   ├── ru.js
+│   │           │   │   ├── sk.js
+│   │           │   │   ├── sl.js
+│   │           │   │   ├── sq.js
+│   │           │   │   ├── sr-Cyrl.js
+│   │           │   │   ├── sr.js
+│   │           │   │   ├── sv.js
+│   │           │   │   ├── th.js
+│   │           │   │   ├── tk.js
+│   │           │   │   ├── tr.js
+│   │           │   │   ├── uk.js
+│   │           │   │   ├── vi.js
+│   │           │   │   ├── zh-CN.js
+│   │           │   │   └── zh-TW.js
+│   │           │   ├── LICENSE.md
+│   │           │   ├── select2.full.js
+│   │           │   └── select2.full.min.js
+│   │           └── xregexp
+│   │               ├── LICENSE.txt
+│   │               ├── xregexp.js
+│   │               └── xregexp.min.js
+│   ├── assets
+│   │   └── memoji
+│   │       ├── body_type
+│   │       │   ├── body_athletic.svg
+│   │       │   ├── body_heavy.svg
+│   │       │   ├── body_slim.svg
+│   │       │   └── body_standard.svg
+│   │       ├── brows
+│   │       │   ├── brows_angular.svg
+│   │       │   ├── brows_curved.svg
+│   │       │   ├── brows_flat.svg
+│   │       │   ├── brows_thick.svg
+│   │       │   └── brows_thin.svg
+│   │       ├── clothing
+│   │       │   ├── cloth_dress.svg
+│   │       │   ├── cloth_hoodie.svg
+│   │       │   ├── cloth_shirt.svg
+│   │       │   ├── cloth_suit.svg
+│   │       │   └── cloth_tshirt.svg
+│   │       ├── ears
+│   │       │   ├── ears_large.svg
+│   │       │   ├── ears_medium.svg
+│   │       │   ├── ears_pierced.svg
+│   │       │   └── ears_small.svg
+│   │       ├── eyes
+│   │       │   ├── eyes_almond.svg
+│   │       │   ├── eyes_droopy.svg
+│   │       │   ├── eyes_hooded.svg
+│   │       │   ├── eyes_narrow.svg
+│   │       │   └── eyes_round.svg
+│   │       ├── eyewear
+│   │       │   ├── glass_aviator.svg
+│   │       │   ├── glass_none.svg
+│   │       │   ├── glass_rect.svg
+│   │       │   ├── glass_round.svg
+│   │       │   └── glass_square.svg
+│   │       ├── facial_hair
+│   │       │   ├── beard_goatee.svg
+│   │       │   ├── beard_heavy.svg
+│   │       │   ├── beard_light.svg
+│   │       │   ├── beard_mustache.svg
+│   │       │   └── beard_none.svg
+│   │       ├── hairstyle
+│   │       │   ├── hair_long_1.svg
+│   │       │   ├── hair_long_2.svg
+│   │       │   ├── hair_long_3.svg
+│   │       │   ├── hair_long_4.svg
+│   │       │   ├── hair_med_1.svg
+│   │       │   ├── hair_med_2.svg
+│   │       │   ├── hair_med_3.svg
+│   │       │   ├── hair_med_4.svg
+│   │       │   ├── hair_short_1.svg
+│   │       │   ├── hair_short_2.svg
+│   │       │   ├── hair_short_3.svg
+│   │       │   ├── hair_short_4.svg
+│   │       │   └── hair_short_5.svg
+│   │       ├── head
+│   │       │   ├── head_oval.svg
+│   │       │   ├── head_pointed.svg
+│   │       │   ├── head_round.svg
+│   │       │   ├── head_slim.svg
+│   │       │   └── head_square.svg
+│   │       ├── headwear
+│   │       │   ├── hat_beanie.svg
+│   │       │   ├── hat_beret.svg
+│   │       │   ├── hat_cap.svg
+│   │       │   ├── hat_fedora.svg
+│   │       │   └── hat_none.svg
+│   │       ├── mouth
+│   │       │   ├── mouth_full.svg
+│   │       │   ├── mouth_neutral.svg
+│   │       │   ├── mouth_pout.svg
+│   │       │   ├── mouth_smile.svg
+│   │       │   └── mouth_thin.svg
+│   │       ├── nose
+│   │       │   ├── nose_flat.svg
+│   │       │   ├── nose_large.svg
+│   │       │   ├── nose_medium.svg
+│   │       │   ├── nose_sharp.svg
+│   │       │   └── nose_small.svg
+│   │       └── skin
+│   │           ├── cheeks_blush.svg
+│   │           ├── cheeks_defined.svg
+│   │           ├── cheeks_none.svg
+│   │           ├── spot_forehead.svg
+│   │           ├── spot_left.svg
+│   │           ├── spot_none.svg
+│   │           ├── spot_right.svg
+│   │           ├── tone_dark.svg
+│   │           ├── tone_deep.svg
+│   │           ├── tone_light.svg
+│   │           ├── tone_medium_dark.svg
+│   │           ├── tone_medium_light.svg
+│   │           └── tone_medium.svg
+│   ├── images
+│   │   ├── marker-female.png
+│   │   └── marker-user.png
+│   ├── predictive_card.css
+│   ├── predictive_card.js
+│   ├── rest_framework
+│   │   ├── css
+│   │   │   ├── bootstrap.min.css
+│   │   │   ├── bootstrap.min.css.map
+│   │   │   ├── bootstrap-theme.min.css
+│   │   │   ├── bootstrap-theme.min.css.map
+│   │   │   ├── bootstrap-tweaks.css
+│   │   │   ├── default.css
+│   │   │   ├── font-awesome-4.0.3.css
+│   │   │   └── prettify.css
+│   │   ├── fonts
+│   │   │   ├── fontawesome-webfont.eot
+│   │   │   ├── fontawesome-webfont.svg
+│   │   │   ├── fontawesome-webfont.ttf
+│   │   │   ├── fontawesome-webfont.woff
+│   │   │   ├── glyphicons-halflings-regular.eot
+│   │   │   ├── glyphicons-halflings-regular.svg
+│   │   │   ├── glyphicons-halflings-regular.ttf
+│   │   │   ├── glyphicons-halflings-regular.woff
+│   │   │   └── glyphicons-halflings-regular.woff2
+│   │   ├── img
+│   │   │   ├── glyphicons-halflings.png
+│   │   │   ├── glyphicons-halflings-white.png
+│   │   │   └── grid.png
+│   │   └── js
+│   │       ├── ajax-form.js
+│   │       ├── bootstrap.min.js
+│   │       ├── csrf.js
+│   │       ├── default.js
+│   │       ├── jquery-3.7.1.min.js
+│   │       ├── load-ajax-form.js
+│   │       └── prettify-min.js
+│   ├── script.js
+│   ├── style.css
+│   ├── sw.js
+│   ├── task_manager_v2.css
+│   └── task_manager_v2.js
+├── structure.txt
+├── templates
+│   ├── 400.html
+│   ├── 403.html
+│   ├── 404.html
+│   ├── 500.html
+│   ├── 502.html
+│   ├── 503.html
+│   ├── admin
+│   │   └── index.html
+│   ├── index.html
+│   └── task_manager_v2.html
+├── tmp
+│   ├── test_train.py
+│   ├── verify_training.py
+│   └── verify_training_v2.py
+└── uploads
+
+65 directories, 432 files

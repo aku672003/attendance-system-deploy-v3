@@ -304,6 +304,42 @@ class EmployeeDocument(models.Model):
         return f"{self.employee.username} - {self.doc_type}"
 
 
+class Project(models.Model):
+    STATUS_CHOICES = [
+        ('running', 'Running'),
+        ('completed', 'Completed'),
+        ('on_hold', 'On Hold'),
+    ]
+
+    name = models.CharField(max_length=200)
+    description = models.TextField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='running')
+    
+    # New fields requested by user
+    priority = models.CharField(max_length=20, choices=[('low', 'Low'), ('medium', 'Medium'), ('high', 'High'), ('critical', 'Critical')], default='medium')
+    client_facing = models.BooleanField(default=False)
+    technologies = models.CharField(max_length=255, null=True, blank=True)
+    project_owner = models.ForeignKey('Employee', on_delete=models.SET_NULL, null=True, blank=True, related_name='owned_projects')
+    assignees = models.ManyToManyField('Employee', blank=True, related_name='assigned_projects')
+    escalation_level = models.CharField(max_length=50, null=True, blank=True)
+    escalation_contacts = models.ManyToManyField('Employee', blank=True, related_name='escalation_projects')
+    sla_response_time = models.CharField(max_length=50, null=True, blank=True)
+    escalation_matrix = models.TextField(null=True, blank=True)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    
+    created_by = models.ForeignKey('Employee', on_delete=models.CASCADE, related_name='created_projects')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'projects'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.name} ({self.get_status_display()})"
+
+
 class Task(models.Model):
     STATUS_CHOICES = [
         ('todo', 'To Do'),
@@ -326,6 +362,7 @@ class Task(models.Model):
     description = models.TextField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='todo')
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='medium')
+    project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
 
     mentors = models.ManyToManyField(Employee, related_name='supervised_tasks', blank=True)
     created_by = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='created_tasks')
@@ -560,6 +597,7 @@ class Meeting(models.Model):
     description = models.TextField(null=True, blank=True)
     date = models.DateField()
     start_time = models.TimeField(null=True, blank=True)
+    project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name='meetings')
     created_by = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='created_meetings')
     participants = models.ManyToManyField(Employee, related_name='meetings')
     created_at = models.DateTimeField(auto_now_add=True)

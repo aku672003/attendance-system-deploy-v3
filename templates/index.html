@@ -933,6 +933,20 @@
                     </div>
                 </div>
 
+                <!-- Projects Card -->
+                <div class="stat-card" id="widget-admin-projects" onclick="openProjectsManager()" draggable="false">
+                    <div class="stat-card-title">📁 Projects</div>
+                    <div class="stat-card-value" id="totalProjects">0</div>
+                    <div class="stat-card-timing"><span id="runningProjects">0</span> running</div>
+                    <div class="stat-card-subtext"><span id="completedProjects">0</span> completed</div>
+                    <div class="widget-resize-controls" onclick="event.stopPropagation()">
+                        <button class="resize-btn" onclick="resizeWidget('widget-admin-projects', 'sm')">S</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-admin-projects', 'md')">M</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-admin-projects', 'lg')">L</button>
+                        <button class="resize-btn" onclick="resizeWidget('widget-admin-projects', 'xl')">XL</button>
+                    </div>
+                </div>
+
                 <!-- Intelligence Hub Card (Admin Version) -->
                 <div class="stat-card intelligence-hub-card widget-sm" id="intelligenceHubCard">
                     <div class="intelligence-hub-header">
@@ -2314,6 +2328,21 @@
                         style="height:48px;font-size:1rem;border-radius:12px;border:1px solid #e2e8f0;">
                 </div>
 
+                <div class="premium-field-group" style="margin-top:16px; display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="momLinkProjectCheck" style="width: 18px; height: 18px; cursor: pointer;" onchange="toggleMomProjectSelect(this.checked)">
+                    <label for="momLinkProjectCheck" class="premium-label" style="margin: 0; cursor: pointer; font-size: 0.95rem; font-weight: 600;">Link to a Project?</label>
+                </div>
+
+                <div id="momProjectSelectContainer" class="premium-field-group" style="margin-top:12px; display: none;">
+                    <label class="premium-label">Project</label>
+                    <div style="display: flex; gap: 10px;">
+                        <select id="momProject" class="form-control" style="height:48px;font-size:1rem;border-radius:12px;border:1px solid #e2e8f0; flex: 1;">
+                            <option value="">-- Select Project --</option>
+                        </select>
+                        <button id="momCreateProjectBtn" type="button" class="btn btn-sm" onclick="showCreateProjectForm(); closeModal('meetingMomModal'); openProjectsManager();" style="white-space: nowrap; border-radius: 12px;">+ New</button>
+                    </div>
+                </div>
+
                 <div class="form-row" style="margin-top:16px;">
                     <div class="premium-field-group">
                         <label class="premium-label">Meeting Date</label>
@@ -3280,9 +3309,9 @@
     <!-- External JavaScript -->
     <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     {% load static %}
-    <script src="{% static 'script.js' %}?v=1.1.6"></script>
+    <script src="{% static 'script.js' %}?v=1.2.0"></script>
     <script src="{% static 'predictive_card.js' %}?v=1.1.1"></script>
-    <script src="{% static 'task_manager_v2.js' %}?v=1.0.2"></script>
+    <script src="{% static 'task_manager_v2.js' %}?v=1.0.3"></script>
 
     <!-- ═══════════════════════════════════════════════════════════════════
          HOLIDAY MANAGEMENT — CSS + JS
@@ -4076,6 +4105,462 @@
             <!-- Rendered by JS -->
         </div>
     </div>
+    <!-- Projects Manager Modal -->
+    <div id="projectsManagerModal" class="premium-modal-container" style="z-index: 10000;">
+        <style>
+            #projectsManagerModal .form-control {
+                height: 42px !important;
+                padding: 8px 12px !important;
+                font-size: 14px !important;
+                border-radius: 10px !important;
+                border: 2px solid #e2e8f0 !important;
+                background: #f8fafc !important;
+                color: #1e293b !important;
+                line-height: 1.2 !important;
+            }
+            #projectsManagerModal select.form-control {
+                padding-top: 4px !important;
+                padding-bottom: 4px !important;
+            }
+            #projectsManagerModal textarea.form-control {
+                height: auto !important;
+                padding: 10px 12px !important;
+            }
+            
+            body.dark-mode #projectsManagerModal .form-control {
+                background: #1e293b !important;
+                border-color: #334155 !important;
+                color: #f8fafc !important;
+            }
+            
+            /* Premium card grid and card layouts */
+            .projects-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+                gap: 20px;
+                margin-top: 15px;
+            }
+            .project-card {
+                background: var(--card-bg, #ffffff);
+                border: 1px solid var(--border-color, #e2e8f0);
+                border-radius: 16px;
+                padding: 20px;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+                transition: transform 0.2s, box-shadow 0.2s;
+                position: relative;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                gap: 16px;
+                overflow: hidden;
+            }
+            body.dark-mode .project-card {
+                background: #1e293b !important;
+                border-color: #334155 !important;
+            }
+            .project-card:hover {
+                transform: translateY(-4px);
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            }
+            .project-card-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            .project-card-title {
+                font-size: 1.15rem;
+                font-weight: 700;
+                color: var(--text-color, #0f172a);
+                margin: 0;
+                line-height: 1.3;
+            }
+            body.dark-mode .project-card-title {
+                color: #f8fafc !important;
+            }
+            .project-card-badges {
+                display: flex;
+                gap: 6px;
+                flex-wrap: wrap;
+                margin-top: 4px;
+            }
+            .project-card-progress {
+                margin: 12px 0 6px 0;
+            }
+            .project-card-progress-bar {
+                height: 8px;
+                border-radius: 4px;
+                background: #f1f5f9;
+                overflow: hidden;
+                position: relative;
+            }
+            body.dark-mode .project-card-progress-bar {
+                background: #334155;
+            }
+            .project-card-progress-fill {
+                height: 100%;
+                border-radius: 4px;
+                background: linear-gradient(90deg, #3b82f6, #2563eb);
+                transition: width 0.4s ease;
+            }
+            .project-card-meta {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+                font-size: 0.85rem;
+                color: var(--text-muted, #64748b);
+                border-top: 1px dashed var(--border-color, #e2e8f0);
+                padding-top: 12px;
+            }
+            body.dark-mode .project-card-meta {
+                border-color: #334155;
+            }
+            .project-card-actions {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 8px;
+                margin-top: 8px;
+            }
+            
+            /* Radial progress dashboard styles */
+            .radial-progress-container circle {
+                transition: stroke-dashoffset 0.4s ease;
+            }
+            body.dark-mode .radial-progress-container circle {
+                stroke-color: #334155;
+            }
+            
+            /* Custom premium checkbox/radio list */
+            .premium-checkbox-list {
+                border: 2px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 10px;
+                height: 120px;
+                overflow-y: auto;
+                background: #f8fafc;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            body.dark-mode .premium-checkbox-list {
+                background: #1e293b;
+                border-color: #334155;
+                color: #f8fafc;
+            }
+            
+            .premium-checkbox-item {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                cursor: pointer;
+                font-size: 14px;
+                padding: 4px 6px;
+                border-radius: 6px;
+                transition: background 0.2s;
+                color: inherit;
+            }
+            
+            .premium-checkbox-item:hover {
+                background: rgba(0, 0, 0, 0.05);
+            }
+            
+            body.dark-mode .premium-checkbox-item:hover {
+                background: rgba(255, 255, 255, 0.05);
+            }
+            
+            .premium-checkbox-item input[type="checkbox"],
+            .premium-checkbox-item input[type="radio"] {
+                width: 16px;
+                height: 16px;
+                cursor: pointer;
+                margin: 0;
+            }
+        </style>
+        <div class="premium-modal-backdrop" onclick="closeProjectsManager()"></div>
+        <div class="premium-modal-content" style="max-width: 1200px; width: 95%; min-height: 500px;">
+            <div class="premium-modal-header">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <h3>📁 Projects Manager</h3>
+                    <span class="badge" id="projectsModalCount" style="background: var(--blue-100); color: var(--blue-800); border-radius: 12px; padding: 4px 10px;">0 Total</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <button class="btn btn-primary" onclick="showCreateProjectForm()" style="border-radius: 12px;">+ New Project</button>
+                    <button class="btn-icon-sm" onclick="closeProjectsManager()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">×</button>
+                </div>
+            </div>
+            
+            <div class="premium-modal-body">
+                <div id="projectsListContainer">
+                    <div id="projectsGrid" class="projects-grid">
+                        <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
+                            <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+                            <p style="margin-top: 15px; font-weight: 600;">Loading projects and calculating analytics...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="createProjectFormContainer" style="display: none; margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+                    <h4 style="margin-bottom: 16px;">Create New Project</h4>
+                    <form id="createProjectForm" onsubmit="handleCreateProject(event)">
+                        <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                            <div class="premium-field-group">
+                                <label class="premium-label">Project Name <span style="color:var(--error-color);">*</span></label>
+                                <input type="text" id="newProjectName" class="form-control" required style="height:42px; border-radius:10px;">
+                            </div>
+                            <div class="premium-field-group">
+                                <label class="premium-label">Status</label>
+                                <select id="newProjectStatus" class="form-control" style="height:42px; border-radius:10px;">
+                                    <option value="running">Running</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="on_hold">On Hold</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                            <div class="premium-field-group">
+                                <label class="premium-label">Priority</label>
+                                <select id="newProjectPriority" class="form-control" style="height:42px; border-radius:10px;">
+                                    <option value="low">Low</option>
+                                    <option value="medium" selected>Medium</option>
+                                    <option value="high">High</option>
+                                    <option value="critical">Critical</option>
+                                </select>
+                            </div>
+                            <div class="premium-field-group">
+                                <label class="premium-label">Start Date</label>
+                                <input type="date" id="newProjectStartDate" class="form-control" style="height:42px; border-radius:10px;">
+                            </div>
+                            <div class="premium-field-group">
+                                <label class="premium-label">End Date</label>
+                                <input type="date" id="newProjectEndDate" class="form-control" style="height:42px; border-radius:10px;">
+                            </div>
+                        </div>
+
+                        <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                            <div class="premium-field-group">
+                                <label class="premium-label">Project Owner</label>
+                                <input type="text" id="searchProjectOwner" class="form-control" placeholder="🔍 Search owners..." style="height:34px; font-size:0.8rem; border-radius:8px; margin-bottom:8px; padding: 4px 10px; border: 1px solid var(--border-color, #e2e8f0);" onkeyup="filterChecklist('searchProjectOwner', 'newProjectOwnerContainer')">
+                                <div id="newProjectOwnerContainer" class="premium-checkbox-list" style="max-height: 150px; overflow-y: auto;">
+                                    <!-- Populated by JS -->
+                                </div>
+                            </div>
+                            <div class="premium-field-group">
+                                <label class="premium-label">Assignees</label>
+                                <input type="text" id="searchProjectAssignee" class="form-control" placeholder="🔍 Search assignees..." style="height:34px; font-size:0.8rem; border-radius:8px; margin-bottom:8px; padding: 4px 10px; border: 1px solid var(--border-color, #e2e8f0);" onkeyup="filterChecklist('searchProjectAssignee', 'newProjectAssigneesContainer')">
+                                <div id="newProjectAssigneesContainer" class="premium-checkbox-list" style="max-height: 150px; overflow-y: auto;">
+                                    <!-- Populated by JS -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Escalation Matrix Section -->
+                        <div style="background: rgba(99, 102, 241, 0.05); border: 1px dashed var(--primary-color, #2563eb); border-radius: 14px; padding: 16px; margin-bottom: 20px;">
+                            <h4 style="margin: 0 0 12px 0; font-size: 0.95rem; font-weight: 700; color: var(--primary-color, #2563eb); display: flex; align-items: center; gap: 6px;">
+                                <span>🛡️</span> Escalation Matrix Builder
+                            </h4>
+                            
+                            <div class="form-row" style="display: grid; grid-template-columns: 1fr 2fr; gap: 16px; margin-bottom: 12px;">
+                                <div class="premium-field-group">
+                                    <label class="premium-label" style="font-size: 0.8rem;">Escalation Level</label>
+                                    <input type="text" id="newProjectEscLevel" class="form-control" placeholder="e.g. L1, L2" style="height:40px; border-radius:10px;">
+                                </div>
+                                <div class="premium-field-group">
+                                    <label class="premium-label" style="font-size: 0.8rem;">Escalation Contacts</label>
+                                    <input type="text" id="searchEscContact" class="form-control" placeholder="🔍 Search escalation contacts..." style="height:34px; font-size:0.8rem; border-radius:8px; margin-bottom:8px; padding: 4px 10px; border: 1px solid var(--border-color, #e2e8f0);" onkeyup="filterChecklist('searchEscContact', 'newProjectEscContactContainer')">
+                                    <div id="newProjectEscContactContainer" class="premium-checkbox-list" style="max-height: 110px; overflow-y: auto;">
+                                        <!-- Populated by JS -->
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-row" style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 16px; margin-bottom: 12px; align-items: flex-end;">
+                                <div class="premium-field-group">
+                                    <label class="premium-label" style="font-size: 0.8rem;">SLA Response Time</label>
+                                    <input type="text" id="newProjectSla" class="form-control" placeholder="e.g. 2 Hours, 24 Hours" style="height:40px; border-radius:10px;">
+                                </div>
+                                <button type="button" class="btn btn-primary" onclick="addEscalationMatrixStep()" style="height: 40px; border-radius: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--primary-color, #2563eb); border: none; color: white;">
+                                    ➕ Add Step
+                                </button>
+                            </div>
+
+                            <!-- Live Visual representation of the Escalation Matrix under construction in Table Format -->
+                            <div id="newProjectEscalationMatrixSection" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 12px; display: none;">
+                                <label class="premium-label" style="font-size: 0.85rem; margin-bottom: 8px;">Escalating Matrix Flow</label>
+                                <div style="overflow-x: auto; background: var(--bg-light, #f8fafc); border: 1px solid var(--border-color, #e2e8f0); border-radius: 12px; padding: 4px;">
+                                    <table style="width: 100%; margin: 0; font-size: 0.85rem; border-collapse: collapse;">
+                                        <thead>
+                                            <tr style="border-bottom: 2px solid var(--border-color, #e2e8f0); text-align: left; background: rgba(99, 102, 241, 0.05);">
+                                                <th style="padding: 8px 12px; font-weight: 700; color: var(--text-color, #1e293b);">Level</th>
+                                                <th style="padding: 8px 12px; font-weight: 700; color: var(--text-color, #1e293b);">SLA Response Time</th>
+                                                <th style="padding: 8px 12px; font-weight: 700; color: var(--text-color, #1e293b);">Escalation Contacts</th>
+                                                <th style="padding: 8px 12px; font-weight: 700; color: var(--text-color, #1e293b); text-align: center; width: 60px;">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="newProjectEscalationMatrixContainer">
+                                            <!-- Rendered dynamically by JS -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-row" style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 16px; align-items: center;">
+                            <div class="premium-field-group">
+                                <label class="premium-label">Technologies</label>
+                                <input type="text" id="newProjectTech" class="form-control" placeholder="e.g. React, Python, AWS" style="height:42px; border-radius:10px;">
+                            </div>
+                            <div class="premium-field-group" style="display: flex; align-items: center; gap: 10px; margin-top: 25px;">
+                                <input type="checkbox" id="newProjectClientFacing" style="width: 18px; height: 18px;">
+                                <label class="premium-label" style="margin: 0;">Client Facing</label>
+                            </div>
+                        </div>
+
+                        <div class="premium-field-group" style="margin-bottom: 24px;">
+                            <label class="premium-label">Description</label>
+                            <textarea id="newProjectDescription" class="form-control" rows="3" style="border-radius:10px; padding: 12px;"></textarea>
+                        </div>
+
+                        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                            <button type="button" class="btn btn-secondary" onclick="hideCreateProjectForm()" style="border-radius: 10px;">Cancel</button>
+                            <button type="submit" class="btn btn-primary" style="border-radius: 10px;">Save Project</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Project Details & Insights Modal -->
+    <div id="projectDetailsModal" class="premium-modal-container" style="z-index: 10005;">
+        <div class="premium-modal-backdrop" onclick="closeProjectDetails()"></div>
+        <div class="premium-modal-content" style="max-width: 850px; width: 95%; border-radius: 20px;">
+            <div class="premium-modal-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 15px;">
+                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <span style="font-size: 2rem;">📊</span>
+                    <div>
+                        <h3 id="projDetailName" style="margin: 0; font-size: 1.5rem; font-weight: 800;">Project Details</h3>
+                        <div id="projDetailBadges" style="margin-top: 4px;"></div>
+                    </div>
+                </div>
+                <button class="btn-icon-sm" onclick="closeProjectDetails()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">×</button>
+            </div>
+            <div class="premium-modal-body" style="padding: 20px; max-height: 75vh; overflow-y: auto;">
+                <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; align-items: start;">
+                    
+                    <!-- Left Column: Performance & Utilization Analytics -->
+                    <div style="display: flex; flex-direction: column; gap: 20px;">
+                        
+                        <!-- Core Health Card -->
+                        <div style="background: var(--bg-light); border: 1px solid var(--border-color); border-radius: 14px; padding: 20px; display: flex; align-items: center; gap: 20px;">
+                            <div class="radial-progress-container" style="position: relative; width: 90px; height: 90px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                <svg style="width: 90px; height: 90px; transform: rotate(-90deg);">
+                                    <circle cx="45" cy="45" r="38" stroke="var(--border-color)" stroke-width="8" fill="transparent" />
+                                    <circle id="projDetailRadialFill" cx="45" cy="45" r="38" stroke="var(--primary-color, #2563eb)" stroke-width="8" fill="transparent" 
+                                            stroke-dasharray="238.76" stroke-dashoffset="238.76" style="transition: stroke-dashoffset 0.5s ease;" />
+                                </svg>
+                                <span id="projDetailRadialPct" style="position: absolute; font-size: 1.2rem; font-weight: 800;">0%</span>
+                            </div>
+                            <div>
+                                <h4 style="margin: 0; font-size: 1.1rem; font-weight: 700;">Overall Progress</h4>
+                                <p id="projDetailTaskRatio" style="margin: 4px 0 0 0; font-size: 0.9rem; color: var(--text-muted);">0 / 0 Tasks Completed</p>
+                                <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
+                                    <button class="btn btn-sm btn-primary" id="projDetailTrackTasksBtn" style="border-radius: 8px; display: flex; align-items: center; gap: 4px;">
+                                        <i class="fas fa-tasks"></i> Track Tasks
+                                    </button>
+                                    <button class="btn btn-sm btn-subtle" id="projDetailReportBtn" style="border-radius: 8px; display: flex; align-items: center; gap: 4px;">
+                                        <i class="fas fa-file-pdf"></i> Report
+                                    </button>
+                                    <button class="btn btn-sm btn-subtle" id="projDetailEditBtn" style="border-radius: 8px; display: none; align-items: center; gap: 4px;">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </button>
+                                    <button class="btn btn-sm" id="projDetailDeleteBtn" style="border-radius: 8px; display: none; align-items: center; gap: 4px; background: rgba(239, 68, 68, 0.1); color: var(--error-color, #ef4444); border: 1px solid rgba(239, 68, 68, 0.2);">
+                                        <i class="fas fa-trash-alt"></i> Delete
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Project Utilisation Card -->
+                        <div style="background: var(--bg-light); border: 1px solid var(--border-color); border-radius: 14px; padding: 20px;">
+                            <h4 style="margin: 0 0 16px 0; font-weight: 700; font-size: 1rem; display: flex; align-items: center; gap: 6px;">
+                                <span>⚡</span> Project Utilisation & Timelines
+                            </h4>
+                            <div style="display: flex; flex-direction: column; gap: 12px; font-size: 0.9rem;">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: var(--text-muted);">Technology Stack:</span>
+                                    <span id="projDetailTech" style="font-weight: 600;">--</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: var(--text-muted);">Estimated Hours:</span>
+                                    <span id="projDetailEstHours" style="font-weight: 600;">0.0 hrs</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: var(--text-muted);">Actual Logged Hours:</span>
+                                    <span id="projDetailActHours" style="font-weight: 600;">0.0 hrs</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: var(--text-muted);">SLA Response Time:</span>
+                                    <span id="projDetailSla" style="font-weight: 600;">--</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: var(--text-muted);">Timeline:</span>
+                                    <span id="projDetailDates" style="font-weight: 600;">--</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Task Breakdown Status -->
+                        <div style="background: var(--bg-light); border: 1px solid var(--border-color); border-radius: 14px; padding: 20px;">
+                            <h4 style="margin: 0 0 12px 0; font-weight: 700; font-size: 1rem;">📋 Task Status Distribution</h4>
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: center;">
+                                <div style="background: rgba(148, 163, 184, 0.1); padding: 10px; border-radius: 10px;">
+                                    <div style="font-size: 1.25rem; font-weight: 800; color: #64748b;" id="projDetailTodoCount">0</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">To Do</div>
+                                </div>
+                                <div style="background: rgba(59, 130, 246, 0.1); padding: 10px; border-radius: 10px;">
+                                    <div style="font-size: 1.25rem; font-weight: 800; color: #3b82f6;" id="projDetailProgressCount">0</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">In Progress</div>
+                                </div>
+                                <div style="background: rgba(16, 185, 129, 0.1); padding: 10px; border-radius: 10px;">
+                                    <div style="font-size: 1.25rem; font-weight: 800; color: #10b981;" id="projDetailCompletedCount">0</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Completed</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Right Column: Assignee Contributions & Performance -->
+                    <div style="display: flex; flex-direction: column; gap: 20px;">
+                        <div style="background: var(--bg-light); border: 1px solid var(--border-color); border-radius: 14px; padding: 20px;">
+                            <h4 style="margin: 0 0 14px 0; font-weight: 700; font-size: 1rem; display: flex; align-items: center; justify-content: space-between;">
+                                <span>👥 Assignee Contributions</span>
+                                <span class="badge" id="projDetailAssigneeCount" style="background: var(--blue-100); color: var(--blue-800); border-radius: 10px; font-size: 0.75rem;">0 Assignees</span>
+                            </h4>
+                            <div id="projDetailAssigneesList" style="display: flex; flex-direction: column; gap: 14px; max-height: 250px; overflow-y: auto; padding-right: 4px;">
+                                <!-- Rendered by JS -->
+                                <div style="text-align: center; color: var(--text-muted); font-size: 0.9rem; padding: 20px;">No assignees on this project.</div>
+                            </div>
+                        </div>
+
+                        <!-- Escalation Matrix Interactive Timeline -->
+                        <div style="background: var(--bg-light); border: 1px solid var(--border-color); border-radius: 14px; padding: 20px;">
+                            <h4 style="margin: 0 0 16px 0; font-weight: 700; font-size: 1rem; display: flex; align-items: center; gap: 6px;">
+                                <span>🛡️</span> Project Escalation Matrix
+                            </h4>
+                            <div id="projDetailEscalationMatrixSection" style="display: flex; flex-direction: column; gap: 14px; max-height: 280px; overflow-y: auto; padding-right: 4px;">
+                                <!-- Populated dynamically by JS -->
+                                <div style="text-align: center; color: var(--text-muted); font-size: 0.9rem; padding: 20px;">No escalation matrix defined.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {% include 'task_manager_v2.html' %}
 
     <!-- Gated Access Initialization -->

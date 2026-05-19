@@ -11,6 +11,8 @@ const TaskManagerV2 = {
     allEmployees: [], // Cache for searchable lists
     selectedAssignees: [], // IDs of selected assignees for new task
     selectedMentors: [], // IDs of selected mentors for new task
+    onlyProjectTasks: false,
+    filterProjectId: null,
 
     init() {
         console.log("TaskManagerV2 Initialized. Methods:", Object.keys(this).filter(k => typeof this[k] === 'function'));
@@ -91,12 +93,45 @@ const TaskManagerV2 = {
     close() {
         document.getElementById('taskManagerV2Modal').classList.remove('active');
         if (typeof updateScrollLock === 'function') updateScrollLock();
+        
+        // Reset project filters
+        this.onlyProjectTasks = false;
+        this.filterProjectId = null;
+        const btn = document.getElementById('tmV2ProjectFilterToggle');
+        if (btn) {
+            btn.style.background = '';
+            btn.style.color = '';
+            btn.style.borderColor = '';
+        }
     },
 
     switchTab(tabId) {
         this.activeTab = tabId;
         document.querySelectorAll('.tm-v2-tab').forEach(t => t.classList.toggle('active', t.getAttribute('data-tab') === tabId));
         document.querySelectorAll('.tm-v2-panel').forEach(p => p.classList.toggle('active', p.id === `tmV2Panel-${tabId}`));
+        this.render();
+    },
+
+    toggleProjectTasksFilter() {
+        this.onlyProjectTasks = !this.onlyProjectTasks;
+        
+        // Clear specific project filters when toggling off
+        if (!this.onlyProjectTasks) {
+            this.filterProjectId = null;
+        }
+        
+        const btn = document.getElementById('tmV2ProjectFilterToggle');
+        if (btn) {
+            if (this.onlyProjectTasks) {
+                btn.style.background = 'var(--primary-color, #2563eb)';
+                btn.style.color = '#ffffff';
+                btn.style.borderColor = 'var(--primary-color, #2563eb)';
+            } else {
+                btn.style.background = '';
+                btn.style.color = '';
+                btn.style.borderColor = '';
+            }
+        }
         this.render();
     },
 
@@ -111,9 +146,21 @@ const TaskManagerV2 = {
             loader.classList.add('hidden'); // Extra safety
         }
 
-        const todoTasks = this.tasks.filter(t => t.status === 'todo');
-        const inProgressTasks = this.tasks.filter(t => t.status === 'in_progress');
-        const completedTasks = this.tasks.filter(t => t.status === 'completed');
+        let tasksToRender = this.tasks || [];
+        
+        // Filter by onlyProjectTasks
+        if (this.onlyProjectTasks) {
+            tasksToRender = tasksToRender.filter(t => t.project_id !== null && t.project_id !== undefined);
+        }
+        
+        // Filter by specific project (e.g. clicked from dashboard admin)
+        if (this.filterProjectId) {
+            tasksToRender = tasksToRender.filter(t => t.project_id === this.filterProjectId);
+        }
+
+        const todoTasks = tasksToRender.filter(t => t.status === 'todo');
+        const inProgressTasks = tasksToRender.filter(t => t.status === 'in_progress');
+        const completedTasks = tasksToRender.filter(t => t.status === 'completed');
 
         document.getElementById('tmV2Count-todo').textContent = todoTasks.length;
         document.getElementById('tmV2Count-inProgress').textContent = inProgressTasks.length;
@@ -197,6 +244,7 @@ const TaskManagerV2 = {
                 <div class="tm-v2-card-header">
                     <div style="display:flex; gap: 8px; align-items:center;">
                         <span class="tm-v2-priority ${priority}">${priority.toUpperCase()}</span>
+                        ${task.project_name ? `<span class="tm-v2-priority" style="background: var(--blue-100); color: var(--blue-800); border: 1px solid var(--blue-200);"><i class="fas fa-folder"></i> ${task.project_name}</span>` : ''}
                     </div>
                     <div class="tm-v2-meta-item" style="font-size: 0.7rem;">Created: ${createdDate}</div>
                 </div>
@@ -438,6 +486,10 @@ const TaskManagerV2 = {
         document.getElementById('newTaskV2SubmitBtn').textContent = 'Create Task';
         document.getElementById('newTaskV2HeaderTitle').innerHTML = '<i class="fas fa-plus-circle"></i> Create New Task';
         document.getElementById('newTaskV2Id').value = '';
+        
+        await this.populateProjectsDropdown();
+        document.getElementById('newTaskV2Project').value = '';
+        
         document.getElementById('newTaskV2Modal').classList.add('active');
     },
 
@@ -474,8 +526,25 @@ const TaskManagerV2 = {
         this.renderMentorList();
         this.updateMentorCount();
 
+        await this.populateProjectsDropdown();
+        document.getElementById('newTaskV2Project').value = task.project_id || '';
+
         this.closeDetail();
         document.getElementById('newTaskV2Modal').classList.add('active');
+    },
+    
+    async populateProjectsDropdown() {
+        try {
+            const res = await apiCall('projects', 'GET');
+            const select = document.getElementById('newTaskV2Project');
+            if (select && res && res.success) {
+                const projects = res.projects || [];
+                select.innerHTML = '<option value="">-- No Project --</option>' + 
+                    projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+            }
+        } catch (e) {
+            console.error('Failed to fetch projects for dropdown', e);
+        }
     },
 
     renderMentorList(filter = '') {
@@ -665,6 +734,12 @@ const TaskManagerV2 = {
             formData.append('description', document.getElementById('newTaskV2Desc').value);
             formData.append('priority', priority);
             formData.append('due_date', document.getElementById('newTaskV2DueDate').value);
+            
+            const projectId = document.getElementById('newTaskV2Project').value;
+            if (projectId) {
+                formData.append('project_id', projectId);
+            }
+            
             console.log("Saving task as user:", user.id, user.name);
             formData.append('user_id', user.id); // For editing permissions
 

@@ -57,6 +57,10 @@ urlpatterns = [
     path('pending-requests', views.pending_requests, name='pending_requests'),
     path('active-tasks', views.active_tasks, name='active_tasks'),
 
+    # Project Management
+    path('projects', views.projects_api, name='projects_api'),
+    path('projects/<int:project_id>', views.project_detail_api, name='project_detail_api'),
+
     # Task Management
     path('employees-simple', views.employees_simple_list, name='employees_simple_list'),
     path('tasks', views.tasks_api, name='tasks_api'),

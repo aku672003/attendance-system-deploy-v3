@@ -24,6 +24,9 @@
                 <i class="fas fa-search tm-v2-search-icon"></i>
                 <input type="text" id="tmV2Search" placeholder="Search tasks...">
             </div>
+            <button id="tmV2ProjectFilterToggle" class="btn btn-secondary" onclick="TaskManagerV2.toggleProjectTasksFilter()" title="Filter Project Tasks" style="border-radius: 12px; display: flex; align-items: center; gap: 6px; padding: 0 16px; height: 42px; font-weight: 600; cursor: pointer;">
+                <i class="fas fa-folder"></i> <span>Project Tasks</span>
+            </button>
             <button class="btn btn-primary btn-lg" onclick="TaskManagerV2.openNewTaskModal()">
                 <i class="fas fa-plus"></i> New Task
             </button>
@@ -213,6 +216,15 @@
             <div class="tm-v2-form-group">
                 <label>Description</label>
                 <textarea id="newTaskV2Desc" placeholder="Provide more details..."></textarea>
+            </div>
+            <div class="tm-v2-form-group" style="margin-bottom: 15px;">
+                <label>Project</label>
+                <div style="display: flex; gap: 10px;">
+                    <select id="newTaskV2Project" style="flex: 1;">
+                        <option value="">-- No Project --</option>
+                    </select>
+                    <button type="button" class="btn btn-sm" onclick="showCreateProjectForm(); document.getElementById('newTaskV2Modal').classList.remove('active'); openProjectsManager();" style="white-space: nowrap;">+ New</button>
+                </div>
             </div>
             <div class="tm-v2-form-row">
                 <div class="tm-v2-form-group">

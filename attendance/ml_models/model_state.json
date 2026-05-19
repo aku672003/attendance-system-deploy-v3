@@ -1,49 +1,49 @@
 {
-    "average_rate": 67.94,
-    "stability_factor": 0.7573,
+    "average_rate": 69.45,
+    "stability_factor": 0.7622,
     "dow_patterns": {
-        "0": 67.33,
-        "1": 68.1,
-        "2": 73.3,
-        "3": 73.19,
-        "4": 70.27,
-        "5": 48.55
+        "0": 69.68,
+        "1": 69.11,
+        "2": 73.66,
+        "3": 75.1,
+        "4": 72.19,
+        "5": 51.09
     },
-    "data_points": 81,
-    "last_trained": "2026-05-13 17:51:40",
+    "data_points": 85,
+    "last_trained": "2026-05-18 12:25:35",
     "ml_model_active": true,
     "version": "2.0.0 (SLM Engine)",
     "logs": [
         {
-            "timestamp": "17:51:35",
+            "timestamp": "12:25:23",
             "message": "Initializing SLM-powered intelligence training sequence..."
         },
         {
-            "timestamp": "17:51:35",
-            "message": "Accessing history for 65 personnel."
+            "timestamp": "12:25:23",
+            "message": "Accessing history for 64 personnel."
         },
         {
-            "timestamp": "17:51:35",
-            "message": "Retrieved 118 days of historical weighted vectors."
+            "timestamp": "12:25:23",
+            "message": "Retrieved 123 days of historical weighted vectors."
         },
         {
-            "timestamp": "17:51:35",
+            "timestamp": "12:25:23",
             "message": "Step 1/3: Training OrganizationSTLM..."
         },
         {
-            "timestamp": "17:51:37",
+            "timestamp": "12:25:34",
             "message": "STLM Organizational Model trained"
         },
         {
-            "timestamp": "17:51:37",
+            "timestamp": "12:25:34",
             "message": "Step 2/3: Training IndividualPredictor..."
         },
         {
-            "timestamp": "17:51:40",
-            "message": "Individual RF Model Trained successfully"
+            "timestamp": "12:25:35",
+            "message": "Individual training skipped: column tasks.project_id does not exist\nLINE 1: ...scription\", \"tasks\".\"status\", \"tasks\".\"priority\", \"tasks\".\"p...\n                                                             ^\n"
         },
         {
-            "timestamp": "17:51:40",
+            "timestamp": "12:25:35",
             "message": "Step 3/3: Updating organizational performance metrics..."
         }
     ]
