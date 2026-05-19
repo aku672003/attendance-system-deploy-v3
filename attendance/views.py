@@ -5912,9 +5912,7 @@ def verify_token(request):
         
         if username:
             employee = Employee.objects.filter(username__iexact=username, is_active=True).first()
-            if employee and user_id and employee.id != user_id:
-                employee = None
-        elif user_id:
+        if not employee and user_id:
             employee = Employee.objects.filter(id=user_id, is_active=True).first()
 
         if employee:
