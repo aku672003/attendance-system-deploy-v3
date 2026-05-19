@@ -91,8 +91,12 @@ def require_valid_token(view_func):
                 if success:
                     user_id = result.get('user_id')
                     username = result.get('username')
-                    employee = Employee.objects.filter(username=username).first() if username else None
-                    if not employee and user_id:
+                    employee = None
+                    if username:
+                        employee = Employee.objects.filter(username__iexact=username).first()
+                        if employee and user_id and employee.id != user_id:
+                            employee = None
+                    elif user_id:
                         employee = Employee.objects.filter(id=user_id).first()
                     if employee:
                         # On local, only bind if token user is admin or matches the requested user
@@ -117,8 +121,10 @@ def require_valid_token(view_func):
         employee = None
         
         if username:
-            employee = Employee.objects.filter(username=username).first()
-        if not employee and user_id:
+            employee = Employee.objects.filter(username__iexact=username).first()
+            if employee and user_id and employee.id != user_id:
+                employee = None
+        elif user_id:
             employee = Employee.objects.filter(id=user_id).first()
             
         if employee:
@@ -159,8 +165,12 @@ def require_gated_token_api(view_func):
                 if success:
                     user_id = result.get('user_id')
                     username = result.get('username')
-                    employee = Employee.objects.filter(username=username).first() if username else None
-                    if not employee and user_id:
+                    employee = None
+                    if username:
+                        employee = Employee.objects.filter(username__iexact=username).first()
+                        if employee and user_id and employee.id != user_id:
+                            employee = None
+                    elif user_id:
                         employee = Employee.objects.filter(id=user_id).first()
                     if employee:
                         # On local, only bind if token user is admin or matches the requested user
@@ -185,8 +195,10 @@ def require_gated_token_api(view_func):
         employee = None
         
         if username:
-            employee = Employee.objects.filter(username=username).first()
-        if not employee and user_id:
+            employee = Employee.objects.filter(username__iexact=username).first()
+            if employee and user_id and employee.id != user_id:
+                employee = None
+        elif user_id:
             employee = Employee.objects.filter(id=user_id).first()
 
         if employee:

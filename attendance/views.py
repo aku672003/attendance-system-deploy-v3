@@ -27,7 +27,7 @@ from datetime import datetime, date, time, timedelta
 from .models import (
     Employee, EmployeeProfile, OfficeLocation, DepartmentOfficeAccess,
     AttendanceRecord, EmployeeRequest, EmployeeDocument, Task, BirthdayWish, TaskComment, TaskStep, TaskAttachment, Team,
-    TemporaryTag, TrainingLog, AvatarAsset, Memoji, Notification, TaskHistory
+    TemporaryTag, TrainingLog, AvatarAsset, Memoji, Notification, TaskHistory, Project
 )
 from .serializers import AvatarAssetSerializer, MemojiSerializer
 from django.contrib.auth.hashers import make_password, check_password
@@ -231,7 +231,7 @@ def login(request):
             }, status=status.HTTP_401_UNAUTHORIZED)
     except Employee.DoesNotExist:
         # Check if the user exists but is inactive (via username or email)
-        if Employee.objects.filter(Q(username=username) | Q(email=username), is_active=False).exists():
+        if Employee.objects.filter(Q(username__iexact=username) | Q(email__iexact=username), is_active=False).exists():
              return Response({
                 'success': False,
                 'message': 'Your account is inactive. Please contact the administrator.'
@@ -2456,9 +2456,17 @@ def admin_summary(request):
 
         surveyors_active = len(surveyors_office_names) + len(surveyors_client_names) + len(surveyors_wfh_names)
 
+        # Project stats
+        total_projects = Project.objects.count()
+        running_projects = Project.objects.filter(status='running').count()
+        completed_projects = Project.objects.filter(status='completed').count()
+
         return Response({
             'success': True,
             'date': str(target_date),
+            'total_projects': total_projects,
+            'running_projects': running_projects,
+            'completed_projects': completed_projects,
             'total_employees': total_employees,
             'present_today': len(present_names),
             'present_names': present_names,
@@ -3695,7 +3703,11 @@ def _serialize_tasks(tasks):
             'comments': comments,
             'steps': steps,
             'history': history_log,
-            'attachments': attachments
+            'attachments': attachments,
+            'project_id': task.project_id,
+            'project_name': task.project.name if task.project else None,
+            'actual_total_hours': float(task.actual_total_hours or 0.0),
+            'estimated_total_hours': float(task.estimated_total_hours or 0.0)
         })
     return data
 
@@ -3756,6 +3768,7 @@ def _create_task_admin(data, creator, files=None):
         description=data.get('description', ''),
         status=data.get('status', 'todo'),
         priority=data.get('priority', 'medium'),
+        project_id=data.get('project_id'),
         created_by=creator,
         start_date=start_date,
         due_date=due_date
@@ -3839,6 +3852,15 @@ def tasks_api(request):
                         tasks_data = _serialize_tasks(tasks)
                     else:
                         tasks_data = _get_employee_my_tasks_data(emp)
+
+                # Filter by project if project_id is provided
+                p_filter_id = request.GET.get('project_id')
+                if p_filter_id:
+                    try:
+                        p_filter_id = int(p_filter_id)
+                        tasks_data = [t for t in tasks_data if t.get('project_id') == p_filter_id]
+                    except ValueError:
+                        pass
 
                 return Response({
                     'success': True,
@@ -4267,7 +4289,9 @@ def meetings_api(request):
                     'display_time': m.start_time.strftime('%I:%M %p') if m.start_time else '',
                     'created_by_name': m.created_by.name,
                     'created_by_id': m.created_by.id,
-                    'participants': [{'id': p.id, 'name': p.name} for p in m.participants.all()]
+                    'participants': [{'id': p.id, 'name': p.name} for p in m.participants.all()],
+                    'project_id': m.project_id,
+                    'project_name': m.project.name if m.project else None
                 })
             
             return Response({'success': True, 'meetings': data})
@@ -4295,6 +4319,7 @@ def meetings_api(request):
                 description=description,
                 date=data.get('date'),
                 start_time=data.get('start_time') if data.get('start_time') else None,
+                project_id=data.get('project_id'),
                 created_by=creator
             )
             
@@ -5886,8 +5911,10 @@ def verify_token(request):
         employee = None
         
         if username:
-            employee = Employee.objects.filter(username=username, is_active=True).first()
-        if not employee and user_id:
+            employee = Employee.objects.filter(username__iexact=username, is_active=True).first()
+            if employee and user_id and employee.id != user_id:
+                employee = None
+        elif user_id:
             employee = Employee.objects.filter(id=user_id, is_active=True).first()
 
         if employee:
@@ -7106,3 +7133,189 @@ def holiday_upload_history(request):
             'saved_count': u.saved_count,
         })
     return Response({'success': True, 'uploads': data})
+
+@api_view(['GET', 'POST'])
+@require_gated_token_api
+def projects_api(request):
+    user = get_current_user(request)
+    if not user:
+        return Response({'success': False, 'message': 'Unauthorized'}, status=403)
+
+    if request.method == 'GET':
+        if (user.role or '').lower() == 'admin':
+            projects = Project.objects.all().order_by('-created_at')
+        else:
+            from django.db.models import Q
+            projects = Project.objects.filter(
+                Q(project_owner=user) | Q(assignees=user)
+            ).distinct().order_by('-created_at')
+        data = [{
+            'id': p.id,
+            'name': p.name,
+            'description': p.description,
+            'status': p.status,
+            'priority': p.priority,
+            'client_facing': p.client_facing,
+            'technologies': p.technologies,
+            'project_owner': {'id': p.project_owner.id, 'name': p.project_owner.name} if p.project_owner else None,
+            'assignees': [{'id': a.id, 'name': a.name} for a in p.assignees.all()],
+            'escalation_level': p.escalation_level,
+            'escalation_contacts': [{'id': ec.id, 'name': ec.name} for ec in p.escalation_contacts.all()],
+            'sla_response_time': p.sla_response_time,
+            'escalation_matrix': p.escalation_matrix,
+            'start_date': p.start_date.strftime('%Y-%m-%d') if p.start_date else None,
+            'end_date': p.end_date.strftime('%Y-%m-%d') if p.end_date else None,
+            'created_by': p.created_by.name,
+            'created_at': p.created_at.strftime('%Y-%m-%d %H:%M')
+        } for p in projects]
+        return Response({'success': True, 'projects': data})
+
+    elif request.method == 'POST':
+        name = request.data.get('name')
+        description = request.data.get('description', '')
+        status_val = request.data.get('status', 'running')
+        
+        if not name:
+            return Response({'success': False, 'message': 'Project name is required'}, status=400)
+            
+        project = Project.objects.create(
+            name=name,
+            description=description,
+            status=status_val,
+            created_by=user,
+            priority=request.data.get('priority', 'medium'),
+            client_facing=request.data.get('client_facing', False),
+            technologies=request.data.get('technologies', ''),
+            escalation_level=request.data.get('escalation_level', ''),
+            sla_response_time=request.data.get('sla_response_time', ''),
+            escalation_matrix=request.data.get('escalation_matrix', ''),
+            start_date=request.data.get('start_date') or None,
+            end_date=request.data.get('end_date') or None,
+        )
+        
+        project_owner_id = request.data.get('project_owner')
+        if project_owner_id:
+            try:
+                project.project_owner = Employee.objects.get(id=project_owner_id)
+                project.save()
+            except Employee.DoesNotExist:
+                pass
+                
+        escalation_contacts = request.data.get('escalation_contacts', [])
+        if escalation_contacts:
+            if isinstance(escalation_contacts, str):
+                import json
+                try: escalation_contacts = json.loads(escalation_contacts)
+                except: escalation_contacts = []
+            if isinstance(escalation_contacts, list):
+                project.escalation_contacts.set(Employee.objects.filter(id__in=escalation_contacts))
+                project.save()
+                
+        assignees = request.data.get('assignees', [])
+        if assignees:
+            if isinstance(assignees, str):
+                import json
+                try: assignees = json.loads(assignees)
+                except: assignees = []
+            if isinstance(assignees, list):
+                project.assignees.set(Employee.objects.filter(id__in=assignees))
+
+        return Response({
+            'success': True, 
+            'message': 'Project created',
+            'project': {
+                'id': project.id,
+                'name': project.name,
+                'status': project.status
+            }
+        })
+
+
+@api_view(['GET', 'PUT', 'DELETE'])
+@require_gated_token_api
+def project_detail_api(request, project_id):
+    user = get_current_user(request)
+    if not user:
+        return Response({'success': False, 'message': 'Unauthorized'}, status=403)
+        
+    try:
+        project = Project.objects.get(id=project_id)
+    except Project.DoesNotExist:
+        return Response({'success': False, 'message': 'Project not found'}, status=404)
+        
+    if request.method == 'GET':
+        return Response({
+            'success': True,
+            'project': {
+                'id': project.id,
+                'name': project.name,
+                'description': project.description,
+                'status': project.status,
+                'priority': project.priority,
+                'client_facing': project.client_facing,
+                'technologies': project.technologies,
+                'project_owner': {'id': project.project_owner.id, 'name': project.project_owner.name} if project.project_owner else None,
+                'assignees': [{'id': a.id, 'name': a.name} for a in project.assignees.all()],
+                'escalation_level': project.escalation_level,
+                'escalation_contacts': [{'id': ec.id, 'name': ec.name} for ec in project.escalation_contacts.all()],
+                'sla_response_time': project.sla_response_time,
+                'escalation_matrix': project.escalation_matrix,
+                'start_date': project.start_date.strftime('%Y-%m-%d') if project.start_date else None,
+                'end_date': project.end_date.strftime('%Y-%m-%d') if project.end_date else None,
+                'created_by': project.created_by.name,
+                'created_at': project.created_at.strftime('%Y-%m-%d %H:%M')
+            }
+        })
+        
+    elif request.method == 'PUT':
+        if 'name' in request.data:
+            project.name = request.data['name']
+        if 'description' in request.data:
+            project.description = request.data['description']
+        if 'status' in request.data:
+            project.status = request.data['status']
+        if 'priority' in request.data:
+            project.priority = request.data['priority']
+        if 'client_facing' in request.data:
+            project.client_facing = request.data['client_facing']
+        if 'technologies' in request.data:
+            project.technologies = request.data['technologies']
+        if 'escalation_level' in request.data:
+            project.escalation_level = request.data['escalation_level']
+        if 'sla_response_time' in request.data:
+            project.sla_response_time = request.data['sla_response_time']
+        if 'escalation_matrix' in request.data:
+            project.escalation_matrix = request.data['escalation_matrix']
+        if 'start_date' in request.data:
+            project.start_date = request.data['start_date'] or None
+        if 'end_date' in request.data:
+            project.end_date = request.data['end_date'] or None
+            
+        if 'project_owner' in request.data:
+            try: project.project_owner = Employee.objects.get(id=request.data['project_owner']) if request.data['project_owner'] else None
+            except: pass
+            
+        if 'escalation_contacts' in request.data:
+            escalation_contacts = request.data['escalation_contacts']
+            if isinstance(escalation_contacts, str):
+                import json
+                try: escalation_contacts = json.loads(escalation_contacts)
+                except: escalation_contacts = []
+            if isinstance(escalation_contacts, list):
+                project.escalation_contacts.set(Employee.objects.filter(id__in=escalation_contacts))
+            
+        if 'assignees' in request.data:
+            assignees = request.data['assignees']
+            if isinstance(assignees, str):
+                import json
+                try: assignees = json.loads(assignees)
+                except: assignees = []
+            if isinstance(assignees, list):
+                project.assignees.set(Employee.objects.filter(id__in=assignees))
+                
+        project.save()
+        return Response({'success': True, 'message': 'Project updated'})
+        
+    elif request.method == 'DELETE':
+        project.delete()
+        return Response({'success': True, 'message': 'Project deleted'})
