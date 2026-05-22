@@ -1,0 +1,7 @@
+{
+  "venvPath": "/home/admin1/Instance/attendance-system-deploy-v3",
+  "venv": "venv",
+  "extraPaths": [
+    "/home/admin1/Instance/attendance-system-deploy-v3/venv/lib/python3.12/site-packages"
+  ]
+}

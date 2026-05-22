@@ -13,10 +13,17 @@ const TaskManagerV2 = {
     selectedMentors: [], // IDs of selected mentors for new task
     onlyProjectTasks: false,
     filterProjectId: null,
+    generalTasksCache: null,
+    projectTasksCache: {},
 
     init() {
         console.log("TaskManagerV2 Initialized. Methods:", Object.keys(this).filter(k => typeof this[k] === 'function'));
         this.setupEventListeners();
+    },
+
+    clearCache() {
+        this.generalTasksCache = null;
+        this.projectTasksCache = {};
     },
 
     setupEventListeners() {
@@ -46,7 +53,30 @@ const TaskManagerV2 = {
         }
     },
 
-    async open(scope = null) {
+    async open(scope = null, options = {}) {
+        // Set project filters based on options
+        this.onlyProjectTasks = options.onlyProjectTasks !== undefined ? options.onlyProjectTasks : false;
+        this.filterProjectId = options.filterProjectId !== undefined ? options.filterProjectId : null;
+        
+        // Reset tasks to prevent rendering stale tasks while loading
+        this.tasks = null;
+
+        // Update Project Tasks filter toggle style
+        const btn = document.getElementById('tmV2ProjectFilterToggle');
+        if (btn) {
+            const icon = this.onlyProjectTasks ? 'fa-folder-open' : 'fa-folder';
+            btn.innerHTML = `<i class="fas ${icon}"></i> <span>Project Tasks</span>`;
+            if (this.onlyProjectTasks) {
+                btn.style.background = 'var(--primary-color, #2563eb)';
+                btn.style.color = '#ffffff';
+                btn.style.borderColor = 'var(--primary-color, #2563eb)';
+            } else {
+                btn.style.background = '';
+                btn.style.color = '';
+                btn.style.borderColor = '';
+            }
+        }
+
         if (scope) {
             this.currentScope = scope;
         } else {
@@ -76,7 +106,7 @@ const TaskManagerV2 = {
         }
 
         // Refresh to get latest data
-        this.refresh();
+        await this.refresh();
     },
 
     async fetchEmployees() {
@@ -132,7 +162,12 @@ const TaskManagerV2 = {
                 btn.style.borderColor = '';
             }
         }
-        this.render();
+        
+        if (!this.onlyProjectTasks) {
+            this.refresh();
+        } else {
+            this.render();
+        }
     },
 
     render() {
@@ -768,6 +803,7 @@ const TaskManagerV2 = {
             if (data.success) {
                 showNotification(editId ? "Task updated successfully" : "Task created successfully", "success");
                 this.closeNewTask();
+                this.clearCache();
                 this.refresh();
             } else {
                 showNotification(data.message || "Failed to save task", "error");
@@ -806,6 +842,8 @@ const TaskManagerV2 = {
             });
             if (res.success) {
                 showNotification("Step updated", "success");
+                this.clearCache();
+                this.refresh(); // Background silent list update
                 this.openDetail(taskId);
             }
         } catch (err) {
@@ -824,6 +862,7 @@ const TaskManagerV2 = {
             if (res && res.success) {
                 showNotification('Task deleted', 'success');
                 this.closeDetail();
+                this.clearCache();
                 this.refresh();
             } else {
                 showNotification(res.message || 'Failed to delete task', 'error');
@@ -845,6 +884,7 @@ const TaskManagerV2 = {
             });
             if (res.success) {
                 showNotification(`Task moved to ${newStatus.replace('_', ' ')}`, "success");
+                this.clearCache();
                 this.refresh();
                 if (this.currentTask && this.currentTask.id === taskId) {
                     this.openDetail(taskId);
@@ -863,17 +903,70 @@ const TaskManagerV2 = {
         const scope = this.currentScope || ((user && (user.role === 'admin' || user.role === 'Mentor' || user.has_subordinates)) ? 'team' : 'my');
 
         const loader = document.getElementById('tmV2Loader');
-        if (loader && !this.tasks) loader.style.display = 'flex';
+        const projBtn = document.getElementById('tmV2ProjectFilterToggle');
 
-        const res = await apiCall(`tasks?employee_id=${empId}&scope=${scope}&_cb=${Date.now()}`, 'GET');
-        if (res && res.success) {
-            this.tasks = res.tasks;
-            this.render();
+        // Check if we have cached data for the current query configuration
+        let cachedData = null;
+        if (this.filterProjectId) {
+            cachedData = this.projectTasksCache[this.filterProjectId];
+        } else {
+            cachedData = this.generalTasksCache;
         }
 
-        if (loader) {
-            loader.style.display = 'none';
-            loader.classList.add('hidden');
+        // If we have cached data, render it instantly to the user!
+        if (cachedData) {
+            this.tasks = cachedData;
+            this.render();
+            // Instantly restore buttons to ensure no UI-stuck state
+            if (projBtn) {
+                projBtn.disabled = false;
+                const icon = this.onlyProjectTasks ? 'fa-folder-open' : 'fa-folder';
+                projBtn.innerHTML = `<i class="fas ${icon}"></i> <span>Project Tasks</span>`;
+            }
+            if (loader) {
+                loader.style.display = 'none';
+                loader.classList.add('hidden');
+            }
+        } else {
+            // Show loader if no cache exists
+            if (loader && !this.tasks) loader.style.display = 'flex';
+            if (projBtn) {
+                projBtn.disabled = true;
+                projBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span>Loading...</span>`;
+            }
+        }
+
+        let url = `tasks?employee_id=${empId}&scope=${scope}&_cb=${Date.now()}`;
+        if (this.filterProjectId) {
+            url += `&project_id=${this.filterProjectId}`;
+        }
+
+        try {
+            const res = await apiCall(url, 'GET');
+            if (res && res.success) {
+                this.tasks = res.tasks;
+                
+                // Update Cache
+                if (this.filterProjectId) {
+                    this.projectTasksCache[this.filterProjectId] = res.tasks;
+                } else {
+                    this.generalTasksCache = res.tasks;
+                }
+                
+                this.render();
+            }
+        } catch (err) {
+            console.error("Error refreshing tasks:", err);
+        } finally {
+            if (projBtn) {
+                projBtn.disabled = false;
+                const icon = this.onlyProjectTasks ? 'fa-folder-open' : 'fa-folder';
+                projBtn.innerHTML = `<i class="fas ${icon}"></i> <span>Project Tasks</span>`;
+            }
+            if (loader) {
+                loader.style.display = 'none';
+                loader.classList.add('hidden');
+            }
         }
     },
 
@@ -1042,6 +1135,8 @@ const TaskManagerV2 = {
             });
             if (res.success) {
                 input.value = '';
+                this.clearCache();
+                this.refresh(); // Background silent list update
                 this.openDetail(this.currentTask.id);
             }
         } catch (err) {
@@ -1092,6 +1187,8 @@ const TaskManagerV2 = {
             });
             if (res.success) {
                 this.hideAddStepInput();
+                this.clearCache();
+                this.refresh(); // Background silent list update
                 this.openDetail(this.currentTask.id);
             } else {
                 showNotification(res.message || "Failed to add step", "error");

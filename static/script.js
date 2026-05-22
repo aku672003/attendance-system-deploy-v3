@@ -8794,6 +8794,14 @@ async function confirmExport() {
     const typeSelect = document.getElementById('exportTypeSelect');
     const selectedType = typeSelect ? typeSelect.value : 'all';
 
+    const userSelect = document.getElementById('exportUserSelect');
+    const selectedUserId = userSelect ? userSelect.value : 'all';
+    let employeeName = '';
+    if (selectedUserId !== 'all' && userSelect) {
+        const selectedOption = userSelect.options[userSelect.selectedIndex];
+        employeeName = selectedOption ? selectedOption.textContent.replace(/\s+/g, '_') : '';
+    }
+
     if (btn) btn.disabled = true;
     if (btnText) btnText.classList.add('hidden');
     if (spinner) spinner.classList.remove('hidden');
@@ -8808,10 +8816,10 @@ async function confirmExport() {
     const progressTitle = document.getElementById('exportProgressTitle');
 
     if (progressModal) {
-        progressBar.style.width = '0%';
-        progressStatus.innerText = 'Fetching attendance records...';
-        progressCount.innerText = '0% complete';
-        progressIcon.innerText = '⏳';
+        progressBar.style.width = '5%';
+        progressStatus.innerText = 'Initializing secure export connection...';
+        progressCount.innerText = '5% complete';
+        progressIcon.innerText = '⚡';
         progressTitle.innerText = 'Exporting Attendance';
         openModal('exportProgressModal');
     }
@@ -8828,7 +8836,16 @@ async function confirmExport() {
             params.type = selectedType;
         }
 
+        if (selectedUserId && selectedUserId !== 'all') {
+            params.employee_id = selectedUserId;
+        }
+
         params.user_id = currentUser.id;
+
+        if (progressStatus) progressStatus.innerText = 'Downloading attendance records...';
+        if (progressBar) progressBar.style.width = '15%';
+        if (progressCount) progressCount.innerText = '15% complete';
+
         const res = await apiCall('attendance-records', 'GET', params);
 
         if (isExportAllCancelled) return;
@@ -8842,14 +8859,19 @@ async function confirmExport() {
             throw new Error('No records found for selected criteria');
         }
 
-        if (progressStatus) progressStatus.innerText = 'Fetching holidays...';
+        if (progressStatus) progressStatus.innerText = 'Compiling holiday schedules...';
+        if (progressBar) progressBar.style.width = '35%';
+        if (progressCount) progressCount.innerText = '35% complete';
+
         const fromYear = new Date(fromDate).getFullYear();
         const toYear = new Date(toDate).getFullYear();
         const years = [fromYear];
         if (toYear !== fromYear) years.push(toYear);
 
         const holidayMap = {};
-        for (const y of years) {
+        for (let i = 0; i < years.length; i++) {
+            const y = years[i];
+            if (progressStatus) progressStatus.innerText = `Fetching calendar holidays for ${y}...`;
             const hRes = await apiCall('holidays', 'GET', { year: y });
             if (hRes && hRes.success && Array.isArray(hRes.holidays)) {
                 hRes.holidays.forEach(h => {
@@ -8858,7 +8880,10 @@ async function confirmExport() {
             }
         }
 
-        if (progressStatus) progressStatus.innerText = 'Building attendance register...';
+        if (progressStatus) progressStatus.innerText = 'Structuring Excel workbook cells...';
+        if (progressBar) progressBar.style.width = '48%';
+        if (progressCount) progressCount.innerText = '48% complete';
+        await new Promise(resolve => setTimeout(resolve, 100));
 
         const dateRange = getDateRange(fromDate, toDate);
         const employeeMap = {};
@@ -9070,13 +9095,29 @@ async function confirmExport() {
                 sCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
             }
 
-            // Update progress and yield thread every 50 employees for much faster execution
-            if (idx % 50 === 0 || idx === totalEmployees - 1) {
+            // Update progress and yield thread dynamically
+            let yieldInterval = 2;
+            let yieldDelay = 20;
+            if (totalEmployees > 100) {
+                yieldInterval = 10;
+                yieldDelay = 5;
+            } else if (totalEmployees > 300) {
+                yieldInterval = 30;
+                yieldDelay = 0;
+            }
+
+            if (idx % yieldInterval === 0 || idx === totalEmployees - 1) {
                 const rowProgress = 50 + Math.round((idx / totalEmployees) * 40);
                 if (progressBar) progressBar.style.width = `${rowProgress}%`;
                 if (progressCount) progressCount.innerText = `${rowProgress}% complete`;
-                // Non-blocking delay
-                await new Promise(resolve => requestAnimationFrame(resolve));
+                if (progressStatus) progressStatus.innerText = `Exporting: ${emp.employee}`;
+                
+                // Non-blocking delay for smooth animation
+                if (yieldDelay > 0) {
+                    await new Promise(resolve => setTimeout(resolve, yieldDelay));
+                } else {
+                    await new Promise(resolve => requestAnimationFrame(resolve));
+                }
             }
         }
 
@@ -9097,7 +9138,9 @@ async function confirmExport() {
         /* ---------- DOWNLOAD ---------- */
 
         const buffer = await wb.xlsx.writeBuffer();
-        const filename = `attendance_register_${fromDate}_to_${toDate}.xlsx`;
+        const filename = employeeName 
+            ? `attendance_register_${employeeName}_${fromDate}_to_${toDate}.xlsx`
+            : `attendance_register_${fromDate}_to_${toDate}.xlsx`;
 
         // SUCCESS UI
         if (progressBar) progressBar.style.width = '100%';
@@ -13150,19 +13193,10 @@ async function deleteProject(id) {
 function openProjectTasks(projectId, projectName) {
     closeProjectsManager();
     if (window.TaskManagerV2) {
-        TaskManagerV2.open('team');
-        TaskManagerV2.onlyProjectTasks = true;
-        TaskManagerV2.filterProjectId = projectId;
-        
-        // Update Project Tasks filter toggle style
-        const btn = document.getElementById('tmV2ProjectFilterToggle');
-        if (btn) {
-            btn.style.background = 'var(--primary-color, #2563eb)';
-            btn.style.color = '#ffffff';
-            btn.style.borderColor = 'var(--primary-color, #2563eb)';
-        }
-        
-        TaskManagerV2.refresh();
+        TaskManagerV2.open('team', {
+            onlyProjectTasks: true,
+            filterProjectId: projectId
+        });
     } else {
         showNotification('Task Manager not initialized', 'error');
     }

@@ -56,7 +56,11 @@ class Command(BaseCommand):
         missed_checkout_qs = AttendanceRecord.objects.filter(
             check_in_time__isnull=False,
             check_out_time__isnull=True
-        ).exclude(status__in=['absent', 'leave'])
+        ).exclude(
+            status__in=['absent', 'leave']
+        ).exclude(
+            notes__icontains="Approved by Admin"
+        )
 
         if target_date < now.date():
             # For past dates, mark all unclosed records
@@ -117,7 +121,11 @@ def run_auto_mark_absent():
         date__lt=target_date,
         check_in_time__isnull=False,
         check_out_time__isnull=True
-    ).exclude(status__in=['absent', 'leave']).update(
+    ).exclude(
+        status__in=['absent', 'leave']
+    ).exclude(
+        notes__icontains="Approved by Admin"
+    ).update(
         status='absent',
         notes="Absent marked: Forgot to check out (Previous day)"
     )
@@ -128,7 +136,11 @@ def run_auto_mark_absent():
             date=target_date,
             check_in_time__isnull=False,
             check_out_time__isnull=True
-        ).exclude(status__in=['absent', 'leave']).update(
+        ).exclude(
+            status__in=['absent', 'leave']
+        ).exclude(
+            notes__icontains="Approved by Admin"
+        ).update(
             status='absent',
             notes="Absent marked: Forgot to check out (Today, late night)"
         )

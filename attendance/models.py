@@ -229,6 +229,34 @@ class AttendanceRecord(models.Model):
     def __str__(self):
         return f"{self.employee.username} - {self.date}"
 
+    def save(self, *args, **kwargs):
+        from datetime import datetime, timedelta
+        from django.utils import timezone
+
+        now_local = timezone.localtime(timezone.now())
+
+        if self.status in ['present', 'half_day', 'wfh', 'client'] and not self.check_out_time:
+            if self.date < now_local.date() or (self.date == now_local.date() and now_local.hour >= 19):
+                if self.check_in_time:
+                    try:
+                        in_t = datetime.strptime(str(self.check_in_time), '%H:%M:%S')
+                        out_t = in_t + timedelta(hours=9)
+                        self.check_out_time = out_t.time().strftime('%H:%M:%S')
+                        self.total_hours = 9.00
+                    except Exception:
+                        self.check_out_time = "19:00:00"
+                        self.total_hours = 9.00
+                else:
+                    self.check_out_time = "19:00:00"
+                    self.total_hours = 9.00
+                
+                if not self.notes:
+                    self.notes = "Approved by Admin"
+                elif "Approved by Admin" not in self.notes:
+                    self.notes = f"{self.notes} - Approved by Admin"
+
+        super().save(*args, **kwargs)
+
 
 class EmployeeRequest(models.Model):
     REQUEST_TYPE_CHOICES = [
